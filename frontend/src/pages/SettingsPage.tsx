@@ -7,7 +7,7 @@ import { CalendarSection, GmailSection } from "@/components/settings/Google";
 import { DataSection, PolicySection, RemindersSection, SystemSection } from "@/components/settings/Other";
 import { ErrorState, LoadingRows, PageHeader } from "@/components/ui/states";
 import { translateKey } from "@/i18n";
-import { useSettings } from "@/lib/queries";
+import { useGoogle, useSettings, useSystemStatus } from "@/lib/queries";
 import { cn } from "@/lib/utils";
 
 const SECTIONS = ["general", "ai", "gmail", "calendar", "reminders", "policy", "system", "data"] as const;
@@ -34,12 +34,17 @@ export default function SettingsPage() {
   const { t } = useTranslation();
   const location = useLocation();
   const { data: settings, error, isLoading, refetch } = useSettings();
+  const status = useSystemStatus();
+  const google = useGoogle();
   useOAuthResult();
 
+  // Jump to #section only once every section has its data; otherwise sections above it are still
+  // loading and push the target further down after the scroll.
+  const laidOut = Boolean(settings) && !status.isPending && !google.isPending;
   useEffect(() => {
-    if (!location.hash || !settings) return;
-    document.getElementById(location.hash.slice(1))?.scrollIntoView({ behavior: "smooth", block: "start" });
-  }, [location.hash, settings]);
+    if (!location.hash || !laidOut) return;
+    document.getElementById(location.hash.slice(1))?.scrollIntoView({ block: "start" });
+  }, [location.hash, laidOut]);
 
   return (
     <div className="grid gap-6">
