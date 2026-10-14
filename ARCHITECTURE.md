@@ -102,7 +102,9 @@ and merges rule-only findings the model missed.
 Three layers, applied to every candidate against existing tasks:
 
 1. **Deterministic** – same source item (re-processing is idempotent), same Gmail thread (with compatible action),
-   identical file content (SHA-256).
+   identical file content (SHA-256). An identical copy reuses the first file's text instead of being parsed and
+   OCR-ed again (a sender's logo arrives with every mail), unless the first file was read without OCR and OCR is
+   available now.
 2. **Normalised similarity** – weighted entity overlap (strong entities only: enrollment certificate,
    residence permit, semester fee …), action compatibility, character n-gram text similarity across scripts, and
    *object overlap* (shared specific CJK terms, uncommon words or reference numbers; generic words and platform
@@ -141,10 +143,16 @@ reminder if the user enables it.
 Every sync, scan, import and reminder pass is a `sync_jobs` row with counters, error code, `recoverable` flag
 and `next_retry_at`. Gmail sync lists the last N days (or uses the history API incrementally), processes
 messages oldest first, skips items already processed and moves its checkpoint only after a fully successful
-run. HTTP 429/5xx and network errors are retried with exponential back-off and jitter inside the job and then
-re-scheduled (2, 4, 8 … minutes, at most 5 attempts); an invalid or revoked token sets the source to
-"re-authorization needed" and is never retried blindly. Interrupted jobs are marked on start-up. No failure
-deletes stored data.
+run. Gmail API requests are paced (at most one every 0.2 s): a first sync against a real account hit Google's
+per-user `403 rateLimitExceeded` at a few requests per second. Rate limits, HTTP 429/5xx and network errors are
+retried with exponential back-off and jitter inside the job (rate limits from 2 s, others from 1 s, at most 32 s,
+6 attempts; a `Retry-After` is honoured as a minimum) and then re-scheduled (2, 4, 8 … minutes, at most
+5 attempts); an invalid or revoked token sets the source to "re-authorization needed" and is never retried
+blindly. Interrupted jobs are marked on start-up. No failure deletes stored data.
+
+Files imported while no OCR engine was installed keep an `ocr_unavailable` warning. While Tesseract is missing
+it is looked for again at most every 30 s, so installing it needs no restart; the Sources page then offers to
+read those files again in a `reprocess` job (oldest first, so identical copies reuse the first result).
 
 ## Data model
 

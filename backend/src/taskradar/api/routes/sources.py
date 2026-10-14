@@ -312,6 +312,34 @@ def reveal_document(document_id: int, c: Container = Depends(get_container)) -> 
     return {"revealed": True}
 
 
+@router.post("/documents/reprocess-ocr")
+def reprocess_ocr_backlog(
+    request: Request, wait: bool = False, c: Container = Depends(get_container)
+) -> dict[str, Any]:
+    """Read the files again that were imported while no OCR engine was available (runs as a job)."""
+    if not c.ocr.available():
+        raise ApiError("ocr_unavailable", "No OCR engine is installed", 409)
+    count = len(c.documents.ocr_backlog())
+    if count == 0:
+        return {"accepted": False, "count": 0, "job": None}
+    try:
+        # The job record exists before the response is sent, so the UI sees it running right away.
+        job_id, run = c.documents.start_ocr_backlog_job(c.jobs)
+    except JobAlreadyRunning as exc:
+        raise ApiError("job_already_running", "These files are already being read again", 409) from exc
+    if wait:
+        return {"accepted": True, "count": count, "job": run()}
+
+    def background() -> None:
+        try:
+            run()
+        except Exception:
+            log.exception("Re-reading the OCR backlog (job %s) failed", job_id)
+
+    _executor(request).submit(background)
+    return {"accepted": True, "count": count, "job": None}
+
+
 @router.post("/documents/{document_id}/reprocess")
 def reprocess_document(document_id: int, c: Container = Depends(get_container)) -> dict[str, Any]:
     return c.documents.process(document_id).__dict__

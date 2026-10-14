@@ -56,7 +56,14 @@ export const useMessages = () => useQuery({ queryKey: qk.messages, queryFn: api.
 export const useJobs = () => useQuery({ queryKey: qk.jobs, queryFn: () => api.jobs(40) });
 export const useFailures = () => useQuery({ queryKey: qk.failures, queryFn: api.failures });
 export const useSettings = () => useQuery({ queryKey: qk.settings, queryFn: api.settings, staleTime: 60_000 });
-export const useSystemStatus = () => useQuery({ queryKey: qk.system, queryFn: api.systemStatus, staleTime: 15_000 });
+export const useSystemStatus = () =>
+  useQuery({
+    queryKey: qk.system,
+    queryFn: api.systemStatus,
+    staleTime: 15_000,
+    // While files are being read again with OCR, poll so the page updates when the job finishes.
+    refetchInterval: (query) => (query.state.data?.ocr.reprocessing ? 2000 : false),
+  });
 export const useGoogle = () => useQuery({ queryKey: qk.google, queryFn: api.google });
 export const useNotifications = () =>
   useQuery({ queryKey: qk.notifications, queryFn: api.notifications, refetchInterval: 30_000 });

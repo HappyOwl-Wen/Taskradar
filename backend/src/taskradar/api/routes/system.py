@@ -65,6 +65,8 @@ def system_status(request: Request, c: Container = Depends(get_container)) -> di
             "available": ocr.available(),
             "languages": ocr.languages(),
             "version": getattr(ocr, "version", lambda: None)(),
+            "backlog": len(c.documents.ocr_backlog()),
+            "reprocessing": c.documents.ocr_backlog_running(),
         },
         "secret_store": {"backend": c.secrets.backend_name, "available": c.secrets.available()},
         "scheduler": scheduler.status() if scheduler else {"running": False, "jobs": []},

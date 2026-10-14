@@ -54,14 +54,14 @@ mail or document and quotes the sentence it came from. Details: [ARCHITECTURE.md
 | Area | What it does | Status |
 | --- | --- | --- |
 | Uploads & folders | PDF, PNG, JPG, WebP, `.eml`; drag & drop; only folders you add are watched; originals are never modified | implemented, tested |
-| Parsing | text-first PDF extraction, OCR fallback per page (Tesseract, `chi_sim+eng`, `deu+eng`), MIME/HTML mail, quoted-reply stripping | implemented, tested (real OCR in tests) |
+| Parsing | text-first PDF extraction, OCR fallback per page (Tesseract, `chi_sim+eng`, `deu+eng`), MIME/HTML mail, quoted-reply stripping; files imported before OCR was installed can be read again from the Sources page | implemented, tested (real OCR in tests) |
 | Extraction | tasks with title, action, category, priority, deadline (date-only stays date-only), confidence, evidence; marketing/newsletters ignored; prompt-injection text treated as data | implemented, tested, evaluated |
 | Dates | absolute, relative and ambiguous dates in zh/de/en; relative dates resolved from the *source* date; unresolvable dates are flagged, never invented | implemented, tested |
 | Deduplication | same source / same thread, normalised similarity across languages, optional LLM judge; grey zone becomes a suggestion; merges are undoable | implemented, tested, evaluated |
 | Lifecycle | Candidate → Confirmed → In progress / Waiting for reply → Completed / Dismissed; completion evidence; explicit deadline changes applied with undo | implemented, tested |
 | Reminders | Overdue / 24 h / 3 days / 7 days (configurable), date-only deadlines count until the end of the day, DST-safe, deduplicated, stop after completion | implemented, tested |
-| Gmail | OAuth (installed-app flow with PKCE), `gmail.readonly` only, last 30 days, incremental history sync, retries with backoff, attachment PDFs | implemented, tested with a fake Gmail; **real account not verified** (needs your OAuth client) |
-| Google Calendar | separate OAuth (`calendar.app.created`), preview → confirm → write into a dedicated "TaskRadar" calendar, idempotent event IDs, no invitations | implemented, tested with a fake Calendar; **real account not verified** |
+| Gmail | OAuth (installed-app flow with PKCE), `gmail.readonly` only, last 30 days, incremental history sync, request pacing, retries with backoff, attachments | implemented, tested with a fake Gmail; **verified with one real account**: initial and incremental sync, attachments, automatic recovery from Google's rate limit (request pacing was added afterwards and is tested with fakes only) |
+| Google Calendar | separate OAuth (`calendar.app.created`), preview → confirm → write into a dedicated "TaskRadar" calendar, idempotent event IDs, no invitations | implemented, tested with a fake Calendar; connecting a real account verified, **writing an event to a real calendar not verified yet** |
 | LLM extraction | OpenAI structured outputs or OpenAI-compatible endpoint, strict schema validation, bounded retries, rules fallback, data minimisation, consent required | implemented, tested with a mocked provider; **real API not verified** (needs your key) |
 | Dashboard | Dashboard, Review inbox with evidence panel, All tasks, Task detail with history/undo, Sources, Settings, Insights; dark/light; zh/en | implemented, unit-tested, verified in a browser |
 | Background | scheduled Gmail sync, folder scans, reminder checks, automatic retries, restart recovery, optional Windows autostart (only after confirmation) | implemented, tested |
@@ -142,14 +142,14 @@ See [SECURITY.md](SECURITY.md) for the threat model.
 
 ```powershell
 cd backend
-.venv\Scripts\python.exe -m pytest            # 174 tests, about 18 s, includes real OCR
+.venv\Scripts\python.exe -m pytest            # 183 tests, about 18 s, includes real OCR
 .venv\Scripts\python.exe -m ruff check .
 .venv\Scripts\python.exe -m ruff format --check .
 .venv\Scripts\python.exe -m mypy
 .venv\Scripts\python.exe -m taskradar eval    # extraction / dedup evaluation on the labelled dataset
 
 cd ..\frontend
-npm run lint; npm run typecheck; npm test      # 29 tests
+npm run lint; npm run typecheck; npm test      # 33 tests
 ```
 
 The workflow in `.github/workflows/ci.yml` runs the same checks on Ubuntu, with Tesseract and the same pinned
@@ -207,8 +207,9 @@ TaskRadar.cmd       double-click launcher       Setup.cmd   one-time setup
   ("归还/续借"), parcel pick-ups ("abholen"), passive bookings ("must be booked") and some completion phrasings
   ("has been confirmed", "was submitted successfully"). Titles can be vague when the instruction uses a pronoun
   ("Diese hochladen"); the evidence quote still shows the full context.
-* Gmail, Google Calendar and the OpenAI path are implemented against the official APIs and covered by tests
-  with fakes and mocks, but have **not** been exercised with a real account or API key in this project yet.
+* Gmail sync has been exercised with one real account. Writing events to a real Google Calendar and the OpenAI
+  path are implemented against the official APIs and covered by tests with fakes and mocks, but have **not**
+  been exercised with a real calendar or API key yet.
 * Desktop toasts use Windows PowerShell/WinRT and depend on the Windows notification settings (there is a test
   button); autostart, Explorer integration and toasts are Windows-only.
 * OCR covers printed Chinese (simplified), German and English; handwriting and low-quality photos are not
@@ -230,6 +231,7 @@ TaskRadar.cmd       double-click launcher       Setup.cmd   one-time setup
    也可以之后运行 `powershell -ExecutionPolicy Bypass -File scripts\install-tesseract.ps1`。
 3. 双击 `TaskRadar.cmd` 启动，浏览器打开 <http://127.0.0.1:8000>。关闭窗口即停止。
 4. 不连接任何账号也能体验：「来源 → 演示邮箱 → 创建」，或把 `backend/src/taskradar/demo/samples/` 中的示例文件拖进窗口。
+   如果在安装 OCR 之前就已导入截图或扫描件，装好 OCR 后在「来源」页点「立即识别」即可补识别，无需重启。
 5. 连接 Gmail / Google 日历需要你本人在 Google Cloud Console 创建“桌面应用”OAuth 客户端并登录授权，步骤见上文
    [Connecting Gmail and Google Calendar](#connecting-gmail-and-google-calendar)。Gmail 只申请只读权限。
 6. 默认使用本地规则引擎，不会把内容发给任何云服务；启用 OpenAI 前需要在设置中明确同意数据发送说明。

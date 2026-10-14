@@ -4,6 +4,7 @@ import { useLocation, useSearchParams } from "react-router";
 import { useTranslation } from "react-i18next";
 import { UploadButton } from "@/components/layout/TopBar";
 import { JobItem } from "@/components/sources/JobItem";
+import { OcrBacklogNotice } from "@/components/sources/OcrBacklogNotice";
 import { DocumentsTable, MessagesTable } from "@/components/sources/RecordTables";
 import { DemoCard, FoldersCard, GmailCard } from "@/components/sources/SourceCards";
 import { EmptyState, ErrorState, LoadingRows, PageHeader } from "@/components/ui/states";
@@ -115,6 +116,7 @@ export default function SourcesPage() {
           </div>
         </div>
       ) : null}
+      <OcrBacklogNotice />
       <Tabs value={tab} onValueChange={(v) => setParams(v === "documents" ? {} : { tab: v }, { replace: true })}>
         <TabsList className="max-w-full overflow-x-auto">
           {TABS.map((key) => (

@@ -374,7 +374,16 @@ export interface Settings {
 export interface SystemStatus {
   version: string;
   data_dir: string;
-  ocr: { engine: string; available: boolean; languages: string[]; version: string | null };
+  ocr: {
+    engine: string;
+    available: boolean;
+    languages: string[];
+    version: string | null;
+    /** Documents imported while OCR was unavailable (their images were not read). */
+    backlog: number;
+    /** A job is reading the backlog again right now. */
+    reprocessing: boolean;
+  };
   secret_store: { backend: string; available: boolean };
   scheduler: { running: boolean; jobs: { id: string; next_run_time: string | null }[] };
   agent_mode: "rules" | "llm";

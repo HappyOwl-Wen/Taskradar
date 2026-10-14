@@ -183,6 +183,7 @@ export const api = {
   },
   revealDocument: (id: number) => post<{ revealed: boolean }>(`/api/documents/${id}/reveal`),
   reprocessDocument: (id: number) => post<ImportResult>(`/api/documents/${id}/reprocess`),
+  reprocessOcrBacklog: () => post<{ accepted: boolean; count: number; job: SyncJob | null }>("/api/documents/reprocess-ocr"),
   deleteDocument: (id: number) => del<{ deleted: number }>(`/api/documents/${id}`),
   documentFileUrl: (id: number) => `/api/documents/${id}/file`,
   messages: () => get<{ items: MessageListItem[] }>("/api/messages"),

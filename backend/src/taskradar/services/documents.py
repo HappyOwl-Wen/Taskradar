@@ -15,25 +15,30 @@ import time
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
 
 from taskradar.config import AppConfig
 from taskradar.db.base import utcnow
-from taskradar.db.models import Document, DocumentPage, Message, Source, TaskSource
+from taskradar.db.models import Document, DocumentPage, Message, Source, SyncJob, TaskSource
 from taskradar.db.session import transaction
-from taskradar.domain.enums import ItemStatus, SourceKind, SourceRelation
+from taskradar.domain.enums import ItemStatus, JobKind, JobStatus, JobTrigger, SourceKind, SourceRelation
 from taskradar.domain.schemas import Evidence, NormalizedMessage
 from taskradar.parsing.documents import DocumentParseError, parse_document
 from taskradar.parsing.email_mime import message_content_hash, parse_eml_bytes
 from taskradar.parsing.filetypes import SniffedType, UnsupportedFileError, sanitize_filename, sha256_bytes, sniff_bytes
 from taskradar.parsing.ocr import OCREngine
 from taskradar.services.ingest import INGEST_LOCK, IngestOutcome, IngestService
+from taskradar.services.jobs import JobContext, JobRunner
 from taskradar.services.settings import SettingsService
 from taskradar.services.tasks import Origin, TaskService
 
 log = logging.getLogger(__name__)
+
+OCR_UNAVAILABLE = "ocr_unavailable"  # document warning: images or scanned pages that still need OCR
+OCR_BACKLOG_LOCK = "reprocess:ocr"
 
 
 class ImportRejected(ValueError):
@@ -229,6 +234,16 @@ class DocumentService:
             doc.status = ItemStatus.PENDING.value
         result = ImportResult(name, "processed", True, document_id=document_id)
         started = time.perf_counter()
+        ocr_ready = self.ocr.available()
+        with INGEST_LOCK, transaction(self._factory) as session:
+            doc = session.get(Document, document_id)
+            assert doc is not None
+            twin = self._analysed_twin(session, doc, ocr_ready=ocr_ready)
+            if twin is not None:
+                # Identical content was already read (e.g. the same logo in every mail of a sender):
+                # reuse its text instead of parsing and OCR-ing the file again.
+                self._copy_parse(session, doc, twin)
+                return self._mark_duplicate(session, doc, twin, result, started)
         try:
             parsed = parse_document(path, kind, self.ocr)
         except DocumentParseError as exc:
@@ -264,25 +279,10 @@ class DocumentService:
             doc.ocr_engine = parsed.ocr_engine
             doc.warnings = parsed.warnings
             doc.text_chars = len(parsed.text)
-            twin = session.scalar(
-                select(Document)
-                .where(
-                    Document.sha256 == doc.sha256,
-                    Document.id != doc.id,
-                    Document.status == ItemStatus.PROCESSED.value,
-                )
-                .order_by(Document.id)
-            )
+            twin = self._analysed_twin(session, doc, ocr_ready=OCR_UNAVAILABLE not in parsed.warnings)
             if twin is not None:
-                # Deterministic layer: identical file content was already analysed.
-                linked = self._link_duplicate_content(session, doc, twin)
-                doc.status = ItemStatus.SKIPPED.value
-                doc.warnings = [*parsed.warnings, f"duplicate_content_of:{twin.id}"]
-                doc.processed_at = self.clock()
-                doc.processing_ms = int((time.perf_counter() - started) * 1000)
-                result.status = "duplicate_content"
-                result.duplicates_merged = linked
-                return result
+                # Analysed by a concurrent import in the meantime.
+                return self._mark_duplicate(session, doc, twin, result, started)
 
         try:
             outcome = self.ingest.process_document(document_id)
@@ -303,6 +303,95 @@ class DocumentService:
             doc.processed_at = self.clock()
             doc.processing_ms = int((time.perf_counter() - started) * 1000)
         return result
+
+    def _analysed_twin(self, session: Session, doc: Document, *, ocr_ready: bool) -> Document | None:
+        """An analysed document with identical content, unless OCR could now read more than it did."""
+        twins = session.scalars(
+            select(Document)
+            .where(
+                Document.sha256 == doc.sha256,
+                Document.id != doc.id,
+                Document.status == ItemStatus.PROCESSED.value,
+            )
+            .order_by(Document.id)
+        )
+        return next((t for t in twins if not ocr_ready or OCR_UNAVAILABLE not in (t.warnings or [])), None)
+
+    def _copy_parse(self, session: Session, doc: Document, twin: Document) -> None:
+        for stale in list(doc.pages):
+            session.delete(stale)
+        session.flush()
+        for page in twin.pages:
+            session.add(
+                DocumentPage(
+                    document_id=doc.id,
+                    page_no=page.page_no,
+                    text=page.text,
+                    method=page.method,
+                    ocr_confidence=page.ocr_confidence,
+                )
+            )
+        doc.page_count = twin.page_count
+        doc.extraction_method = twin.extraction_method
+        doc.language = twin.language
+        doc.doc_date = twin.doc_date
+        doc.ocr_engine = twin.ocr_engine
+        doc.warnings = list(twin.warnings or [])
+        doc.text_chars = twin.text_chars
+
+    def _mark_duplicate(
+        self, session: Session, doc: Document, twin: Document, result: ImportResult, started: float
+    ) -> ImportResult:
+        """Deterministic layer: identical file content was already analysed; link its tasks instead."""
+        result.duplicates_merged = self._link_duplicate_content(session, doc, twin)
+        result.status = "duplicate_content"
+        doc.status = ItemStatus.SKIPPED.value
+        doc.error_code = None
+        doc.error_message = None
+        doc.warnings = [*doc.warnings, f"duplicate_content_of:{twin.id}"]
+        doc.processed_at = self.clock()
+        doc.processing_ms = int((time.perf_counter() - started) * 1000)
+        return result
+
+    # ------------------------------------------------------------------------------------------
+    # Files imported while no OCR engine was available
+    # ------------------------------------------------------------------------------------------
+
+    def ocr_backlog(self) -> list[int]:
+        """Documents whose images or scanned pages could not be read because OCR was unavailable."""
+        with transaction(self._factory) as session:
+            rows = session.execute(
+                select(Document.id, Document.warnings)
+                .where(Document.status != ItemStatus.PENDING.value)
+                .order_by(Document.id)
+            ).all()
+        return [doc_id for doc_id, warnings in rows if OCR_UNAVAILABLE in (warnings or [])]
+
+    def ocr_backlog_running(self) -> bool:
+        with transaction(self._factory) as session:
+            running = select(SyncJob.id).where(
+                SyncJob.lock_key == OCR_BACKLOG_LOCK, SyncJob.status == JobStatus.RUNNING.value
+            )
+            return session.scalar(running) is not None
+
+    def start_ocr_backlog_job(self, jobs: JobRunner) -> tuple[int, Callable[[], dict[str, Any]]]:
+        """Create the job record now (raises ``JobAlreadyRunning``); the returned callable does the work."""
+        job_id = jobs.start(JobKind.REPROCESS, lock_key=OCR_BACKLOG_LOCK, source_id=None, trigger=JobTrigger.MANUAL)
+        return job_id, lambda: jobs.execute(job_id, JobKind.REPROCESS, self.reprocess_ocr_backlog)
+
+    def reprocess_ocr_backlog(self, ctx: JobContext) -> JobStatus:
+        """Job body: read the backlog again, oldest first (so identical copies reuse the first result)."""
+        ids = self.ocr_backlog()
+        ctx.bump("items_seen", len(ids))
+        for document_id in ids:
+            result = self.process(document_id)
+            if result.status == "failed":
+                ctx.bump("items_failed")
+                continue
+            ctx.bump("items_skipped" if result.status == "duplicate_content" else "items_processed")
+            ctx.bump("tasks_created", result.tasks_created)
+            ctx.bump("tasks_updated", result.tasks_updated + result.completions_applied)
+        return JobStatus.PARTIAL if ctx.counters["items_failed"] else JobStatus.SUCCEEDED
 
     def _link_duplicate_content(self, session: Session, doc: Document, twin: Document) -> int:
         count = 0

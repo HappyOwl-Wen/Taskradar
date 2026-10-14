@@ -11,6 +11,8 @@ import os
 import re
 import shutil
 import subprocess
+import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Protocol
@@ -91,22 +93,43 @@ class TesseractEngine:
 
     name = "tesseract"
 
-    def __init__(self, cmd: str | Path | None = None, tools_dir: Path | None = None, timeout: float = 60.0):
+    # While unavailable, look for a newly installed Tesseract at most this often (seconds).
+    REDETECT_INTERVAL = 30.0
+
+    def __init__(
+        self,
+        cmd: str | Path | None = None,
+        tools_dir: Path | None = None,
+        timeout: float = 60.0,
+        *,
+        clock: Callable[[], float] = time.monotonic,
+    ):
         self.timeout = timeout
+        self._configured = Path(cmd) if cmd else None
+        self._tools_dir = tools_dir
+        self._clock = clock
         self._cmd: Path | None = None
-        candidates = [Path(cmd)] if cmd else candidate_tesseract_paths(tools_dir)
-        for path in candidates:
-            if path.is_file():
-                self._cmd = path
-                break
         self._langs: list[str] | None = None
+        self._detected_at = 0.0
+        self._detect()
+
+    def _detect(self) -> None:
+        self._detected_at = self._clock()
+        candidates = [self._configured] if self._configured else candidate_tesseract_paths(self._tools_dir)
+        self._cmd = next((path for path in candidates if path.is_file()), None)
+        self._langs = None
 
     @property
     def command(self) -> str | None:
         return str(self._cmd) if self._cmd else None
 
     def available(self) -> bool:
-        return self._cmd is not None and bool(self.languages())
+        ready = self._cmd is not None and bool(self.languages())
+        if not ready and self._clock() - self._detected_at >= self.REDETECT_INTERVAL:
+            # Installed (or language data added) while TaskRadar is running: no restart needed.
+            self._detect()
+            ready = self._cmd is not None and bool(self.languages())
+        return ready
 
     def languages(self) -> list[str]:
         if self._cmd is None:

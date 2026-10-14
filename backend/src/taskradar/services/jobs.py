@@ -128,6 +128,12 @@ class JobRunner:
         attempt: int = 1,
     ) -> dict[str, Any]:
         job_id = self.start(kind, lock_key=lock_key, source_id=source_id, trigger=trigger, attempt=attempt)
+        return self.execute(job_id, kind, fn, attempt=attempt)
+
+    def execute(
+        self, job_id: int, kind: JobKind, fn: Callable[[JobContext], JobStatus], *, attempt: int = 1
+    ) -> dict[str, Any]:
+        """Run the body of a job created with :meth:`start` and record its outcome."""
         ctx = JobContext(job_id)
         try:
             status = fn(ctx)
