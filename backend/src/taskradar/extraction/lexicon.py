@@ -25,7 +25,7 @@ ACTION_PATTERNS: list[tuple[ActionType, re.Pattern[str]]] = [
         _rx(
             r"缴纳|缴费|缴清|交费|支付|付款|付清|汇款|转账|续费",
             r"\bpay\b|\bpaying\b|\btransfer\b|\bremit\b|\bsettle\b|payment (?:is )?due",
-            r"bezahlen|zahlen|überweisen|begleichen|entrichten|zahlbar",
+            r"bezahlen|zahlen|überweisen|begleichen|entrichten|zahlbar|(?:überwiesen|bezahlt|beglichen)\s+(?:werden|sein)\b",
         ),
     ),
     (
@@ -40,9 +40,9 @@ ACTION_PATTERNS: list[tuple[ActionType, re.Pattern[str]]] = [
     (
         ActionType.SUBMIT,
         _rx(
-            r"提交|递交|呈交|上交|交回|寄送|寄回|补交|补充提交|提供",
-            r"\bsubmit\w*|\bhand in\b|\bturn in\b|\bsend (?:us|in|back)\b|\bprovide\b|\breturn (?:the|your)\b",
-            r"einreichen|einzureichen|reichen\s+Sie\b.{0,200}?\bein\b|abgeben|abzugeben|geben\s+Sie\b.{0,200}?\bab\b|"
+            r"提交|递交|呈交|上交|交回|寄送|寄回|补交|补充提交|提供|发给|发送给|寄给|交给",
+            r"\bsubmit\w*|\bbe received\b|\bhand in\b|\bturn in\b|\bsend (?:us|me|in|back)\b|\bprovide\b|\breturn (?:the|your|them|it)\b",
+            r"(?:eingereicht|vorgelegt|abgegeben|eingegangen|zugegangen)\s+(?:werden|sein)\b|einreichen|einzureichen|reichen\s+Sie\b.{0,200}?\bein\b|abgeben|abzugeben|geben\s+Sie\b.{0,200}?\bab\b|"
             r"vorlegen|vorzulegen|legen\s+Sie\b.{0,200}?\bvor\b|nachreichen|nachzureichen|zusenden|zuzusenden|"
             r"zukommen (?:zu )?lassen|übermitteln|einsenden|einzusenden|senden\s+Sie|schicken\s+Sie|"
             r"zurückschicken|zurückzuschicken|zurücksenden|zurückzusenden|zuschicken|zuzuschicken",
@@ -52,7 +52,7 @@ ACTION_PATTERNS: list[tuple[ActionType, re.Pattern[str]]] = [
         ActionType.REPLY,
         _rx(
             r"回复|答复|回信|反馈",
-            r"\breply\b|\brespond\b|\bget back to\b|\blet us know\b|\banswer\b",
+            r"\breply\b|\brespond\b|\bget back to\b|\blet us know\b|\banswer\b|\bRSVP\b",
             r"antworten|beantworten|rückmelden|melden\s+Sie\s+sich|Rückantwort|teilen\s+Sie\s+uns\b.{0,40}?\bmit\b",
         ),
     ),
@@ -67,7 +67,7 @@ ACTION_PATTERNS: list[tuple[ActionType, re.Pattern[str]]] = [
         ActionType.PREPARE,
         _rx(
             r"填写|填报|完成|准备|更新",
-            r"\bcomplete\b|\bfill (?:in|out)\b|\bprepare\b|\bupdate\b",
+            r"\bcomplete\b|\bbe completed\b|\bfill (?:in|out)\b|\bprepare\b|\bupdate\b",
             r"ausfüllen|auszufüllen|füllen\s+Sie\b.{0,200}?\baus\b|erledigen|zu erledigen|vorbereiten|aktualisieren",
         ),
     ),
@@ -75,11 +75,12 @@ ACTION_PATTERNS: list[tuple[ActionType, re.Pattern[str]]] = [
 
 # Words that make a sentence an obligation addressed to the reader.
 OBLIGATION_CUES = _rx(
-    r"请|务必|需要|需|须|必须|应当|要求|记得|别忘了|敬请|烦请|麻烦您",
+    r"(?<![申邀])请(?!假)|务必|需要|需|须|必须|应当|要求|记得|别忘了|敬请|烦请|麻烦您|麻烦你|能否|可否",
     r"\bplease\b|\bkindly\b|\bmust\b|\brequired\b|\bneed(?:s)? to\b|\bha(?:ve|s) to\b|\bare asked to\b|"
-    r"\byou should\b|\bremember to\b|\bdon'?t forget\b|\bdo not forget\b|action required|mandatory",
+    r"\byou should\b|\bremember to\b|\bdon'?t forget\b|\bdo not forget\b|action required|mandatory|"
+    r"\b(?:could|can|would) you\b",
     r"\bbitte\b|\bmüssen\b|\bmuss\b|verpflichtet|erforderlich|benötigen|denken Sie daran|vergessen Sie nicht|"
-    r"notwendig|wir bitten Sie|sind gebeten",
+    r"notwendig|wir bitten Sie|sind gebeten|\b(?:könnten|können|würden) Sie\b",
 )
 
 ADDRESSEE_CUES = _rx(r"您|你", r"\byou\b|\byour\b", r"\bSie\b|\bIhre?[nmrs]?\b", flags=0)
@@ -177,7 +178,7 @@ COMPLETION_PATTERNS: list[tuple[CompletionKind, re.Pattern[str]]] = [
 ]
 
 APPOINTMENT_CUES = _rx(
-    r"预约时间|面谈|会议|考试时间|面试|讲座|会面|报告会|预约于|您的预约",
+    r"预约时间|面谈|会议|考试时间|面试|讲座|会面|报告会|预约于|您的预约|安排在|定于|举行",
     r"\bappointment\b|\bmeeting\b|\binterview\b|\bexam\b|\btakes place\b|\bscheduled for\b",
     r"\bTermin\b|Sprechstunde|Vorstellungsgespräch|Prüfung|Klausur|findet\s.{0,40}?statt|Besprechung",
 )
@@ -263,20 +264,21 @@ ENTITY_PATTERNS: dict[str, tuple[float, re.Pattern[str]]] = {
         _rx(r"选课|课程注册|课程报名", r"course registration|module registration|register for (?:the )?course", r"Kursanmeldung|Modulanmeldung|Lehrveranstaltungsanmeldung"),
     ),
     "re_registration": (1.0, _rx(r"学期注册|续注册", r"re-?registration", r"Rückmeldung")),
-    "passport": (0.7, _rx(r"护照", r"passport", r"Reisepass")),
+    "passport": (0.5, _rx(r"护照", r"passport", r"Reisepass")),
     "rent": (0.9, _rx(r"房租|租金", r"\brent\b", r"\bMiete\b")),
     "broadcast_fee": (1.0, _rx(r"广播费", r"broadcast(?:ing)? fee|licen[cs]e fee", r"Rundfunkbeitrag|\bGEZ\b")),
     "thesis": (1.0, _rx(r"毕业论文|论文", r"\bthesis\b", r"Abschlussarbeit|Masterarbeit|Bachelorarbeit")),
+    "scholarship": (1.0, _rx(r"奖学金|助学金", r"\bscholarship\b|\bgrant application\b", r"Stipendium|Stipendien")),
     "homework": (0.9, _rx(r"作业", r"assignment|homework|exercise sheet", r"Hausaufgabe|Übungsblatt|Hausarbeit")),
     "transcript": (0.9, _rx(r"成绩单", r"transcript", r"Notenspiegel|Transcript of Records|Leistungsnachweis")),
-    "photo": (0.6, _rx(r"照片", r"\bphoto\b", r"Lichtbild|Passfoto|Foto")),
+    "photo": (0.4, _rx(r"照片", r"\bphoto\b", r"Lichtbild|Passfoto|Foto")),
     "bank_account": (0.7, _rx(r"银行账户|银行卡", r"bank account", r"Bankkonto|Girokonto")),
     "tax_id": (0.9, _rx(r"税号", r"tax id|tax identification", r"Steuer-?ID|Steueridentifikationsnummer")),
     "address_change": (0.9, _rx(r"新地址|地址变更|更新地址", r"address change|new address|update your address", r"Adressänderung|neue Adresse")),
     "semester_ticket": (0.9, _rx(r"学期票", r"semester ticket", r"Semesterticket|Deutschlandticket")),
-    "application_form": (0.6, _rx(r"申请表|表格", r"application form|\bform\b", r"Antragsformular|Formular")),
+    "application_form": (0.4, _rx(r"申请表|表格", r"application form|\bform\b", r"Antragsformular|Formular")),
     "library_books": (0.9, _rx(r"图书馆|借书|还书", r"library books?|return (?:the )?books", r"Bibliothek|Bücher zurückgeben|Leihfrist")),
-    "rsvp": (0.6, _rx(r"是否参加|出席情况", r"\bRSVP\b|whether you (?:will )?attend", r"Teilnahme bestätigen|ob Sie teilnehmen")),
+    "rsvp": (0.3, _rx(r"是否参加|出席情况", r"\bRSVP\b|whether you (?:will )?attend", r"Teilnahme bestätigen|ob Sie teilnehmen")),
     "documents": (0.3, _rx(r"材料|文件|资料", r"\bdocuments?\b|paperwork", r"Unterlagen|Dokumente|Nachweise")),
     "appointment": (0.3, _rx(r"预约", r"appointment", r"\bTermin\b")),
     "payment": (0.2, _rx(r"款项", r"\bpayment\b", r"\bZahlung\b")),

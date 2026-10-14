@@ -88,6 +88,7 @@ def make_container(
             secrets=secrets or MemorySecretStore(),
             clock=clock,
             llm_provider=llm,
+            # An explicit None selects the application's default factory (synthetic demo mailbox).
             gmail_client_factory=overrides.pop("gmail_client_factory", gmail.factory),
             calendar_client_factory=overrides.pop("calendar_client_factory", lambda: calendar_client),
             ocr=ocr or _OCR,
@@ -146,7 +147,7 @@ def api(make_container: Callable[..., Container]) -> Iterator[Any]:
     from taskradar.api.app import create_app
     from taskradar.services.system import AutostartManager
 
-    container = make_container()
+    container = make_container(gmail_client_factory=None)  # real demo-mailbox factory (honours demo settings)
     app = create_app(container, extra_hosts={"testserver"}, autostart=AutostartManager(startup_dir=None))
     with TestClient(app) as client:
         token = client.get("/api/session").json()["csrf_token"]

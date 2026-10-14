@@ -86,14 +86,69 @@ def action_similarity(a: ActionType, b: ActionType) -> float:
     return 0.0
 
 
+_GENERIC_CJK_TERMS = (
+    "截止日期", "截止时间", "截止", "提交", "通知", "提醒", "请于", "请在", "之前", "以前", "时间", "日期", "同学",
+    "各位", "您的", "我们", "已经", "收到", "完成", "需要", "办理", "注册",
+)
+_GENERIC_LATIN = {
+    "please", "submit", "deadline", "reminder", "friendly", "required", "action", "document", "documents",
+    "erinnerung", "unterlagen", "bitte", "termin", "appointment", "einreichen", "regards", "grüßen",
+    "freundlichen", "geehrte", "geehrter", "received", "erhalten", "information", "informationen",
+}
+_NUMBER = re.compile(r"(?<![\d.,/])\d{3,}(?![\d.,/])")
+
+
+def _cjk_core(text: str) -> list[str]:
+    runs = _CJK_RUN.findall(normalize(text))
+    cleaned: list[str] = []
+    for run in runs:
+        for term in _GENERIC_CJK_TERMS:
+            run = run.replace(term, "|")
+        cleaned.extend(part for part in run.split("|") if len(part) >= 2)
+    return cleaned
+
+
+def _longest_common_run(a: list[str], b: list[str]) -> int:
+    from difflib import SequenceMatcher
+
+    best = 0
+    for ra in a:
+        for rb in b:
+            match = SequenceMatcher(None, ra, rb, autojunk=False).find_longest_match(0, len(ra), 0, len(rb))
+            best = max(best, match.size)
+    return best
+
+
+def object_overlap(a: str, b: str) -> float:
+    """Evidence that two texts name the same *specific* object: a shared multi-character CJK term
+    ("实验报告"), a shared uncommon word ("Lernvereinbarung", "agreement(s)") or a shared reference
+    number such as an invoice number. Generic words never count."""
+    score = 0.0
+    common_cjk = _longest_common_run(_cjk_core(a), _cjk_core(b))
+    if common_cjk >= 4:
+        score = 0.8
+    elif common_cjk >= 3:
+        score = 0.6
+    words_a = {w for w in _LATIN_WORD.findall(normalize(a)) if len(w) >= 6 and not w.isdigit()
+               and w not in STOPWORDS and w not in _GENERIC_LATIN}
+    words_b = {w for w in _LATIN_WORD.findall(normalize(b)) if len(w) >= 6 and not w.isdigit()
+               and w not in STOPWORDS and w not in _GENERIC_LATIN}
+    shared = {wa for wa in words_a for wb in words_b if wa == wb or (len(wa) >= 7 and wa[:7] == wb[:7])}
+    if shared:
+        score = max(score, 0.8 if len(shared) >= 2 else 0.6)
+    numbers_a = {n for n in _NUMBER.findall(a) if not (len(n) == 4 and n.startswith(("19", "20")))}
+    numbers_b = {n for n in _NUMBER.findall(b) if not (len(n) == 4 and n.startswith(("19", "20")))}
+    if numbers_a & numbers_b:
+        score = max(score, 0.8)
+    return score
+
+
 def entity_similarity(a: list[str], b: list[str]) -> float | None:
-    """Weighted Jaccard over canonical entities. None when either side has no specific entity."""
+    """Weighted Jaccard over canonical *specific* entities. None when either side has none
+    (generic entities such as "documents" or "appointment" never identify an obligation)."""
     strong_a = {e for e in a if lx.entity_weight(e) >= 0.6}
     strong_b = {e for e in b if lx.entity_weight(e) >= 0.6}
     if not strong_a or not strong_b:
-        weak_a, weak_b = set(a), set(b)
-        if weak_a and weak_b and weak_a & weak_b:
-            return 0.5
         return None
     inter = sum(lx.entity_weight(e) for e in strong_a & strong_b)
     union = sum(lx.entity_weight(e) for e in strong_a | strong_b)

@@ -35,7 +35,7 @@ from taskradar.extraction import lexicon as lx
 from taskradar.extraction.dates import DateMention, choose_deadline, find_dates, mention_to_due
 from taskradar.parsing.language import detect_language
 
-RULES_VERSION = "rules-1.2"
+RULES_VERSION = "rules-1.3"
 RULES_CONFIDENCE_CAP = 0.85
 
 _HARD_BREAK = re.compile(r"[^\n。！？!?；;]+[。！？!?；;]?")
@@ -292,13 +292,11 @@ def _title_de(seg: str, match: re.Match[str]) -> str | None:
         obj = re.sub(r"^\s+Sie\b", "", after)
     else:
         # Infinitive at the clause end: "..., die Unterlagen bis zum 27.11. einzureichen."
-        before = seg[: match.start()]
-        for marker in (",", "daran", ":"):
-            idx = before.rfind(marker)
-            if idx != -1:
-                before = before[idx + len(marker):]
-                break
+        # (commas inside numbers such as "49,90" are not clause boundaries)
+        before = re.split(r"(?<!\d),(?!\d)|\bdaran\b|:", seg[: match.start()])[-1]
         before = re.sub(r"^\s*bitte\b", "", before, flags=re.I)
+        # Passive obligation "Die Rechnung ... ist bis ... zu begleichen" -> keep the subject phrase.
+        before = re.sub(r"\s+(?:ist|sind|muss|müssen|wird|werden)\b.*$", "", before)
         before = _DE_MODAL.sub("", before)
         obj = before
     obj = _strip_date_phrases(obj)
@@ -430,6 +428,9 @@ class RuleBasedExtractor:
             if found is None:
                 continue
             action, match = found
+            if action in lx.GENERIC_ACTIONS and seg_text.rstrip().endswith((":", "：")) \
+                    and not _mentions_in(mentions, seg):
+                continue  # list header such as "本周需要完成：" / "Please complete the following:"
             obligation = bool(lx.OBLIGATION_CUES.search(seg_text))
             seg_mentions = _mentions_in(mentions, seg)
             cued = [m for m in seg_mentions if m.deadline_cue]
@@ -523,6 +524,7 @@ class RuleBasedExtractor:
                     t.relation_hint = RelationHint.DEADLINE_CHANGE
 
         tasks = self._merge_within_document(tasks)
+        signals = self._merge_signals(signals)
         if marketing >= 3:
             notes.append("suppressed_marketing_content")
             trace.append({"step": "rules.marketing_suppressed", "dropped_tasks": len(tasks)})
@@ -604,6 +606,28 @@ class RuleBasedExtractor:
                 action_type=action,
             )
         return None
+
+    @staticmethod
+    def _merge_signals(signals: list[CompletionSignal]) -> list[CompletionSignal]:
+        """One signal per kind and message: the subject line ("Eingangsbestätigung") and the body
+        sentence naming the object belong together."""
+        merged: dict[CompletionKind, CompletionSignal] = {}
+        for signal in signals:
+            current = merged.get(signal.kind)
+            if current is None:
+                merged[signal.kind] = signal
+                continue
+            both_explicit = current.explicit and signal.explicit
+            best = signal if len(signal.evidence.quote) > len(current.evidence.quote) else current
+            merged[signal.kind] = best.model_copy(update={
+                "subject": _clip(f"{current.subject} {signal.subject}", 300),
+                "entities": list(dict.fromkeys([*current.entities, *signal.entities])),
+                "explicit": both_explicit,
+                "confidence": max(current.confidence, signal.confidence) if both_explicit
+                else min(current.confidence, signal.confidence),
+                "action_type": current.action_type if current.action_type != ActionType.OTHER else signal.action_type,
+            })
+        return list(merged.values())
 
     @staticmethod
     def _merge_within_document(tasks: list[CandidateTask]) -> list[CandidateTask]:

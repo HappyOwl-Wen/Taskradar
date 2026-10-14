@@ -16,7 +16,8 @@ from typing import Literal, Protocol
 
 from taskradar.domain.enums import ACTIVE_STATUSES, MatchRelation, RelationHint
 from taskradar.domain.schemas import CandidateTask, CompletionSignal, MatchDecision, TaskSnapshot
-from taskradar.reconciliation.normalize import action_similarity, entity_similarity, text_similarity
+from taskradar.extraction.dates import find_dates
+from taskradar.reconciliation.normalize import action_similarity, entity_similarity, object_overlap, text_similarity
 
 
 @dataclass(frozen=True)
@@ -53,8 +54,13 @@ class Reconciler:
     def content_score(self, cand: CandidateTask, task: TaskSnapshot) -> tuple[float, list[str]]:
         ent = entity_similarity(cand.entities, task.entities)
         act = action_similarity(cand.action_type, task.action_type)
-        txt = text_similarity(f"{cand.title} {cand.action_required}", _task_text(task))
-        reasons = [f"entities={ent if ent is None else round(ent, 2)}", f"action={act:.2f}", f"text={txt:.2f}"]
+        cand_text = f"{cand.title} {cand.action_required}"
+        txt = text_similarity(cand_text, _task_text(task))
+        # The object may be named in a neighbouring sentence ("... für die Rechnung Nr. 4711 ...").
+        obj = object_overlap(f"{cand_text} {cand.description[:600]}", f"{task.title} {task.description[:600]}")
+        reasons = [f"entities={ent if ent is None else round(ent, 2)}", f"action={act:.2f}", f"text={txt:.2f}",
+                   f"object={obj:.2f}"]
+        txt = max(txt, obj)
         if ent is None:
             # Without specific entities the action type alone must not create a match.
             score = 0.65 * txt + 0.35 * act * min(1.0, txt * 2.5)
@@ -119,7 +125,8 @@ class Reconciler:
                         )
                     return MatchDecision(relation=MatchRelation.NEW, score=score, layer="semantic", reasons=reasons)
             same_or_unknown_date = cand.due.date is None or task.due_date is None or cand.due.date == task.due_date
-            if same_or_unknown_date:
+            refers_back = cand.relation_hint in (RelationHint.REMINDER, RelationHint.DEADLINE_CHANGE)
+            if same_or_unknown_date or refers_back:
                 return MatchDecision(
                     relation=MatchRelation.POSSIBLE_DUPLICATE, task_id=task.id, score=score, layer="normalized",
                     reasons=[*reasons, "grey_zone_needs_user_decision"],
@@ -154,9 +161,14 @@ class Reconciler:
                 reasons=[*reasons, f"deadline_gap_{gap}_days_recurring"],
             )
         newer = source_date is None or task.last_source_at is None or source_date >= task.last_source_at
-        if explicit_change or newer:
-            return decision(MatchRelation.DEADLINE_UPDATE, "explicit_deadline_change" if explicit_change else "newer_source")
-        return decision(MatchRelation.POSSIBLE_DUPLICATE, "older_source_conflicting_deadline")
+        if explicit_change:
+            return decision(MatchRelation.DEADLINE_UPDATE, "explicit_deadline_change")
+        # A different date is only treated as an update of the same obligation when the new source
+        # itself refers back to it (reminder / same thread) or the match is very strong.
+        strong = cand.relation_hint == RelationHint.REMINDER or "same_mail_thread" in reasons or score >= 0.85
+        if newer and strong:
+            return decision(MatchRelation.DEADLINE_UPDATE, "newer_source")
+        return decision(MatchRelation.POSSIBLE_DUPLICATE, "conflicting_deadline_needs_review")
 
     # -----------------------------------------------------------------------------------------
 
@@ -169,7 +181,8 @@ class Reconciler:
                 continue
             ent = entity_similarity(signal.entities, task.entities)
             act = action_similarity(signal.action_type, task.action_type)
-            txt = text_similarity(signal.subject, _task_text(task))
+            txt = max(text_similarity(signal.subject, _task_text(task)),
+                      object_overlap(signal.subject, f"{task.title} {task.description[:600]}"))
             if ent is None:
                 score = 0.6 * txt + 0.2 * act * min(1.0, txt * 2.5)
             elif ent == 0.0:
@@ -177,6 +190,11 @@ class Reconciler:
             else:
                 score = 0.6 * ent + 0.25 * txt + 0.15 * act
             reasons = [f"entities={ent if ent is None else round(ent, 2)}", f"action={act:.2f}", f"text={txt:.2f}"]
+            if task.due_date is not None and task.due_date in {
+                m.date for m in find_dates(signal.subject, task.due_date) if not m.is_relative
+            }:
+                score += 0.25  # e.g. "Ihr Termin am 22.10.2026 wurde storniert"
+                reasons.append("same_date")
             if thread_id and thread_id in task.thread_ids:
                 score += 0.25
                 reasons.append("same_mail_thread")

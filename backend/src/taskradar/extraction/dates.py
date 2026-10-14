@@ -217,6 +217,15 @@ _DEADLINE_BEFORE = re.compile(
     re.I,
 )
 _DEADLINE_AFTER = re.compile(r"^\s*(前|之前|以前|截止|为止|到期|at the latest|deadline|spätestens|fällig)", re.I)
+# "within 14 days after contract signing": the period starts at an event we do not know, so the
+# date must not be computed from the mail date. Receipt of the message itself is a known anchor.
+_EVENT_ANCHOR_AFTER = re.compile(
+    r"^\s*(?:(?:of|after|following|from)\s+(?!(?:the\s+)?(?:receipt|date of this|this\s+(?:letter|e-?mail|notice|message)|today))"
+    r"|(?:nach|ab)\s+(?!(?:dem\s+)?(?:Erhalt|Zugang|Zustellung|Eingang|Datum dieses|heute)))",
+    re.I,
+)
+_EVENT_ANCHOR_BEFORE_ZH = re.compile(r"(后|之后|以后)\s*$")
+_RECEIPT_BEFORE_ZH = re.compile(r"(收到|接到|收悉)[^，。；]{0,12}(后|之后|以后)\s*$")
 # Relative weekday matches such as "bis Freitag" / "by Friday" carry their own deadline cue.
 _CUE_INSIDE = re.compile(r"^(by|until|before|due|bis|vor)\b", re.I)
 _SENTENCE_STOP = re.compile(r"[\n。！？!?；;]")
@@ -693,6 +702,23 @@ def find_dates(
             or bool(_CUE_INSIDE.match(mention.text))
             or bool(_DEADLINE_BEFORE.search(before) or _DEADLINE_AFTER.search(after))
         )
+        if mention.kind.endswith("_within"):
+            zh_before = text[max(0, mention.start - 20): mention.start]
+            event_after = bool(_EVENT_ANCHOR_AFTER.match(text[mention.end: mention.end + 60]))
+            event_before = bool(_EVENT_ANCHOR_BEFORE_ZH.search(zh_before)) and not _RECEIPT_BEFORE_ZH.search(zh_before)
+            if event_after or event_before:
+                mention.date = None
+                mention.ambiguous = True
+                mention.notes.append("period_starts_at_unknown_event")
+                if event_after:  # "innerhalb von 14 Tagen | nach Vertragsunterzeichnung"
+                    tail = re.match(r"[^.,;:!?。，；：！？\n]{0,60}", text[mention.end:])
+                    if tail and tail.group(0).strip():
+                        mention.end += len(tail.group(0).rstrip())
+                else:  # "签约后 | 14天内"
+                    head = re.search(r"[^，。；：！？\n请在于]{1,10}(?:后|之后|以后)\s*$", zh_before)
+                    if head:
+                        mention.start -= len(head.group(0))
+                mention.text = text[mention.start: mention.end]
     return selected
 
 

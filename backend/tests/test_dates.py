@@ -74,6 +74,36 @@ def test_relative_dates_use_the_source_date_not_today() -> None:
     assert first("Bitte bis morgen um 10 Uhr antworten.").time == dt.time(10, 0)
 
 
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Bitte überweisen Sie die Kaution innerhalb von 14 Tagen nach Vertragsunterzeichnung.",
+        "Please pay the deposit within 10 days after signing the lease.",
+        "请在签约后14天内缴纳押金。",
+    ],
+)
+def test_periods_starting_at_an_unknown_event_are_not_resolved(text: str) -> None:
+    mention = first(text)
+    assert mention.date is None  # never computed from the mail date
+    due = mention_to_due(mention, anchor_kind=DueAnchor.SOURCE_DATE)
+    assert due.precision == DuePrecision.NONE and due.needs_confirmation
+    # The original wording, including the unknown event, is kept for the user.
+    assert due.text is not None
+    assert any(event in due.text for event in ("Vertragsunterzeichnung", "signing", "签约"))
+
+
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        ("Please reply within 14 days of receipt of this letter.", dt.date(2026, 10, 27)),
+        ("Bitte antworten Sie innerhalb von 14 Tagen nach Erhalt dieses Schreibens.", dt.date(2026, 10, 27)),
+        ("请在收到本通知后7日内回复。", dt.date(2026, 10, 20)),
+    ],
+)
+def test_periods_starting_at_receipt_are_resolved(text: str, expected: dt.date) -> None:
+    assert first(text).date == expected
+
+
 def test_business_days_skip_weekends() -> None:
     # Friday + 3 business days = Wednesday
     assert first("请在3个工作日内完成缴费", anchor=dt.date(2026, 10, 16)).date == dt.date(2026, 10, 21)
