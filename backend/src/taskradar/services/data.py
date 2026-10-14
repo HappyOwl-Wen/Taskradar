@@ -37,7 +37,6 @@ from taskradar.db.models import (
     TaskSuggestion,
 )
 from taskradar.db.session import transaction
-from taskradar.domain.enums import SourceKind
 
 log = logging.getLogger(__name__)
 
@@ -126,7 +125,12 @@ class DataService:
             session.delete(task)
 
     def delete_all(self) -> dict[str, int]:
-        """Remove all tasks, imported items, history and stored file copies. Settings stay."""
+        """Remove all tasks, imported items, history, sources and stored file copies.
+
+        Watched folders are no longer watched (otherwise the next scan would silently re-import everything),
+        but the files in them are never touched. Settings and credentials stay; Gmail/Calendar can be
+        disconnected separately.
+        """
         counts: dict[str, int] = {}
         with transaction(self._factory) as session:
             for model in (
@@ -148,8 +152,7 @@ class DataService:
             ):
                 result = session.execute(delete(model))
                 counts[model.__tablename__] = int(getattr(result, "rowcount", 0) or 0)
-            # Keep folder/Gmail source definitions? No - the user asked for a clean slate.
-            result = session.execute(delete(Source).where(Source.kind != SourceKind.FOLDER.value))
+            result = session.execute(delete(Source))
             counts["sources"] = int(getattr(result, "rowcount", 0) or 0)
         for folder in (self.config.uploads_dir, self.config.attachments_dir):
             if folder.exists():

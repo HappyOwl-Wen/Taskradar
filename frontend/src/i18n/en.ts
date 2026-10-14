@@ -555,7 +555,7 @@ const en: Messages = {
       delete: "Delete record",
       deleteTitle: "Delete this file record?",
       deleteDescription:
-        "TaskRadar deletes its own stored copy and the extracted text. The original file (if it is in your folder) is not deleted. Related tasks stay but lose this evidence.",
+        "TaskRadar deletes its own stored copy and the extracted text; the original file is never deleted. Related tasks stay but lose this evidence. If the file is still in a watched folder, the next scan imports it again.",
       deleted: "Deleted",
       pages: "{{count}} page(s)",
       ocrEngine: "OCR engine",
@@ -738,7 +738,7 @@ const en: Messages = {
       download: "Download export",
       deleteAll: "Delete all local data",
       deleteAllHint:
-        "Deletes every task, mail record, stored document copy and log entry in the TaskRadar database. Gmail, Google Calendar and the original files in your folders are not affected. Remove secrets separately above.",
+        "Deletes every task, mail record, stored document copy, history and sync record, stops watching all folders and removes all sources. Gmail, Google Calendar and the original files in your folders are not affected. Settings and saved authorizations stay; disconnect or remove them separately above.",
       deleteAllTitle: "Delete all local data?",
       deleteAllBody: "This cannot be undone. Type DELETE to confirm.",
       deleteAllConfirm: "Delete permanently",

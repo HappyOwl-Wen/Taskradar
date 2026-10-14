@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import os
+import time
 from pathlib import Path
 from typing import Any
 
@@ -164,6 +165,27 @@ def test_destructive_actions_need_explicit_confirmation(api: Any, tmp_path: Path
     assert api.post("/api/data/delete-all", json={"confirm": "DELETE"}).status_code == 200
     with transaction(api.container.factory) as session:
         assert session.scalars(select(Task)).first() is None
+
+
+def test_delete_all_stops_watching_folders_but_keeps_original_files(api: Any, tmp_path: Path) -> None:
+    folder = tmp_path / "inbox"
+    folder.mkdir()
+    original = folder / "notice.pdf"
+    original.write_bytes((SAMPLES / "01_zh_enrollment_certificate_notice.pdf").read_bytes())
+    os.utime(original, (time.time() - 60, time.time() - 60))  # not "still being written"
+    api.post("/api/sources/folders", json={"path": str(folder)})  # starts the first scan in the background
+    deadline = time.monotonic() + 30
+    while time.monotonic() < deadline:
+        jobs = api.get("/api/sync-jobs").json()["items"]
+        if any(j["kind"] == "folder_scan" and j["status"] != "running" for j in jobs):
+            break
+        time.sleep(0.05)
+    assert api.get("/api/tasks").json()["total"] == 1
+    assert api.post("/api/data/delete-all", json={"confirm": "DELETE"}).status_code == 200
+    assert api.get("/api/sources").json()["items"] == []
+    api.container.folders.scan_all()  # what the scheduler would do next: nothing is re-imported
+    assert api.get("/api/tasks").json()["total"] == 0
+    assert original.read_bytes() == (SAMPLES / "01_zh_enrollment_certificate_notice.pdf").read_bytes()
     manager = AutostartManager(startup_dir=tmp_path / "Startup")
     api.app.state.autostart = manager
     assert api.post("/api/system/autostart", json={"enabled": True}).status_code == 403
