@@ -81,7 +81,9 @@ class GmailSyncService:
         )
 
     def _retry(self, fn: Callable[[], Any]) -> Any:
-        return call_with_retries(fn, max_attempts=4, base_delay=1.0, max_delay=16.0, sleep=self.sleep)
+        return call_with_retries(
+            fn, max_attempts=6, base_delay=1.0, rate_limit_base_delay=2.0, max_delay=32.0, sleep=self.sleep
+        )
 
     def _checkpoint(self, session: Session, source_id: int, key: str) -> str | None:
         row = session.scalar(

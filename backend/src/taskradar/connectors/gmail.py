@@ -15,8 +15,13 @@ from taskradar.connectors.errors import (
     NotFoundError,
     PermanentError,
     RateLimitedError,
+    RequestPacer,
     TransientError,
 )
+
+# At most ~5 Gmail API requests per second. Well below Google's documented quota, but bursts of a few
+# requests per second already triggered 403 rateLimitExceeded on a real (new) project.
+GMAIL_MIN_INTERVAL = 0.2
 
 log = logging.getLogger(__name__)
 
@@ -65,18 +70,20 @@ def map_http_error(status: int, content: bytes | str | None, headers: dict[str, 
 
 
 class GoogleGmailClient:
-    def __init__(self, credentials: Any, *, timeout: float = 30.0) -> None:
+    def __init__(self, credentials: Any, *, timeout: float = 30.0, min_interval: float = GMAIL_MIN_INTERVAL) -> None:
         import google_auth_httplib2
         import httplib2
         from googleapiclient.discovery import build
 
         http = google_auth_httplib2.AuthorizedHttp(credentials, http=httplib2.Http(timeout=timeout))
         self._service = build("gmail", "v1", http=http, cache_discovery=False, static_discovery=True)
+        self._pacer = RequestPacer(min_interval)
 
     def _execute(self, request: Any) -> Any:
         from google.auth.exceptions import RefreshError, TransportError
         from googleapiclient.errors import HttpError
 
+        self._pacer.wait()
         try:
             return request.execute(num_retries=0)
         except HttpError as exc:

@@ -4,8 +4,16 @@ from __future__ import annotations
 
 import datetime as dt
 
+import pytest
 from sqlalchemy import func, select
 
+from taskradar.connectors.errors import (
+    RateLimitedError,
+    RequestPacer,
+    TransientError,
+    backoff_delay,
+    call_with_retries,
+)
 from taskradar.container import Container
 from taskradar.db.models import Document, Message, Source, SyncCheckpoint, SyncJob, Task
 from taskradar.db.session import transaction
@@ -98,6 +106,59 @@ def test_rate_limit_is_retried_transparently(container: Container, gmail: FakeGm
     job = container.gmail.sync(source_id)
     assert job["status"] == "succeeded"
     assert count(container, Task) > 0
+
+
+def test_sustained_rate_limiting_is_absorbed_within_the_job(container: Container, gmail: FakeGmailRegistry) -> None:
+    # Seen with a real account: Google answered "403 rateLimitExceeded" several times in a row.
+    source_id = gmail_source(container)
+    gmail.client.failure_mode = "rate_limit"
+    gmail.client.failures_remaining = 5
+    job = container.gmail.sync(source_id)
+    assert job["status"] == "succeeded"
+    assert count(container, Task) > 0
+
+
+def test_retry_after_is_a_minimum_never_shortened() -> None:
+    exc = RateLimitedError("slow down", retry_after=10)
+    for attempt in range(1, 6):
+        assert backoff_delay(exc, attempt, base_delay=1, max_delay=32, rand=lambda: 0.0) >= 10
+
+
+def test_rate_limits_back_off_longer_than_transient_errors() -> None:
+    def delay(exc: Exception, attempt: int) -> float:
+        return backoff_delay(exc, attempt, base_delay=1, max_delay=32, rate_limit_base_delay=2, rand=lambda: 1.0)  # type: ignore[arg-type]
+
+    assert [delay(RateLimitedError("x"), n) for n in range(1, 7)] == [2, 4, 8, 16, 32, 32]
+    assert [delay(TransientError("x"), n) for n in range(1, 4)] == [1, 2, 4]
+
+
+def test_very_long_retry_after_is_left_to_the_job_scheduler() -> None:
+    calls: list[int] = []
+
+    def always_limited() -> None:
+        calls.append(1)
+        raise RateLimitedError("come back in ten minutes", retry_after=600)
+
+    with pytest.raises(RateLimitedError):
+        call_with_retries(always_limited, max_attempts=6, max_delay=32, sleep=lambda _s: None)
+    assert len(calls) == 1  # no in-job waiting for ten minutes
+
+
+def test_request_pacer_spaces_out_bursts_but_not_idle_requests() -> None:
+    now = [100.0]
+    slept: list[float] = []
+
+    def sleep(seconds: float) -> None:
+        slept.append(round(seconds, 3))
+        now[0] += seconds
+
+    pacer = RequestPacer(0.2, clock=lambda: now[0], sleep=sleep)
+    for _ in range(4):
+        pacer.wait()
+    assert slept == [0.2, 0.2, 0.2]
+    now[0] += 5  # a pause longer than the interval
+    pacer.wait()
+    assert slept == [0.2, 0.2, 0.2]
 
 
 def test_persistent_server_errors_fail_recoverably_and_keep_data(
