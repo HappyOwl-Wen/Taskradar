@@ -375,7 +375,12 @@ class IngestService:
                 # Re-analysis (after an extractor improvement or once OCR is installed) may find a deadline
                 # the first run missed; it fills a gap but never overrides an existing or user-set date.
                 task = self.tasks.get(session, decision.task_id)
-                if self._enrich_due(session, task, cand, origin, reanalysis=True):
+                updated = self._enrich_due(session, task, cand, origin, reanalysis=True)
+                if task.due_date is not None and task.due_date == cand.due.date:
+                    # Show where the date comes from, e.g. a "Due date:" line only the re-analysis found.
+                    deadline_evidence = [e for e in cand.evidence if e.kind == "deadline"]
+                    self.tasks.add_source_evidence(session, task, origin.key, deadline_evidence)
+                if updated:
                     outcome.tasks_updated += 1
                     self._refresh(session, existing, task)
             return

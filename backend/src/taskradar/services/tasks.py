@@ -286,6 +286,20 @@ class TaskService:
             candidate_row.task_id = task.id
         return task
 
+    def add_source_evidence(self, session: Session, task: Task, origin_key: str, evidence: list[Evidence]) -> bool:
+        """Add evidence found by a re-analysis to the task's existing source(s) for ``origin_key``."""
+        changed = False
+        for source in session.scalars(
+            select(TaskSource).where(TaskSource.task_id == task.id, TaskSource.origin_key == origin_key)
+        ):
+            current = list(source.evidence or [])
+            seen = {(e.get("kind"), e.get("quote")) for e in current}
+            added = [e.model_dump(mode="json") for e in evidence if (e.kind, e.quote) not in seen]
+            if added:
+                source.evidence = [*current, *added]
+                changed = True
+        return changed
+
     def _add_source(
         self,
         session: Session,

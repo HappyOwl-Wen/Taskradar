@@ -191,12 +191,19 @@ def test_reanalysis_fills_a_deadline_the_first_run_missed(api: Any, monkeypatch:
     assert detail["due_date"] == "2026-10-28"
     filled = next(e for e in detail["events"] if e["type"] == "fields_updated")
     assert filled["actor"] == "agent" and filled["revertible"]
+    [source] = detail["sources"]
+    assert [e["kind"] for e in source["evidence"]] == ["action", "deadline"]  # where the date comes from
+    assert "Due date: 10/28/2026" in source["evidence"][1]["quote"]
     assert len(api.get("/api/tasks").json()["items"]) == 1  # re-analysis never duplicates the task
 
-    # A date the user set is never overridden by a later re-analysis.
+    # Re-analysing again changes nothing, and a date the user set is never overridden.
+    api.post(f"/api/messages/{message_id}/reprocess")
+    assert len(api.get(f"/api/tasks/{task['id']}").json()["sources"][0]["evidence"]) == 2
     api.patch(f"/api/tasks/{task['id']}", json={"due_date": "2026-10-30"})
     api.post(f"/api/messages/{message_id}/reprocess")
-    assert api.get(f"/api/tasks/{task['id']}").json()["due_date"] == "2026-10-30"
+    after = api.get(f"/api/tasks/{task['id']}").json()
+    assert after["due_date"] == "2026-10-30"
+    assert [e["kind"] for e in after["sources"][0]["evidence"]] == ["action", "deadline"]
 
 
 def test_task_editing_validation_and_manual_tasks(api: Any) -> None:
