@@ -75,8 +75,12 @@ def test_incremental_sync_uses_history(container: Container, gmail: FakeGmailReg
     container.gmail.sync(source_id)
     with transaction(container.factory) as session:
         fee = next(t for t in session.scalars(select(Task)) if "Semesterbeitrag" in t.title)
-        container.tasks.change_status(session, fee, TaskStatus.CONFIRMED, actor=__import__("taskradar.domain.enums",
-                                                                                            fromlist=["Actor"]).Actor.USER)
+        container.tasks.change_status(
+            session,
+            fee,
+            TaskStatus.CONFIRMED,
+            actor=__import__("taskradar.domain.enums", fromlist=["Actor"]).Actor.USER,
+        )
         fee_id = fee.id
     gmail.client.add_message(demo_completion_message(container.clock()))
     job = container.gmail.sync(source_id)
@@ -96,7 +100,9 @@ def test_rate_limit_is_retried_transparently(container: Container, gmail: FakeGm
     assert count(container, Task) > 0
 
 
-def test_persistent_server_errors_fail_recoverably_and_keep_data(container: Container, gmail: FakeGmailRegistry) -> None:
+def test_persistent_server_errors_fail_recoverably_and_keep_data(
+    container: Container, gmail: FakeGmailRegistry
+) -> None:
     source_id = gmail_source(container)
     container.gmail.sync(source_id)
     tasks_before = count(container, Task)

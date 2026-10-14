@@ -60,9 +60,22 @@ ACTION_PATTERNS: list[tuple[ActionType, re.Pattern[str]]] = [
     (ActionType.SIGN, _rx(r"签署|签字|签名|签订", r"\bsign\b|\bcountersign\b", r"unterschreiben|unterzeichnen")),
     (ActionType.RENEW, _rx(r"续签|续期|延长签证", r"\brenew\w*|\bextend your\b", r"verlängern|erneuern")),
     (ActionType.APPLY, _rx(r"申请|办理", r"\bapply\b|\bapply for\b", r"beantragen|bewerben\s+Sie|Antrag stellen")),
-    (ActionType.BOOK, _rx(r"预约|预订", r"\bbook\b|\bschedule\b|\breserve\b|make an appointment", r"buchen|vereinbaren|reservieren")),
-    (ActionType.ATTEND, _rx(r"参加|出席|到场", r"\battend\b|\bjoin\b|\bparticipate\b|\bbe present\b", r"teilnehmen|erscheinen\s+Sie|besuchen\s+Sie")),
-    (ActionType.BRING, _rx(r"携带|带上|带好", r"\bbring\b|\bcarry\b", r"mitbringen|mitzubringen|bringen\s+Sie\b.{0,200}?\bmit\b")),
+    (
+        ActionType.BOOK,
+        _rx(r"预约|预订", r"\bbook\b|\bschedule\b|\breserve\b|make an appointment", r"buchen|vereinbaren|reservieren"),
+    ),
+    (
+        ActionType.ATTEND,
+        _rx(
+            r"参加|出席|到场",
+            r"\battend\b|\bjoin\b|\bparticipate\b|\bbe present\b",
+            r"teilnehmen|erscheinen\s+Sie|besuchen\s+Sie",
+        ),
+    ),
+    (
+        ActionType.BRING,
+        _rx(r"携带|带上|带好", r"\bbring\b|\bcarry\b", r"mitbringen|mitzubringen|bringen\s+Sie\b.{0,200}?\bmit\b"),
+    ),
     (
         ActionType.PREPARE,
         _rx(
@@ -88,7 +101,11 @@ ADDRESSEE_CUES = _rx(r"您|你", r"\byou\b|\byour\b", r"\bSie\b|\bIhre?[nmrs]?\b
 # Statements that describe what someone else will do; not obligations for the user.
 THIRD_PARTY_CUES = _rx(r"我们将|我们会|we will|we'll|wir werden|wird von uns")
 
-OPTIONAL_CUES = _rx(r"可选|自愿|如有兴趣|如有需要", r"\boptional\b|if you wish|if you are interested", r"freiwillig|bei Interesse|optional")
+OPTIONAL_CUES = _rx(
+    r"可选|自愿|如有兴趣|如有需要",
+    r"\boptional\b|if you wish|if you are interested",
+    r"freiwillig|bei Interesse|optional",
+)
 
 CONSEQUENCE_CUES = _rx(
     r"罚款|滞纳金|否则|将被|取消资格|注销|逾期将|影响注册|无法注册",
@@ -104,7 +121,11 @@ MARKETING_STRONG = _rx(
     r"im Browser anzeigen|Angebot gilt",
 )
 
-NEWSLETTER_CUES = _rx(r"简报|周报|资讯|新闻", r"\bnewsletter\b|\bdigest\b|weekly update|news roundup", r"Newsletter|Wochenrückblick|Neuigkeiten")
+NEWSLETTER_CUES = _rx(
+    r"简报|周报|资讯|新闻",
+    r"\bnewsletter\b|\bdigest\b|weekly update|news roundup",
+    r"Newsletter|Wochenrückblick|Neuigkeiten",
+)
 
 REMINDER_CUES = _rx(
     r"提醒|再次提醒|温馨提示|友情提示|催办|尚未收到|还未收到|仍未",
@@ -118,7 +139,9 @@ DEADLINE_CHANGE_CUES = _rx(
     r"verlängert|verschoben|neue Frist|neuer Termin|geändert auf",
 )
 
-CANCEL_TASK_CUES = _rx(r"无需再|不再需要|无需提交", r"no longer (?:required|necessary|needed)", r"nicht mehr erforderlich|entfällt")
+CANCEL_TASK_CUES = _rx(
+    r"无需再|不再需要|无需提交", r"no longer (?:required|necessary|needed)", r"nicht mehr erforderlich|entfällt"
+)
 
 # "If you have already submitted ..., please ignore" -> a reminder, NOT a completion.
 CONDITIONAL_DONE = _rx(
@@ -168,12 +191,20 @@ COMPLETION_PATTERNS: list[tuple[CompletionKind, re.Pattern[str]]] = [
     ),
     (
         CompletionKind.APPROVED,
-        _rx(r"已通过|已批准|审核通过|已获批", r"(?:has been|was|is) approved|application (?:was )?accepted", r"genehmigt|bewilligt|wurde angenommen"),
+        _rx(
+            r"已通过|已批准|审核通过|已获批",
+            r"(?:has been|was|is) approved|application (?:was )?accepted",
+            r"genehmigt|bewilligt|wurde angenommen",
+        ),
     ),
     (CompletionKind.CANCELLED, _rx(r"已取消", r"(?:has been|was) cancel+ed", r"storniert|abgesagt")),
     (
         CompletionKind.IN_REVIEW,
-        _rx(r"正在处理|审核中|处理中|正在审核", r"(?:is|are) being processed|under review|in review", r"wird bearbeitet|in Bearbeitung|wird geprüft"),
+        _rx(
+            r"正在处理|审核中|处理中|正在审核",
+            r"(?:is|are) being processed|under review|in review",
+            r"wird bearbeitet|in Bearbeitung|wird geprüft",
+        ),
     ),
 ]
 
@@ -247,21 +278,42 @@ ENTITY_PATTERNS: dict[str, tuple[float, re.Pattern[str]]] = {
     ),
     "residence_permit": (
         1.0,
-        _rx(r"居留许可|居留卡|居留", r"residence (?:permit|title|card)", r"Aufenthaltstitel|Aufenthaltserlaubnis|\beAT\b|Niederlassungserlaubnis"),
+        _rx(
+            r"居留许可|居留卡|居留",
+            r"residence (?:permit|title|card)",
+            r"Aufenthaltstitel|Aufenthaltserlaubnis|\beAT\b|Niederlassungserlaubnis",
+        ),
     ),
     "visa": (0.9, _rx(r"签证", r"\bvisa\b", r"Visum")),
     "address_registration": (
         1.0,
-        _rx(r"住址登记|地址登记|居住登记", r"address registration|registration certificate", r"Wohnsitzanmeldung|Meldebescheinigung|\bAnmeldung\b"),
+        _rx(
+            r"住址登记|地址登记|居住登记",
+            r"address registration|registration certificate",
+            r"Wohnsitzanmeldung|Meldebescheinigung|\bAnmeldung\b",
+        ),
     ),
     "health_insurance": (
         1.0,
-        _rx(r"医保|医疗保险|健康保险", r"health insurance", r"Krankenversicherung|Versicherungsbescheinigung|Krankenkasse"),
+        _rx(
+            r"医保|医疗保险|健康保险",
+            r"health insurance",
+            r"Krankenversicherung|Versicherungsbescheinigung|Krankenkasse",
+        ),
     ),
-    "exam_registration": (1.0, _rx(r"考试报名|考试注册", r"exam registration|register for (?:the )?exam", r"Prüfungsanmeldung|Klausuranmeldung")),
+    "exam_registration": (
+        1.0,
+        _rx(
+            r"考试报名|考试注册", r"exam registration|register for (?:the )?exam", r"Prüfungsanmeldung|Klausuranmeldung"
+        ),
+    ),
     "course_registration": (
         1.0,
-        _rx(r"选课|课程注册|课程报名", r"course registration|module registration|register for (?:the )?course", r"Kursanmeldung|Modulanmeldung|Lehrveranstaltungsanmeldung"),
+        _rx(
+            r"选课|课程注册|课程报名",
+            r"course registration|module registration|register for (?:the )?course",
+            r"Kursanmeldung|Modulanmeldung|Lehrveranstaltungsanmeldung",
+        ),
     ),
     "re_registration": (1.0, _rx(r"学期注册|续注册", r"re-?registration", r"Rückmeldung")),
     "passport": (0.5, _rx(r"护照", r"passport", r"Reisepass")),
@@ -274,11 +326,24 @@ ENTITY_PATTERNS: dict[str, tuple[float, re.Pattern[str]]] = {
     "photo": (0.4, _rx(r"照片", r"\bphoto\b", r"Lichtbild|Passfoto|Foto")),
     "bank_account": (0.7, _rx(r"银行账户|银行卡", r"bank account", r"Bankkonto|Girokonto")),
     "tax_id": (0.9, _rx(r"税号", r"tax id|tax identification", r"Steuer-?ID|Steueridentifikationsnummer")),
-    "address_change": (0.9, _rx(r"新地址|地址变更|更新地址", r"address change|new address|update your address", r"Adressänderung|neue Adresse")),
+    "address_change": (
+        0.9,
+        _rx(
+            r"新地址|地址变更|更新地址",
+            r"address change|new address|update your address",
+            r"Adressänderung|neue Adresse",
+        ),
+    ),
     "semester_ticket": (0.9, _rx(r"学期票", r"semester ticket", r"Semesterticket|Deutschlandticket")),
     "application_form": (0.4, _rx(r"申请表|表格", r"application form|\bform\b", r"Antragsformular|Formular")),
-    "library_books": (0.9, _rx(r"图书馆|借书|还书", r"library books?|return (?:the )?books", r"Bibliothek|Bücher zurückgeben|Leihfrist")),
-    "rsvp": (0.3, _rx(r"是否参加|出席情况", r"\bRSVP\b|whether you (?:will )?attend", r"Teilnahme bestätigen|ob Sie teilnehmen")),
+    "library_books": (
+        0.9,
+        _rx(r"图书馆|借书|还书", r"library books?|return (?:the )?books", r"Bibliothek|Bücher zurückgeben|Leihfrist"),
+    ),
+    "rsvp": (
+        0.3,
+        _rx(r"是否参加|出席情况", r"\bRSVP\b|whether you (?:will )?attend", r"Teilnahme bestätigen|ob Sie teilnehmen"),
+    ),
     "documents": (0.3, _rx(r"材料|文件|资料", r"\bdocuments?\b|paperwork", r"Unterlagen|Dokumente|Nachweise")),
     "appointment": (0.3, _rx(r"预约", r"appointment", r"\bTermin\b")),
     "payment": (0.2, _rx(r"款项", r"\bpayment\b", r"\bZahlung\b")),
@@ -294,7 +359,7 @@ def detect_entities(text: str) -> list[str]:
 
 
 def entity_weight(name: str) -> float:
-    return ENTITY_PATTERNS.get(name, (0.5, None))[0]  # type: ignore[return-value]
+    return ENTITY_PATTERNS.get(name, (0.5, None))[0]
 
 
 GENERIC_ACTIONS = {ActionType.PREPARE, ActionType.OTHER}
@@ -345,30 +410,66 @@ def detect_category(text: str, action: ActionType | None = None) -> Category:
 
 ACTION_LABELS: dict[str, dict[ActionType, str]] = {
     "zh": {
-        ActionType.SUBMIT: "提交", ActionType.PAY: "缴纳", ActionType.REGISTER: "注册", ActionType.REPLY: "回复",
-        ActionType.CONFIRM: "确认", ActionType.ATTEND: "参加", ActionType.BOOK: "预约", ActionType.UPLOAD: "上传",
-        ActionType.SIGN: "签署", ActionType.RENEW: "续签", ActionType.APPLY: "申请", ActionType.BRING: "携带",
-        ActionType.PREPARE: "完成", ActionType.CANCEL: "取消", ActionType.OTHER: "处理",
+        ActionType.SUBMIT: "提交",
+        ActionType.PAY: "缴纳",
+        ActionType.REGISTER: "注册",
+        ActionType.REPLY: "回复",
+        ActionType.CONFIRM: "确认",
+        ActionType.ATTEND: "参加",
+        ActionType.BOOK: "预约",
+        ActionType.UPLOAD: "上传",
+        ActionType.SIGN: "签署",
+        ActionType.RENEW: "续签",
+        ActionType.APPLY: "申请",
+        ActionType.BRING: "携带",
+        ActionType.PREPARE: "完成",
+        ActionType.CANCEL: "取消",
+        ActionType.OTHER: "处理",
     },
     "en": {
-        ActionType.SUBMIT: "Submit", ActionType.PAY: "Pay", ActionType.REGISTER: "Register", ActionType.REPLY: "Reply",
-        ActionType.CONFIRM: "Confirm", ActionType.ATTEND: "Attend", ActionType.BOOK: "Book", ActionType.UPLOAD: "Upload",
-        ActionType.SIGN: "Sign", ActionType.RENEW: "Renew", ActionType.APPLY: "Apply for", ActionType.BRING: "Bring",
-        ActionType.PREPARE: "Complete", ActionType.CANCEL: "Cancel", ActionType.OTHER: "Handle",
+        ActionType.SUBMIT: "Submit",
+        ActionType.PAY: "Pay",
+        ActionType.REGISTER: "Register",
+        ActionType.REPLY: "Reply",
+        ActionType.CONFIRM: "Confirm",
+        ActionType.ATTEND: "Attend",
+        ActionType.BOOK: "Book",
+        ActionType.UPLOAD: "Upload",
+        ActionType.SIGN: "Sign",
+        ActionType.RENEW: "Renew",
+        ActionType.APPLY: "Apply for",
+        ActionType.BRING: "Bring",
+        ActionType.PREPARE: "Complete",
+        ActionType.CANCEL: "Cancel",
+        ActionType.OTHER: "Handle",
     },
     "de": {
-        ActionType.SUBMIT: "einreichen", ActionType.PAY: "bezahlen", ActionType.REGISTER: "anmelden",
-        ActionType.REPLY: "beantworten", ActionType.CONFIRM: "bestätigen", ActionType.ATTEND: "teilnehmen",
-        ActionType.BOOK: "buchen", ActionType.UPLOAD: "hochladen", ActionType.SIGN: "unterschreiben",
-        ActionType.RENEW: "verlängern", ActionType.APPLY: "beantragen", ActionType.BRING: "mitbringen",
-        ActionType.PREPARE: "erledigen", ActionType.CANCEL: "stornieren", ActionType.OTHER: "erledigen",
+        ActionType.SUBMIT: "einreichen",
+        ActionType.PAY: "bezahlen",
+        ActionType.REGISTER: "anmelden",
+        ActionType.REPLY: "beantworten",
+        ActionType.CONFIRM: "bestätigen",
+        ActionType.ATTEND: "teilnehmen",
+        ActionType.BOOK: "buchen",
+        ActionType.UPLOAD: "hochladen",
+        ActionType.SIGN: "unterschreiben",
+        ActionType.RENEW: "verlängern",
+        ActionType.APPLY: "beantragen",
+        ActionType.BRING: "mitbringen",
+        ActionType.PREPARE: "erledigen",
+        ActionType.CANCEL: "stornieren",
+        ActionType.OTHER: "erledigen",
     },
 }
 
 ENTITY_LABELS: dict[str, dict[str, str]] = {
     "enrollment_certificate": {"zh": "在读证明", "en": "enrollment certificate", "de": "Immatrikulationsbescheinigung"},
     "tuition_fee": {"zh": "学期费", "en": "semester fee", "de": "Semesterbeitrag"},
-    "residence_permit": {"zh": "居留许可材料", "en": "residence permit documents", "de": "Unterlagen für den Aufenthaltstitel"},
+    "residence_permit": {
+        "zh": "居留许可材料",
+        "en": "residence permit documents",
+        "de": "Unterlagen für den Aufenthaltstitel",
+    },
     "visa": {"zh": "签证", "en": "visa", "de": "Visum"},
     "address_registration": {"zh": "住址登记", "en": "address registration", "de": "Wohnsitzanmeldung"},
     "health_insurance": {"zh": "医保证明", "en": "health insurance certificate", "de": "Versicherungsbescheinigung"},

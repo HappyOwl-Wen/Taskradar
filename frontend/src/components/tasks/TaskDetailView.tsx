@@ -204,7 +204,11 @@ export function TaskDetailView({ taskId, embedded = false, onDeleted }: { taskId
         {task.source_published_at ? (
           <>
             <dt>{t("detail.publishedAt")}</dt>
-            <dd>{formatDateTime(task.source_published_at, i18n.language, timezone)}</dd>
+            <dd>
+              {task.source_published_day
+                ? formatDate(task.source_published_day, i18n.language)
+                : formatDateTime(task.source_published_at, i18n.language, timezone)}
+            </dd>
           </>
         ) : null}
         <dt>{t("detail.updatedAt")}</dt>

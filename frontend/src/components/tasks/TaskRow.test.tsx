@@ -35,6 +35,7 @@ const task: TaskSummary = {
   calendar_status: null,
   detected_at: null,
   source_published_at: null,
+  source_published_day: null,
   created_at: null,
   updated_at: null,
   confirmed_at: null,

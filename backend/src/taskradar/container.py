@@ -97,8 +97,9 @@ def build_container(
     agent = AgentFactory(settings, guard, provider_override=llm_provider)
     ingest = IngestService(factory, settings=settings, agent=agent, tasks=tasks, clock=clock)
     ocr_engine = ocr or TesseractEngine(config.tesseract_cmd, tools_dir=config.tools_dir)
-    documents = DocumentService(factory, config=config, settings=settings, ingest=ingest, tasks=tasks,
-                                ocr=ocr_engine, clock=clock)
+    documents = DocumentService(
+        factory, config=config, settings=settings, ingest=ingest, tasks=tasks, ocr=ocr_engine, clock=clock
+    )
     jobs = JobRunner(factory, clock)
     folders = FolderService(factory, settings=settings, documents=documents, guard=guard, jobs=jobs, clock=clock)
     oauth = GoogleOAuthManager(secrets, redirect_uri=f"{config.base_url}/api/oauth/google/callback", clock=clock)
@@ -107,12 +108,18 @@ def build_container(
         if source.kind == SourceKind.DEMO_MAIL.value:
             messages, attachments = build_demo_mailbox(clock())
             client = FakeGmailClient(
-                messages, attachments=attachments, clock=clock, email=DEMO_ACCOUNT,
+                messages,
+                attachments=attachments,
+                clock=clock,
+                email=DEMO_ACCOUNT,
                 failure_mode=settings.get().demo.gmail_failure_mode,
             )
             with transaction(factory) as session:
-                stage = session.scalar(select(SyncCheckpoint.value).where(
-                    SyncCheckpoint.source_id == source.id, SyncCheckpoint.key == "demo_stage"))
+                stage = session.scalar(
+                    select(SyncCheckpoint.value).where(
+                        SyncCheckpoint.source_id == source.id, SyncCheckpoint.key == "demo_stage"
+                    )
+                )
             if stage and int(stage) >= 2:
                 client.add_message(demo_completion_message(clock()))
             return client
@@ -122,19 +129,47 @@ def build_container(
         return GoogleCalendarClient(oauth.credentials("calendar"))
 
     gmail = GmailSyncService(
-        factory, settings=settings, documents=documents, jobs=jobs, guard=guard,
-        client_factory=gmail_client_factory or default_gmail_factory, clock=clock, sleep=sleep or time.sleep,
+        factory,
+        settings=settings,
+        documents=documents,
+        jobs=jobs,
+        guard=guard,
+        client_factory=gmail_client_factory or default_gmail_factory,
+        clock=clock,
+        sleep=sleep or time.sleep,
     )
     calendar = CalendarSyncService(
-        factory, settings=settings, guard=guard, tasks=tasks,
+        factory,
+        settings=settings,
+        guard=guard,
+        tasks=tasks,
         client_factory=calendar_client_factory or default_calendar_factory,
-        connected=lambda: oauth.connected("calendar"), base_url=config.base_url, clock=clock,
+        connected=lambda: oauth.connected("calendar"),
+        base_url=config.base_url,
+        clock=clock,
     )
-    notifications = NotificationService(factory, settings=settings, guard=guard, jobs=jobs, clock=clock,
-                                        toast=toast or show_toast)
+    notifications = NotificationService(
+        factory, settings=settings, guard=guard, jobs=jobs, clock=clock, toast=toast or show_toast
+    )
     return Container(
-        config=config, engine=engine, factory=factory, clock=clock, secrets=secrets, settings=settings, guard=guard,
-        tasks=tasks, agent=agent, ingest=ingest, ocr=ocr_engine, documents=documents, folders=folders, jobs=jobs,
-        oauth=oauth, gmail=gmail, calendar=calendar, notifications=notifications,
-        data=DataService(factory, config=config, clock=clock), metrics=MetricsService(factory),
+        config=config,
+        engine=engine,
+        factory=factory,
+        clock=clock,
+        secrets=secrets,
+        settings=settings,
+        guard=guard,
+        tasks=tasks,
+        agent=agent,
+        ingest=ingest,
+        ocr=ocr_engine,
+        documents=documents,
+        folders=folders,
+        jobs=jobs,
+        oauth=oauth,
+        gmail=gmail,
+        calendar=calendar,
+        notifications=notifications,
+        data=DataService(factory, config=config, clock=clock),
+        metrics=MetricsService(factory),
     )

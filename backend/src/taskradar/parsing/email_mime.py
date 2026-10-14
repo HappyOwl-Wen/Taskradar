@@ -27,7 +27,11 @@ _QUOTE_HEADERS = [
     re.compile(r"^On .{3,200} wrote:\s*$", re.I),
     re.compile(r"^Am .{3,200} schrieb .{0,200}:\s*$", re.I),
     re.compile(r"^在.{3,200}写道[:：]\s*$"),
-    re.compile(r"^-{2,}\s*(Original Message|Ursprüngliche Nachricht|原始邮件|Forwarded message|Weitergeleitete Nachricht)\s*-{2,}", re.I),
+    re.compile(
+        r"^-{2,}\s*(Original Message|Ursprüngliche Nachricht|原始邮件|Forwarded message|"
+        r"Weitergeleitete Nachricht)\s*-{2,}",
+        re.I,
+    ),
     re.compile(r"^_{10,}\s*$"),
 ]
 _OUTLOOK_FROM = re.compile(r"^(From|Von|发件人)\s*[:：]", re.I)
@@ -91,9 +95,7 @@ def sender_domain(sender: str) -> str | None:
 def _is_bulk(headers: dict[str, str]) -> bool:
     if headers.get("list-unsubscribe") or headers.get("list-id"):
         return True
-    if headers.get("precedence", "").lower() in {"bulk", "list", "junk"}:
-        return True
-    return False
+    return headers.get("precedence", "").lower() in {"bulk", "list", "junk"}
 
 
 def gmail_web_link(message_id: str, account: str | None = None) -> str:
@@ -204,27 +206,23 @@ def parse_eml_bytes(data: bytes, max_attachment_bytes: int = 15 * 1024 * 1024) -
     headers = {k.lower(): str(v) for k, v in msg.items()}
 
     body_text = ""
-    body = msg.get_body(preferencelist=("plain", "html"))  # type: ignore[attr-defined]
+    body = msg.get_body(preferencelist=("plain", "html"))
     if body is not None:
         content = body.get_content()
-        if body.get_content_type() == "text/html":
-            body_text = html_to_text(content)
-        else:
-            body_text = normalize_whitespace(content)
+        is_html = body.get_content_type() == "text/html"
+        body_text = html_to_text(content) if is_html else normalize_whitespace(content)
     body_text = strip_quoted_text(body_text)[:_MAX_BODY_CHARS]
 
     attachments: list[AttachmentRef] = []
-    for part in msg.iter_attachments():  # type: ignore[attr-defined]
+    for part in msg.iter_attachments():
         ctype = part.get_content_type()
         filename = part.get_filename() or ""
         if ctype not in ATTACHMENT_MIME_TYPES or not filename:
             continue
-        payload = part.get_payload(decode=True) or b""
-        if len(payload) > max_attachment_bytes:
+        payload = part.get_payload(decode=True)
+        if not isinstance(payload, bytes) or len(payload) > max_attachment_bytes:
             continue
-        attachments.append(
-            AttachmentRef(filename=filename, mime_type=ctype, size=len(payload), inline_data=payload)
-        )
+        attachments.append(AttachmentRef(filename=filename, mime_type=ctype, size=len(payload), inline_data=payload))
 
     message_id = headers.get("message-id") or ""
     external_id = message_id.strip("<>") or hashlib.sha256(data).hexdigest()

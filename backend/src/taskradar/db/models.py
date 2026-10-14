@@ -284,9 +284,7 @@ class TaskCandidate(Base):
     decision_layer: Mapped[str | None] = mapped_column(String(20), default=None)
     decision_score: Mapped[float | None] = mapped_column(Float, default=None)
     decision_reasons: Mapped[list[str]] = mapped_column(default=list)
-    task_id: Mapped[str | None] = mapped_column(
-        ForeignKey("tasks.id", ondelete="SET NULL"), default=None, index=True
-    )
+    task_id: Mapped[str | None] = mapped_column(ForeignKey("tasks.id", ondelete="SET NULL"), default=None, index=True)
     created_at: Mapped[dt.datetime] = mapped_column(default=utcnow)
 
 
@@ -361,9 +359,7 @@ class TaskSuggestion(Base):
     candidate_id: Mapped[int | None] = mapped_column(
         ForeignKey("task_candidates.id", ondelete="SET NULL"), default=None
     )
-    related_task_id: Mapped[str | None] = mapped_column(
-        ForeignKey("tasks.id", ondelete="CASCADE"), default=None
-    )
+    related_task_id: Mapped[str | None] = mapped_column(ForeignKey("tasks.id", ondelete="CASCADE"), default=None)
     created_at: Mapped[dt.datetime] = mapped_column(default=utcnow)
     resolved_at: Mapped[dt.datetime | None] = mapped_column(default=None)
 
@@ -435,9 +431,7 @@ class Notification(Base):
     __tablename__ = "notifications"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    task_id: Mapped[str | None] = mapped_column(
-        ForeignKey("tasks.id", ondelete="CASCADE"), default=None, index=True
-    )
+    task_id: Mapped[str | None] = mapped_column(ForeignKey("tasks.id", ondelete="CASCADE"), default=None, index=True)
     level: Mapped[str] = mapped_column(String(16))
     title: Mapped[str] = mapped_column(String(300))
     body: Mapped[str] = mapped_column(Text, default="")

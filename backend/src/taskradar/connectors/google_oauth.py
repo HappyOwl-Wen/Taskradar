@@ -121,8 +121,9 @@ class GoogleOAuthManager:
         from google_auth_oauthlib.flow import Flow
 
         scopes, _ = SERVICES[service]
-        flow = Flow.from_client_config(cfg, scopes=scopes, redirect_uri=self.redirect_uri,
-                                       autogenerate_code_verifier=True)
+        flow = Flow.from_client_config(
+            cfg, scopes=scopes, redirect_uri=self.redirect_uri, autogenerate_code_verifier=True
+        )
         url, state = flow.authorization_url(access_type="offline", prompt="consent", include_granted_scopes="false")
         with self._lock:
             now = self.clock()
@@ -142,7 +143,9 @@ class GoogleOAuthManager:
         try:
             pending.flow.fetch_token(code=code)
         except Exception as exc:  # oauthlib raises a variety of errors
-            raise OAuthError("token_exchange_failed", f"Could not complete authorization: {exc.__class__.__name__}") from exc
+            raise OAuthError(
+                "token_exchange_failed", f"Could not complete authorization: {exc.__class__.__name__}"
+            ) from exc
         creds = pending.flow.credentials
         scopes, token_key = SERVICES[pending.service]
         granted = set(getattr(creds, "granted_scopes", None) or creds.scopes or [])
@@ -174,7 +177,9 @@ class GoogleOAuthManager:
                 try:
                     creds.refresh(Request())
                 except RefreshError as exc:
-                    raise AuthRequiredError("The Google authorization expired or was revoked; please reconnect") from exc
+                    raise AuthRequiredError(
+                        "The Google authorization expired or was revoked; please reconnect"
+                    ) from exc
                 self.secrets.set(token_key, creds.to_json())
             else:
                 raise AuthRequiredError("The Google authorization expired; please reconnect")

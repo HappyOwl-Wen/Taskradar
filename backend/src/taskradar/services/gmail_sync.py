@@ -16,6 +16,7 @@ import datetime as dt
 import logging
 import time
 from collections.abc import Callable
+from functools import partial
 from typing import Any
 
 from sqlalchemy import select
@@ -71,7 +72,11 @@ class GmailSyncService:
 
     def sync(self, source_id: int, *, trigger: JobTrigger = JobTrigger.MANUAL, attempt: int = 1) -> dict[str, Any]:
         return self.jobs.run(
-            JobKind.GMAIL_SYNC, lock_key=f"gmail:{source_id}", source_id=source_id, trigger=trigger, attempt=attempt,
+            JobKind.GMAIL_SYNC,
+            lock_key=f"gmail:{source_id}",
+            source_id=source_id,
+            trigger=trigger,
+            attempt=attempt,
             fn=lambda ctx: self._sync(ctx, source_id),
         )
 
@@ -79,18 +84,30 @@ class GmailSyncService:
         return call_with_retries(fn, max_attempts=4, base_delay=1.0, max_delay=16.0, sleep=self.sleep)
 
     def _checkpoint(self, session: Session, source_id: int, key: str) -> str | None:
-        row = session.scalar(select(SyncCheckpoint).where(SyncCheckpoint.source_id == source_id, SyncCheckpoint.key == key))
+        row = session.scalar(
+            select(SyncCheckpoint).where(SyncCheckpoint.source_id == source_id, SyncCheckpoint.key == key)
+        )
         return row.value if row else None
 
     def _set_checkpoint(self, session: Session, source_id: int, key: str, value: str) -> None:
-        row = session.scalar(select(SyncCheckpoint).where(SyncCheckpoint.source_id == source_id, SyncCheckpoint.key == key))
+        row = session.scalar(
+            select(SyncCheckpoint).where(SyncCheckpoint.source_id == source_id, SyncCheckpoint.key == key)
+        )
         if row is None:
             session.add(SyncCheckpoint(source_id=source_id, key=key, value=value))
         else:
             row.value = value
 
-    def _source_state(self, source_id: int, *, status: SourceStatus, code: str | None = None,
-                      message: str | None = None, success: bool = False, account: str | None = None) -> None:
+    def _source_state(
+        self,
+        source_id: int,
+        *,
+        status: SourceStatus,
+        code: str | None = None,
+        message: str | None = None,
+        success: bool = False,
+        account: str | None = None,
+    ) -> None:
         with transaction(self._factory) as session:
             source = session.get(Source, source_id)
             if source is None:
@@ -165,7 +182,7 @@ class GmailSyncService:
                 page: str | None = None
                 latest = checkpoint
                 while True:
-                    batch, page, history = self._retry(lambda: client.list_history(checkpoint, page))
+                    batch, page, history = self._retry(partial(client.list_history, checkpoint, page))
                     ids.extend(batch)
                     latest = history or latest
                     if not page:
@@ -181,7 +198,7 @@ class GmailSyncService:
         ids = []
         page = None
         while True:
-            batch, page = self._retry(lambda: client.list_message_ids(query, page, 100))
+            batch, page = self._retry(partial(client.list_message_ids, query, page, 100))
             ids.extend(batch)
             if not page or len(ids) >= settings.max_messages_per_sync:
                 break
@@ -209,7 +226,9 @@ class GmailSyncService:
                 db_source = session.get(Source, source.id)
                 assert db_source is not None
                 message, _ = self.documents.store_message(
-                    session, normalized, source=db_source,
+                    session,
+                    normalized,
+                    source=db_source,
                     web_link=None if is_demo else gmail_web_link(gmail_id, db_source.account),
                 )
                 if "DRAFT" in labels or ("SENT" in labels and "INBOX" not in labels):
@@ -227,7 +246,7 @@ class GmailSyncService:
                             ctx.details.setdefault("skipped_attachments", 0)
                             ctx.details["skipped_attachments"] += 1
                             continue
-                        data = self._retry(lambda a=att: client.get_attachment(gmail_id, a.attachment_id))
+                        data = self._retry(partial(client.get_attachment, gmail_id, att.attachment_id))
                         self.documents.store_attachment(session, data, att.filename, message=message)
         else:
             message_id = existing_id

@@ -8,7 +8,6 @@ from __future__ import annotations
 import base64
 import json
 import logging
-import socket
 from typing import Any, Protocol
 
 from taskradar.connectors.errors import (
@@ -25,13 +24,17 @@ log = logging.getLogger(__name__)
 class GmailClient(Protocol):
     def get_profile(self) -> dict[str, Any]: ...
 
-    def list_message_ids(self, query: str, page_token: str | None, max_results: int = 100) -> tuple[list[str], str | None]: ...
+    def list_message_ids(
+        self, query: str, page_token: str | None, max_results: int = 100
+    ) -> tuple[list[str], str | None]: ...
 
     def get_message(self, message_id: str) -> dict[str, Any]: ...
 
     def get_attachment(self, message_id: str, attachment_id: str) -> bytes: ...
 
-    def list_history(self, start_history_id: str, page_token: str | None) -> tuple[list[str], str | None, str | None]: ...
+    def list_history(
+        self, start_history_id: str, page_token: str | None
+    ) -> tuple[list[str], str | None, str | None]: ...
 
 
 def map_http_error(status: int, content: bytes | str | None, headers: dict[str, str] | None = None) -> Exception:
@@ -81,7 +84,7 @@ class GoogleGmailClient:
             raise map_http_error(int(exc.resp.status), exc.content, headers) from exc
         except RefreshError as exc:
             raise AuthRequiredError("The Google authorization expired or was revoked; please reconnect") from exc
-        except (TransportError, TimeoutError, socket.timeout, ConnectionError, OSError) as exc:
+        except (TransportError, TimeoutError, ConnectionError, OSError) as exc:
             raise TransientError(f"Network error while contacting Gmail: {exc.__class__.__name__}") from exc
         except Exception as exc:
             import httplib2
@@ -91,20 +94,20 @@ class GoogleGmailClient:
             raise
 
     def get_profile(self) -> dict[str, Any]:
-        return self._execute(self._service.users().getProfile(userId="me"))  # type: ignore[no-any-return]
+        return self._execute(self._service.users().getProfile(userId="me"))
 
-    def list_message_ids(self, query: str, page_token: str | None, max_results: int = 100) -> tuple[list[str], str | None]:
+    def list_message_ids(
+        self, query: str, page_token: str | None, max_results: int = 100
+    ) -> tuple[list[str], str | None]:
         resp = self._execute(
-            self._service.users().messages().list(
-                userId="me", q=query, pageToken=page_token, maxResults=max_results, includeSpamTrash=False
-            )
+            self._service.users()
+            .messages()
+            .list(userId="me", q=query, pageToken=page_token, maxResults=max_results, includeSpamTrash=False)
         )
         return [m["id"] for m in resp.get("messages", [])], resp.get("nextPageToken")
 
     def get_message(self, message_id: str) -> dict[str, Any]:
-        return self._execute(  # type: ignore[no-any-return]
-            self._service.users().messages().get(userId="me", id=message_id, format="full")
-        )
+        return self._execute(self._service.users().messages().get(userId="me", id=message_id, format="full"))
 
     def get_attachment(self, message_id: str, attachment_id: str) -> bytes:
         resp = self._execute(
@@ -115,9 +118,9 @@ class GoogleGmailClient:
 
     def list_history(self, start_history_id: str, page_token: str | None) -> tuple[list[str], str | None, str | None]:
         resp = self._execute(
-            self._service.users().history().list(
-                userId="me", startHistoryId=start_history_id, historyTypes=["messageAdded"], pageToken=page_token
-            )
+            self._service.users()
+            .history()
+            .list(userId="me", startHistoryId=start_history_id, historyTypes=["messageAdded"], pageToken=page_token)
         )
         ids: list[str] = []
         for record in resp.get("history", []):

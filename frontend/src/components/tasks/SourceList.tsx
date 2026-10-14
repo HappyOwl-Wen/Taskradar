@@ -4,7 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import type { BadgeTone } from "@/components/ui/variants";
 import { Button } from "@/components/ui/button";
 import { api } from "@/lib/api";
-import { formatBytes, formatDateTime } from "@/lib/format";
+import { formatBytes, formatDate, formatDateTime } from "@/lib/format";
 import { useAction } from "@/lib/queries";
 import type { TaskSourceEntry } from "@/lib/types";
 import { EvidenceList } from "./Evidence";
@@ -39,6 +39,7 @@ function SourceEntry({ entry, timezone }: { entry: TaskSourceEntry; timezone: st
   const msg = entry.message;
   const doc = entry.document;
   const date = msg?.sent_at ?? entry.source_date ?? doc?.imported_at ?? entry.created_at;
+  const when = entry.source_day ? formatDate(entry.source_day, i18n.language) : formatDateTime(date, i18n.language, timezone);
   return (
     <li className="grid gap-3 rounded-lg border bg-card p-3.5">
       <div className="flex items-start gap-3">
@@ -53,7 +54,7 @@ function SourceEntry({ entry, timezone }: { entry: TaskSourceEntry; timezone: st
           <p className="text-xs text-muted-foreground">
             {msg ? `${msg.sender} · ` : null}
             {doc ? `${doc.kind.toUpperCase()} · ${formatBytes(doc.size_bytes)}${doc.page_count ? ` · ${t("sources.documents.pages", { count: doc.page_count })}` : ""} · ` : null}
-            {formatDateTime(date, i18n.language, timezone)}
+            {when}
           </p>
         </div>
       </div>

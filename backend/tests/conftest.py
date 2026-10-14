@@ -13,17 +13,17 @@ import pytest
 # Never touch the real user profile / credential store from tests.
 os.environ.setdefault("TASKRADAR_DISABLE_SCHEDULER", "1")
 
-from taskradar.config import AppConfig  # noqa: E402
-from taskradar.connectors.calendar import FakeCalendarClient  # noqa: E402
-from taskradar.connectors.fake_gmail import FakeGmailClient  # noqa: E402
-from taskradar.container import Container, build_container  # noqa: E402
-from taskradar.db.models import Source  # noqa: E402
-from taskradar.demo.mailbox import build_demo_mailbox  # noqa: E402
-from taskradar.domain.schemas import ExtractionInput, TextSegment  # noqa: E402
-from taskradar.llm.base import LLMProvider  # noqa: E402
-from taskradar.parsing.ocr import TesseractEngine  # noqa: E402
-from taskradar.security import secrets as sk  # noqa: E402
-from taskradar.security.secrets import MemorySecretStore  # noqa: E402
+from taskradar.config import AppConfig
+from taskradar.connectors.calendar import FakeCalendarClient
+from taskradar.connectors.fake_gmail import FakeGmailClient
+from taskradar.container import Container, build_container
+from taskradar.db.models import Source
+from taskradar.demo.mailbox import build_demo_mailbox
+from taskradar.domain.schemas import ExtractionInput, TextSegment
+from taskradar.llm.base import LLMProvider
+from taskradar.parsing.ocr import TesseractEngine
+from taskradar.security import secrets as sk
+from taskradar.security.secrets import MemorySecretStore
 
 FIXED_NOW = dt.datetime(2026, 10, 14, 8, 0, tzinfo=dt.UTC)  # 10:00 in Berlin (CEST)
 SAMPLES = Path(__file__).resolve().parent.parent / "src" / "taskradar" / "demo" / "samples"
@@ -81,8 +81,9 @@ def make_container(
 ) -> Iterator[Callable[..., Container]]:
     created: list[Container] = []
 
-    def _make(*, llm: LLMProvider | None = None, secrets: MemorySecretStore | None = None,
-              ocr: Any = None, **overrides: Any) -> Container:
+    def _make(
+        *, llm: LLMProvider | None = None, secrets: MemorySecretStore | None = None, ocr: Any = None, **overrides: Any
+    ) -> Container:
         container = build_container(
             config,
             secrets=secrets or MemorySecretStore(),

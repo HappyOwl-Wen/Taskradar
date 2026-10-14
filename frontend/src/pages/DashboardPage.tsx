@@ -27,7 +27,7 @@ import { EmptyState, ErrorState, LoadingRows, PageHeader } from "@/components/ui
 import { api } from "@/lib/api";
 import { formatDate } from "@/lib/format";
 import { useTimezone } from "@/lib/hooks";
-import { useAction, useDashboard } from "@/lib/queries";
+import { expectSourceActivity, useAction, useDashboard } from "@/lib/queries";
 import type { Dashboard, TaskSummary } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -93,7 +93,13 @@ function Onboarding() {
       await api.syncSource(source.id);
       return source;
     },
-    { success: t("onboarding.demoCreated"), onSuccess: () => navigate("/sources") },
+    {
+      success: t("onboarding.demoCreated"),
+      onSuccess: () => {
+        expectSourceActivity();
+        navigate("/sources");
+      },
+    },
   );
   const steps: { icon: LucideIcon; title: string; hint: string; action: React.ReactNode }[] = [
     { icon: FlaskConical, title: t("onboarding.demo"), hint: t("onboarding.demoHint"), action: (

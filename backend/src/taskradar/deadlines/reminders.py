@@ -72,7 +72,11 @@ def plan_reminder(
     if level == NotificationLevel.UPCOMING and not settings.notify_upcoming:
         return None
     is_candidate = status == TaskStatus.CANDIDATE.value
-    if is_candidate and not settings.notify_candidates and level not in (NotificationLevel.OVERDUE, NotificationLevel.URGENT):
+    if (
+        is_candidate
+        and not settings.notify_candidates
+        and level not in (NotificationLevel.OVERDUE, NotificationLevel.URGENT)
+    ):
         # Unconfirmed tasks never cause frequent notifications.
         return None
     if is_candidate:

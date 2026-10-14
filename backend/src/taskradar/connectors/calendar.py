@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import socket
 from typing import Any, Protocol
 
 from taskradar.connectors.errors import (
@@ -50,7 +49,7 @@ class GoogleCalendarClient:
             raise map_http_error(status, exc.content) from exc
         except RefreshError as exc:
             raise AuthRequiredError("The Google Calendar authorization expired; please reconnect") from exc
-        except (TransportError, TimeoutError, socket.timeout, ConnectionError, OSError) as exc:
+        except (TransportError, TimeoutError, ConnectionError, OSError) as exc:
             raise TransientError(f"Network error while contacting Google Calendar: {exc.__class__.__name__}") from exc
 
     def create_calendar(self, summary: str, time_zone: str) -> str:
@@ -65,15 +64,13 @@ class GoogleCalendarClient:
             return False
 
     def insert_event(self, calendar_id: str, body: dict[str, Any]) -> dict[str, Any]:
-        return self._execute(  # type: ignore[no-any-return]
-            self._service.events().insert(calendarId=calendar_id, body=body, sendUpdates="none")
-        )
+        return self._execute(self._service.events().insert(calendarId=calendar_id, body=body, sendUpdates="none"))
 
     def get_event(self, calendar_id: str, event_id: str) -> dict[str, Any]:
-        return self._execute(self._service.events().get(calendarId=calendar_id, eventId=event_id))  # type: ignore[no-any-return]
+        return self._execute(self._service.events().get(calendarId=calendar_id, eventId=event_id))
 
     def update_event(self, calendar_id: str, event_id: str, body: dict[str, Any]) -> dict[str, Any]:
-        return self._execute(  # type: ignore[no-any-return]
+        return self._execute(
             self._service.events().update(calendarId=calendar_id, eventId=event_id, body=body, sendUpdates="none")
         )
 

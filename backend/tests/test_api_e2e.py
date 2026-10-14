@@ -48,6 +48,8 @@ def test_acceptance_flow(api: Any, make_container: Callable[..., Container]) -> 
     source = detail["sources"][0]
     assert source["document"]["name"] == "01_zh_enrollment_certificate_notice.pdf"
     assert "2026年11月20日" in source["evidence"][0]["quote"] and source["evidence"][0]["page"] == 1
+    # The letter is dated (12 Oct) but carries no time of day; the API says so explicitly.
+    assert source["source_day"] == "2026-10-12" and detail["source_published_day"] == "2026-10-12"
     assert api.get(f"/api/documents/{source['document']['id']}/file").headers["content-type"] == "application/pdf"
 
     # 4. German screenshot -> OCR -> deadline recognised.

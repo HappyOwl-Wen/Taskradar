@@ -6,16 +6,17 @@ generic credential blob to 2560 bytes (~1280 UTF-16 characters), so long values 
 
 from __future__ import annotations
 
+import contextlib
 import logging
 import threading
-from typing import Protocol
+from typing import Any, Protocol
 
 log = logging.getLogger(__name__)
 
 OPENAI_API_KEY = "openai_api_key"
 GOOGLE_CLIENT_CONFIG = "google_client_config"
-GOOGLE_TOKEN_GMAIL = "google_token_gmail"
-GOOGLE_TOKEN_CALENDAR = "google_token_calendar"
+GOOGLE_TOKEN_GMAIL = "google_token_gmail"  # noqa: S105 - name of a credential-store entry, not a secret
+GOOGLE_TOKEN_CALENDAR = "google_token_calendar"  # noqa: S105 - name of a credential-store entry, not a secret
 
 _CHUNK = 1000
 
@@ -42,6 +43,7 @@ class KeyringSecretStore:
     def __init__(self, service: str = "TaskRadar") -> None:
         self.service = service
         self._lock = threading.Lock()
+        self._keyring: Any = None
         try:
             import keyring
 
@@ -106,14 +108,10 @@ class KeyringSecretStore:
             return
         if head.startswith("chunked:"):
             for i in range(int(head.split(":", 1)[1])):
-                try:
+                with contextlib.suppress(keyring.errors.PasswordDeleteError):
                     kr.delete_password(self.service, f"{key}#{i}")  # type: ignore[attr-defined]
-                except keyring.errors.PasswordDeleteError:
-                    pass
-        try:
+        with contextlib.suppress(keyring.errors.PasswordDeleteError):
             kr.delete_password(self.service, key)  # type: ignore[attr-defined]
-        except keyring.errors.PasswordDeleteError:
-            pass
 
 
 class MemorySecretStore:

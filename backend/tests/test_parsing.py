@@ -215,19 +215,31 @@ def _b64(text: str) -> str:
 
 def test_gmail_multipart_message_prefers_plain_text_and_finds_attachments() -> None:
     resource = {
-        "id": "m1", "threadId": "t1", "historyId": "77", "internalDate": "1792000000000",
-        "labelIds": ["INBOX", "UNREAD"], "snippet": "Hello",
+        "id": "m1",
+        "threadId": "t1",
+        "historyId": "77",
+        "internalDate": "1792000000000",
+        "labelIds": ["INBOX", "UNREAD"],
+        "snippet": "Hello",
         "payload": {
             "mimeType": "multipart/mixed",
-            "headers": [{"name": "From", "value": "Office <office@uni.example>"},
-                        {"name": "Subject", "value": "Unterlagen"},
-                        {"name": "List-Unsubscribe", "value": "<mailto:x@y>"}],
+            "headers": [
+                {"name": "From", "value": "Office <office@uni.example>"},
+                {"name": "Subject", "value": "Unterlagen"},
+                {"name": "List-Unsubscribe", "value": "<mailto:x@y>"},
+            ],
             "parts": [
-                {"mimeType": "multipart/alternative", "parts": [
-                    {"mimeType": "text/plain", "headers": [{"name": "Content-Type", "value": "text/plain; charset=utf-8"}],
-                     "body": {"data": _b64("Bitte reichen Sie die Unterlagen ein.")}},
-                    {"mimeType": "text/html", "body": {"data": _b64("<p>HTML version</p>")}},
-                ]},
+                {
+                    "mimeType": "multipart/alternative",
+                    "parts": [
+                        {
+                            "mimeType": "text/plain",
+                            "headers": [{"name": "Content-Type", "value": "text/plain; charset=utf-8"}],
+                            "body": {"data": _b64("Bitte reichen Sie die Unterlagen ein.")},
+                        },
+                        {"mimeType": "text/html", "body": {"data": _b64("<p>HTML version</p>")}},
+                    ],
+                },
                 {"mimeType": "application/pdf", "filename": "form.pdf", "body": {"attachmentId": "a1", "size": 1234}},
                 {"mimeType": "application/x-msdownload", "filename": "virus.exe", "body": {"attachmentId": "a2"}},
             ],
@@ -243,12 +255,19 @@ def test_gmail_multipart_message_prefers_plain_text_and_finds_attachments() -> N
 
 
 def test_gmail_html_only_message_and_charset() -> None:
-    html = "<html><body><style>.x{}</style><p>Sehr geehrte Frau Wang,<br>bitte zahlen Sie bis 30.10.2026.</p>" \
-           "<div style='display:none'>hidden tracking text</div></body></html>"
+    html = (
+        "<html><body><style>.x{}</style><p>Sehr geehrte Frau Wang,<br>bitte zahlen Sie bis 30.10.2026.</p>"
+        "<div style='display:none'>hidden tracking text</div></body></html>"
+    )
     resource = {
-        "id": "m2", "threadId": "t2", "internalDate": "1792000000000",
-        "payload": {"mimeType": "text/html", "headers": [{"name": "Subject", "value": "Zahlung"}],
-                    "body": {"data": base64.urlsafe_b64encode(html.encode("latin-1")).decode()}},
+        "id": "m2",
+        "threadId": "t2",
+        "internalDate": "1792000000000",
+        "payload": {
+            "mimeType": "text/html",
+            "headers": [{"name": "Subject", "value": "Zahlung"}],
+            "body": {"data": base64.urlsafe_b64encode(html.encode("latin-1")).decode()},
+        },
     }
     resource["payload"]["headers"].append({"name": "Content-Type", "value": 'text/html; charset="iso-8859-1"'})
     msg = parse_gmail_message(resource)
@@ -271,7 +290,8 @@ def test_eml_parsing_with_attachment() -> None:
         'Content-Type: multipart/mixed; boundary="b"\r\n\r\n--b\r\nContent-Type: text/plain; charset=utf-8\r\n\r\n'
         "Bitte unterschreiben Sie den Vertrag bis 20.10.2026.\r\n--b\r\nContent-Type: application/pdf\r\n"
         'Content-Disposition: attachment; filename="vertrag.pdf"\r\nContent-Transfer-Encoding: base64\r\n\r\n'
-        + base64.b64encode(b"%PDF-1.4 fake").decode() + "\r\n--b--\r\n"
+        + base64.b64encode(b"%PDF-1.4 fake").decode()
+        + "\r\n--b--\r\n"
     ).encode()
     msg = parse_eml_bytes(raw)
     assert msg.external_id == "abc@home.example"

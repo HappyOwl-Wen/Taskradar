@@ -6,10 +6,8 @@ import logging
 import random
 import time
 from collections.abc import Callable
-from typing import TypeVar
 
 log = logging.getLogger(__name__)
-T = TypeVar("T")
 
 
 class ConnectorError(RuntimeError):
@@ -55,7 +53,7 @@ class PermanentError(ConnectorError):
 RETRYABLE = (RateLimitedError, TransientError)
 
 
-def call_with_retries(
+def call_with_retries[T](
     fn: Callable[[], T],
     *,
     max_attempts: int = 5,

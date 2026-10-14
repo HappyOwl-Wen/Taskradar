@@ -219,7 +219,9 @@ def _parse_hhmm(value: str | None) -> dt.time | None:
     return dt.time(int(m.group(1)), int(m.group(2)))
 
 
-_COMMAND_LIKE = re.compile(r"\b(rm -rf|powershell|cmd\.exe|bash -c|sudo |curl [^ ]+ ?\| ?sh|format c:|del /[sfq])", re.I)
+_COMMAND_LIKE = re.compile(
+    r"\b(rm -rf|powershell|cmd\.exe|bash -c|sudo |curl [^ ]+ ?\| ?sh|format c:|del /[sfq])", re.I
+)
 
 
 def _clean_list(items: list[str], limit: int = 10, length: int = 160) -> list[str]:
@@ -279,8 +281,13 @@ class LLMExtractor:
         redacted = redact_for_llm(inp.text, max_chars=self.max_input_chars, redact_identifiers=self.redact_identifiers)
         user = self.build_user_prompt(inp, redacted.text, anchor, anchor_kind)
         trace: list[dict[str, object]] = [
-            {"step": "llm.prepare", "input_chars": len(redacted.text), "redactions": redacted.count,
-             "truncated": redacted.truncated, "prompt_version": PROMPT_VERSION},
+            {
+                "step": "llm.prepare",
+                "input_chars": len(redacted.text),
+                "redactions": redacted.count,
+                "truncated": redacted.truncated,
+                "prompt_version": PROMPT_VERSION,
+            },
         ]
         usage = LLMUsage(provider=self.provider.name, model=self.provider.model, attempts=0)
         system = SYSTEM_PROMPT
@@ -312,8 +319,7 @@ class LLMExtractor:
                 last_error = LLMInvalidOutputError(f"Model output failed schema validation ({errors} errors)")
                 trace.append({"step": "llm.call", "attempt": attempt, "error": "schema_validation", "errors": errors})
                 system = (
-                    SYSTEM_PROMPT
-                    + "\n\nIMPORTANT: your previous answer was not valid JSON for the required schema. "
+                    SYSTEM_PROMPT + "\n\nIMPORTANT: your previous answer was not valid JSON for the required schema. "
                     "Return only one JSON object that matches the schema exactly."
                 )
                 continue
@@ -334,8 +340,14 @@ class LLMExtractor:
         signals = [self._to_signal(s, inp) for s in parsed.completion_signals]
         if injection:
             trace.append({"step": "llm.safety", "possible_prompt_injection": True, "dropped_tasks": dropped})
-        trace.append({"step": "llm.result", "tasks": len(tasks), "completion_signals": len(signals),
-                      "content_type": parsed.content_type.value})
+        trace.append(
+            {
+                "step": "llm.result",
+                "tasks": len(tasks),
+                "completion_signals": len(signals),
+                "content_type": parsed.content_type.value,
+            }
+        )
         return ExtractionResult(
             content_type=parsed.content_type,
             is_actionable=bool(tasks),
@@ -414,17 +426,17 @@ class LLMExtractor:
         if parsed is not None and parsed.date is not None:
             data = parsed.model_dump()
             data["semantics"] = semantics
-            notes = list(parsed.notes)
+            parsed_notes = list(parsed.notes)
             if model_date is not None and model_date != parsed.date:
                 data["needs_confirmation"] = True
-                notes.append("model_date_disagrees_with_parser")
+                parsed_notes.append("model_date_disagrees_with_parser")
                 uncertainties.append("date_conflict")
             if parsed.time is None and time_grounded:
                 data["time"] = model_time
             if raw.due_ambiguous:
                 data["ambiguous"] = True
                 data["needs_confirmation"] = True
-            data["notes"] = notes
+            data["notes"] = parsed_notes
             return DueInfo(**data)
 
         if model_date is None:

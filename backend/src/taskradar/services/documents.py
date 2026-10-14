@@ -111,19 +111,30 @@ class DocumentService:
         if len(data) == 0:
             return ImportResult(safe_name, "failed", False, error_code="empty_file", error_message="The file is empty")
         if len(data) > max_bytes:
-            return ImportResult(safe_name, "failed", False, error_code="file_too_large",
-                                error_message=f"Files larger than {max_bytes // (1024 * 1024)} MB are not accepted")
+            return ImportResult(
+                safe_name,
+                "failed",
+                False,
+                error_code="file_too_large",
+                error_message=f"Files larger than {max_bytes // (1024 * 1024)} MB are not accepted",
+            )
         try:
             sniffed = sniff_bytes(data[:4096], safe_name)
         except UnsupportedFileError as exc:
-            return ImportResult(safe_name, "failed", False, error_code=exc.code,
-                                error_message="Only PDF, PNG, JPEG, WebP and .eml files are supported")
+            return ImportResult(
+                safe_name,
+                "failed",
+                False,
+                error_code=exc.code,
+                error_message="Only PDF, PNG, JPEG, WebP and .eml files are supported",
+            )
         if sniffed.kind == "email":
             return self.import_eml(data, safe_name)
         with transaction(self._factory) as session:
             source = get_or_create_source(session, SourceKind.UPLOAD, "手动导入")
-            doc, created = self._store_document(session, data, sniffed, safe_name, source_id=source.id,
-                                                dedupe_key=f"upload:{sha256_bytes(data)}")
+            doc, created = self._store_document(
+                session, data, sniffed, safe_name, source_id=source.id, dedupe_key=f"upload:{sha256_bytes(data)}"
+            )
             doc_id, status = doc.id, doc.status
         if not created and status in (ItemStatus.PROCESSED.value, ItemStatus.SKIPPED.value):
             return ImportResult(safe_name, "duplicate_file", False, document_id=doc_id)
@@ -192,8 +203,13 @@ class DocumentService:
         if sniffed.kind == "email":
             return None
         doc, _ = self._store_document(
-            session, data, sniffed, safe_name, source_id=message.source_id,
-            dedupe_key=f"attachment:{message.id}:{sha256_bytes(data)}", message_id=message.id,
+            session,
+            data,
+            sniffed,
+            safe_name,
+            source_id=message.source_id,
+            dedupe_key=f"attachment:{message.id}:{sha256_bytes(data)}",
+            message_id=message.id,
             base=self.config.attachments_dir,
         )
         return doc
@@ -228,12 +244,19 @@ class DocumentService:
         with INGEST_LOCK, transaction(self._factory) as session:
             doc = session.get(Document, document_id)
             assert doc is not None
-            for page in list(doc.pages):
-                session.delete(page)
+            for stale in list(doc.pages):
+                session.delete(stale)
             session.flush()
             for page in parsed.pages:
-                session.add(DocumentPage(document_id=doc.id, page_no=page.page, text=page.text, method=page.method,
-                                         ocr_confidence=page.ocr_confidence))
+                session.add(
+                    DocumentPage(
+                        document_id=doc.id,
+                        page_no=page.page,
+                        text=page.text,
+                        method=page.method,
+                        ocr_confidence=page.ocr_confidence,
+                    )
+                )
             doc.page_count = parsed.page_count
             doc.extraction_method = parsed.extraction_method
             doc.language = parsed.language
@@ -242,11 +265,13 @@ class DocumentService:
             doc.warnings = parsed.warnings
             doc.text_chars = len(parsed.text)
             twin = session.scalar(
-                select(Document).where(
+                select(Document)
+                .where(
                     Document.sha256 == doc.sha256,
                     Document.id != doc.id,
                     Document.status == ItemStatus.PROCESSED.value,
-                ).order_by(Document.id)
+                )
+                .order_by(Document.id)
             )
             if twin is not None:
                 # Deterministic layer: identical file content was already analysed.
@@ -285,8 +310,14 @@ class DocumentService:
         for ts in session.scalars(select(TaskSource).where(TaskSource.document_id == twin.id)):
             evidence = [Evidence.model_validate(e) for e in ts.evidence or []]
             added = self.tasks.attach_source(
-                session, ts.task, origin=origin, candidate_row=None, relation=SourceRelation.DUPLICATE,
-                evidence=evidence, summary=f"相同文件内容再次导入：「{doc.original_name}」", revertible=False,
+                session,
+                ts.task,
+                origin=origin,
+                candidate_row=None,
+                relation=SourceRelation.DUPLICATE,
+                evidence=evidence,
+                summary=f"相同文件内容再次导入：「{doc.original_name}」",
+                revertible=False,
             )
             count += 1 if added is not None else 0
         return count
@@ -308,7 +339,9 @@ class DocumentService:
 
     def import_eml(self, data: bytes, safe_name: str) -> ImportResult:
         try:
-            normalized = parse_eml_bytes(data, max_attachment_bytes=self.settings.get().gmail.max_attachment_mb * 1024 * 1024)
+            normalized = parse_eml_bytes(
+                data, max_attachment_bytes=self.settings.get().gmail.max_attachment_mb * 1024 * 1024
+            )
         except Exception as exc:  # malformed mail
             return ImportResult(safe_name, "failed", False, error_code="corrupted_file", error_message=str(exc)[:200])
         with transaction(self._factory) as session:

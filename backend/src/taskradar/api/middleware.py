@@ -33,8 +33,13 @@ CSP = (
 
 async def _reject(send: Send, status: int, code: str, message: str) -> None:
     body = json.dumps({"error": {"code": code, "message": message, "recoverable": False, "details": {}}}).encode()
-    await send({"type": "http.response.start", "status": status,
-                "headers": [(b"content-type", b"application/json"), (b"content-length", str(len(body)).encode())]})
+    await send(
+        {
+            "type": "http.response.start",
+            "status": status,
+            "headers": [(b"content-type", b"application/json"), (b"content-length", str(len(body)).encode())],
+        }
+    )
     await send({"type": "http.response.body", "body": body})
 
 

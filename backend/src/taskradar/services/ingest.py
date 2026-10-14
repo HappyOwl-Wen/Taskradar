@@ -35,6 +35,7 @@ from taskradar.domain.schemas import (
     ExtractionInput,
     ExtractionResult,
     MatchDecision,
+    TaskSnapshot,
     TextSegment,
 )
 from taskradar.policy.review import (
@@ -276,8 +277,9 @@ class IngestService:
                 cand, origin_key=origin.key, thread_id=origin.thread_id, source_date=origin.date, existing=existing
             )
             self._record_decision(row, decision)
-            self._apply_task_decision(session, cand, row, decision, origin, policy, settings.general.timezone,
-                                      existing, outcome)
+            self._apply_task_decision(
+                session, cand, row, decision, origin, policy, settings.general.timezone, existing, outcome
+            )
 
         for signal in result.completion_signals:
             row = self._signal_row(session, run, prepared, signal)
@@ -289,8 +291,9 @@ class IngestService:
 
     # ------------------------------------------------------------------------------------------
 
-    def _candidate_row(self, session: Session, run: ExtractionRun, prepared: PreparedExtraction,
-                       cand: CandidateTask) -> TaskCandidate:
+    def _candidate_row(
+        self, session: Session, run: ExtractionRun, prepared: PreparedExtraction, cand: CandidateTask
+    ) -> TaskCandidate:
         row = TaskCandidate(
             run_id=run.id,
             message_id=prepared.message_id,
@@ -314,8 +317,9 @@ class IngestService:
         session.flush()
         return row
 
-    def _signal_row(self, session: Session, run: ExtractionRun, prepared: PreparedExtraction,
-                    signal: CompletionSignal) -> TaskCandidate:
+    def _signal_row(
+        self, session: Session, run: ExtractionRun, prepared: PreparedExtraction, signal: CompletionSignal
+    ) -> TaskCandidate:
         row = TaskCandidate(
             run_id=run.id,
             message_id=prepared.message_id,
@@ -341,7 +345,7 @@ class IngestService:
         row.decision_score = decision.score
         row.decision_reasons = decision.reasons[:20]
 
-    def _refresh(self, session: Session, existing: list, task: Task) -> None:  # type: ignore[type-arg]
+    def _refresh(self, session: Session, existing: list[TaskSnapshot], task: Task) -> None:
         session.flush()
         session.refresh(task)
         snap = self.tasks.snapshot(task)
@@ -360,7 +364,7 @@ class IngestService:
         origin: Origin,
         policy: PolicyConfig,
         timezone: str,
-        existing: list,  # type: ignore[type-arg]
+        existing: list[TaskSnapshot],
         outcome: IngestOutcome,
     ) -> None:
         relation = decision.relation
@@ -373,35 +377,60 @@ class IngestService:
             task = self.tasks.get(session, decision.task_id)
             if relation == MatchRelation.DUPLICATE:
                 self.tasks.attach_source(
-                    session, task, origin=origin, candidate_row=row, relation=SourceRelation.DUPLICATE,
-                    evidence=cand.evidence, summary=f"识别为重复通知并合并：「{origin.label}」",
+                    session,
+                    task,
+                    origin=origin,
+                    candidate_row=row,
+                    relation=SourceRelation.DUPLICATE,
+                    evidence=cand.evidence,
+                    summary=f"识别为重复通知并合并：「{origin.label}」",
                 )
                 outcome.duplicates_merged += 1
                 self._enrich_due(session, task, cand, origin)
             else:
                 self.tasks.attach_source(
-                    session, task, origin=origin, candidate_row=row, relation=SourceRelation.DEADLINE_UPDATE,
-                    evidence=cand.evidence, summary=f"新来源「{origin.label}」提到了不同的截止日期",
+                    session,
+                    task,
+                    origin=origin,
+                    candidate_row=row,
+                    relation=SourceRelation.DEADLINE_UPDATE,
+                    evidence=cand.evidence,
+                    summary=f"新来源「{origin.label}」提到了不同的截止日期",
                 )
                 new_date = cand.due.date.isoformat() if cand.due.date else None
                 new_time = cand.due.time.strftime("%H:%M") if cand.due.time else None
                 if deadline_update_should_apply(cand, list(task.user_locked_fields or []), policy):
                     event = self.tasks.update_fields(
-                        session, task, {"due_date": new_date, "due_time": new_time}, actor=Actor.AGENT,
-                        reason="explicit_deadline_change", due_text=cand.due.text,
-                        summary=f"根据「{origin.label}」将截止日期更新为 {new_date}{' ' + new_time if new_time else ''}（可撤销）",
+                        session,
+                        task,
+                        {"due_date": new_date, "due_time": new_time},
+                        actor=Actor.AGENT,
+                        reason="explicit_deadline_change",
+                        due_text=cand.due.text,
+                        summary=(
+                            f"根据「{origin.label}」将截止日期更新为 {new_date}"
+                            f"{' ' + new_time if new_time else ''}（可撤销）"
+                        ),
                     )
                     if event is not None:
                         outcome.tasks_updated += 1
                 else:
                     created = self.tasks.suggest(
-                        session, task, kind=SuggestionKind.UPDATE_DUE,
-                        payload={"due_date": new_date, "due_time": new_time, "due_text": cand.due.text,
-                                 "previous_due_date": task.due_date.isoformat() if task.due_date else None},
-                        evidence=cand.evidence, confidence=cand.confidence,
+                        session,
+                        task,
+                        kind=SuggestionKind.UPDATE_DUE,
+                        payload={
+                            "due_date": new_date,
+                            "due_time": new_time,
+                            "due_text": cand.due.text,
+                            "previous_due_date": task.due_date.isoformat() if task.due_date else None,
+                        },
+                        evidence=cand.evidence,
+                        confidence=cand.confidence,
                         reason="; ".join(decision.reasons),
                         dedupe_key=f"{task.id}:update_due:{origin.key}:{new_date}:{new_time}",
-                        candidate_row=row, summary=f"建议更新截止日期为 {new_date}",
+                        candidate_row=row,
+                        summary=f"建议更新截止日期为 {new_date}",
                     )
                     if created is not None:
                         outcome.suggestions_created += 1
@@ -412,18 +441,29 @@ class IngestService:
         if relation == MatchRelation.POSSIBLE_DUPLICATE:
             review = [*review, "possible_duplicate"]
         task = self.tasks.create_from_candidate(
-            session, cand, origin=origin, candidate_row=row, timezone=timezone, review_reasons=review,
+            session,
+            cand,
+            origin=origin,
+            candidate_row=row,
+            timezone=timezone,
+            review_reasons=review,
         )
         outcome.tasks_created += 1
         outcome.created_task_ids.append(task.id)
         if relation == MatchRelation.POSSIBLE_DUPLICATE and decision.task_id:
             other = self.tasks.get(session, decision.task_id)
             created = self.tasks.suggest(
-                session, task, kind=SuggestionKind.POSSIBLE_DUPLICATE,
+                session,
+                task,
+                kind=SuggestionKind.POSSIBLE_DUPLICATE,
                 payload={"other_task_id": other.id, "other_title": other.title, "score": decision.score},
-                evidence=cand.evidence, confidence=decision.score, reason="; ".join(decision.reasons),
-                dedupe_key=f"{task.id}:possible_duplicate:{other.id}", candidate_row=row,
-                related_task_id=other.id, summary=f"可能与任务「{other.title}」重复",
+                evidence=cand.evidence,
+                confidence=decision.score,
+                reason="; ".join(decision.reasons),
+                dedupe_key=f"{task.id}:possible_duplicate:{other.id}",
+                candidate_row=row,
+                related_task_id=other.id,
+                summary=f"可能与任务「{other.title}」重复",
             )
             if created is not None:
                 outcome.suggestions_created += 1
@@ -438,17 +478,26 @@ class IngestService:
             return
         if task.due_date is None:
             self.tasks.update_fields(
-                session, task,
-                {"due_date": cand.due.date.isoformat(),
-                 "due_time": cand.due.time.strftime("%H:%M") if cand.due.time else None},
-                actor=Actor.AGENT, reason="enriched_from_duplicate", due_text=cand.due.text,
+                session,
+                task,
+                {
+                    "due_date": cand.due.date.isoformat(),
+                    "due_time": cand.due.time.strftime("%H:%M") if cand.due.time else None,
+                },
+                actor=Actor.AGENT,
+                reason="enriched_from_duplicate",
+                due_text=cand.due.text,
                 summary=f"根据「{origin.label}」补充截止日期（可撤销）",
             )
             task.due_needs_confirmation = cand.due.needs_confirmation
         elif task.due_date == cand.due.date and task.due_time is None and cand.due.time is not None:
             self.tasks.update_fields(
-                session, task, {"due_time": cand.due.time.strftime("%H:%M")}, actor=Actor.AGENT,
-                reason="enriched_from_duplicate", summary=f"根据「{origin.label}」补充具体时间（可撤销）",
+                session,
+                task,
+                {"due_time": cand.due.time.strftime("%H:%M")},
+                actor=Actor.AGENT,
+                reason="enriched_from_duplicate",
+                summary=f"根据「{origin.label}」补充具体时间（可撤销）",
             )
 
     def _apply_completion(
@@ -466,7 +515,11 @@ class IngestService:
             return
         task = self.tasks.get(session, decision.task_id)
         attached = self.tasks.attach_source(
-            session, task, origin=origin, candidate_row=row, relation=SourceRelation.COMPLETION_EVIDENCE,
+            session,
+            task,
+            origin=origin,
+            candidate_row=row,
+            relation=SourceRelation.COMPLETION_EVIDENCE,
             evidence=[signal.evidence],
             summary=f"「{origin.label}」包含{'明确' if signal.explicit else '不确定'}的完成/回执信息",
             revertible=False,
@@ -477,7 +530,10 @@ class IngestService:
         action = completion_action(signal, task.status, policy)
         if action == CompletionAction.AUTO_COMPLETE:
             self.tasks.change_status(
-                session, task, TaskStatus.COMPLETED, actor=Actor.AGENT,
+                session,
+                task,
+                TaskStatus.COMPLETED,
+                actor=Actor.AGENT,
                 reason=f"explicit_completion_evidence:{signal.kind.value}",
                 summary=f"根据「{origin.label}」中的明确确认自动标记为已完成（可撤销）",
                 extra_data={"evidence": signal.evidence.quote[:300]},
@@ -497,17 +553,20 @@ class IngestService:
             SuggestionKind.MARK_WAITING: "对方正在处理，可标记为等待回复",
         }[kind]
         created = self.tasks.suggest(
-            session, task, kind=kind,
+            session,
+            task,
+            kind=kind,
             payload={"signal_kind": signal.kind.value, "explicit": signal.explicit},
-            evidence=[signal.evidence], confidence=signal.confidence,
-            reason="; ".join(decision.reasons), dedupe_key=f"{task.id}:{kind.value}:{origin.key}",
-            candidate_row=row, summary=summary,
+            evidence=[signal.evidence],
+            confidence=signal.confidence,
+            reason="; ".join(decision.reasons),
+            dedupe_key=f"{task.id}:{kind.value}:{origin.key}",
+            candidate_row=row,
+            summary=summary,
         )
         if created is not None:
             outcome.suggestions_created += 1
 
 
 def tasks_for_origin(session: Session, origin_key: str) -> list[Task]:
-    return list(
-        session.scalars(select(Task).join(TaskSource).where(TaskSource.origin_key == origin_key).distinct())
-    )
+    return list(session.scalars(select(Task).join(TaskSource).where(TaskSource.origin_key == origin_key).distinct()))

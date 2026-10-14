@@ -4,6 +4,7 @@ import { Outlet } from "react-router";
 import { useTranslation } from "react-i18next";
 import { useUpload } from "@/lib/upload";
 import { Sidebar } from "./Sidebar";
+import { SyncWatcher } from "./SyncWatcher";
 import { TopBar } from "./TopBar";
 
 function hasFiles(event: DragEvent): boolean {
@@ -75,6 +76,7 @@ export function AppShell() {
         </main>
       </div>
       <DropOverlay />
+      <SyncWatcher />
     </div>
   );
 }

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import logging
 from pathlib import Path
 from typing import Any
@@ -35,7 +36,10 @@ def _executor(request: Request) -> Any:
 
 def _running(c: Container, lock_key: str) -> bool:
     with transaction(c.factory) as session:
-        return session.scalar(select(SyncJob.id).where(SyncJob.lock_key == lock_key, SyncJob.status == "running")) is not None
+        return (
+            session.scalar(select(SyncJob.id).where(SyncJob.lock_key == lock_key, SyncJob.status == "running"))
+            is not None
+        )
 
 
 # ---------------------------------------------------------------------------------------------
@@ -51,13 +55,20 @@ def list_sources(c: Container = Depends(get_container)) -> dict[str, Any]:
         msg_counts = dict(session.execute(select(Message.source_id, func.count()).group_by(Message.source_id)).all())
         items = []
         for s in sources:
-            last_job = session.scalar(select(SyncJob).where(SyncJob.source_id == s.id).order_by(SyncJob.started_at.desc()))
-            items.append(source_to_dict(s, {
-                "documents": doc_counts.get(s.id, 0),
-                "messages": msg_counts.get(s.id, 0),
-                "last_job": job_to_dict(last_job) if last_job else None,
-                "running": bool(last_job and last_job.status == "running"),
-            }))
+            last_job = session.scalar(
+                select(SyncJob).where(SyncJob.source_id == s.id).order_by(SyncJob.started_at.desc())
+            )
+            items.append(
+                source_to_dict(
+                    s,
+                    {
+                        "documents": doc_counts.get(s.id, 0),
+                        "messages": msg_counts.get(s.id, 0),
+                        "last_job": job_to_dict(last_job) if last_job else None,
+                        "running": bool(last_job and last_job.status == "running"),
+                    },
+                )
+            )
     return {"items": items}
 
 
@@ -93,7 +104,9 @@ def _start_sync(c: Container, request: Request, source: dict[str, Any], wait: bo
 
 
 @router.post("/sources/{source_id}/sync")
-def sync_source(source_id: int, request: Request, wait: bool = False, c: Container = Depends(get_container)) -> dict[str, Any]:
+def sync_source(
+    source_id: int, request: Request, wait: bool = False, c: Container = Depends(get_container)
+) -> dict[str, Any]:
     with transaction(c.factory) as session:
         source = session.get(Source, source_id)
         if source is None:
@@ -111,10 +124,8 @@ class FolderBody(BaseModel):
 def add_folder(body: FolderBody, request: Request, c: Container = Depends(get_container)) -> dict[str, Any]:
     source = c.folders.add_folder(body.path, recursive=body.recursive)
     info = source_to_dict(source)
-    try:
+    with contextlib.suppress(ApiError):  # a scan of this folder is already running
         _start_sync(c, request, info, wait=False)
-    except ApiError:
-        pass
     return info
 
 
@@ -166,8 +177,9 @@ def list_jobs(limit: int = 30, source_id: int | None = None, c: Container = Depe
 @router.post("/demo/mailbox", status_code=201)
 def create_demo_mailbox(c: Container = Depends(get_container)) -> dict[str, Any]:
     with transaction(c.factory) as session:
-        source = get_or_create_source(session, SourceKind.DEMO_MAIL, "合成演示邮箱（无需 Gmail）",
-                                      account="demo@taskradar.example")
+        source = get_or_create_source(
+            session, SourceKind.DEMO_MAIL, "合成演示邮箱（无需 Gmail）", account="demo@taskradar.example"
+        )
         return source_to_dict(source)
 
 
@@ -178,8 +190,9 @@ def advance_demo(c: Container = Depends(get_container)) -> dict[str, Any]:
         source = session.scalar(select(Source).where(Source.kind == SourceKind.DEMO_MAIL.value))
         if source is None:
             raise ApiError("demo_not_found", "Create the demo mailbox first", 404)
-        row = session.scalar(select(SyncCheckpoint).where(SyncCheckpoint.source_id == source.id,
-                                                          SyncCheckpoint.key == "demo_stage"))
+        row = session.scalar(
+            select(SyncCheckpoint).where(SyncCheckpoint.source_id == source.id, SyncCheckpoint.key == "demo_stage")
+        )
         if row is None:
             session.add(SyncCheckpoint(source_id=source.id, key="demo_stage", value="2"))
         else:
@@ -219,15 +232,21 @@ async def upload(files: list[UploadFile] = File(...), c: Container = Depends(get
 
 
 @router.get("/documents")
-def list_documents(status: str | None = None, limit: int = 200, c: Container = Depends(get_container)) -> dict[str, Any]:
+def list_documents(
+    status: str | None = None, limit: int = 200, c: Container = Depends(get_container)
+) -> dict[str, Any]:
     with transaction(c.factory) as session:
         stmt = select(Document).order_by(Document.imported_at.desc()).limit(min(limit, 1000))
         if status:
             stmt = stmt.where(Document.status == status)
         docs = session.scalars(stmt).all()
-        task_counts = dict(session.execute(
-            select(TaskSource.document_id, func.count(func.distinct(TaskSource.task_id))).group_by(TaskSource.document_id)
-        ).all())
+        task_counts = dict(
+            session.execute(
+                select(TaskSource.document_id, func.count(func.distinct(TaskSource.task_id))).group_by(
+                    TaskSource.document_id
+                )
+            ).all()
+        )
         return {"items": [{**document_brief(d), "task_count": task_counts.get(d.id, 0)} for d in docs]}
 
 
@@ -235,8 +254,9 @@ def _tasks_for(session: Any, column: Any, value: int) -> list[dict[str, Any]]:
     rows = session.execute(select(TaskSource).where(column == value)).scalars().all()
     seen: dict[str, dict[str, Any]] = {}
     for ts in rows:
-        seen.setdefault(ts.task_id, {"id": ts.task_id, "title": ts.task.title, "status": ts.task.status,
-                                     "relation": ts.relation})
+        seen.setdefault(
+            ts.task_id, {"id": ts.task_id, "title": ts.task.title, "status": ts.task.status, "relation": ts.relation}
+        )
     return list(seen.values())
 
 
@@ -246,12 +266,17 @@ def get_document(document_id: int, c: Container = Depends(get_container)) -> dic
         doc = session.get(Document, document_id)
         if doc is None:
             raise ApiError("document_not_found", "Document not found", 404)
-        runs = session.scalars(select(ExtractionRun).where(ExtractionRun.document_id == document_id)
-                               .order_by(ExtractionRun.created_at.desc())).all()
+        runs = session.scalars(
+            select(ExtractionRun)
+            .where(ExtractionRun.document_id == document_id)
+            .order_by(ExtractionRun.created_at.desc())
+        ).all()
         return {
             **document_brief(doc),
-            "pages": [{"page": p.page_no, "text": p.text, "method": p.method, "ocr_confidence": p.ocr_confidence}
-                      for p in doc.pages],
+            "pages": [
+                {"page": p.page_no, "text": p.text, "method": p.method, "ocr_confidence": p.ocr_confidence}
+                for p in doc.pages
+            ],
             "tasks": _tasks_for(session, TaskSource.document_id, document_id),
             "runs": [run_to_dict(r) for r in runs],
         }
@@ -310,13 +335,29 @@ def list_messages(status: str | None = None, limit: int = 200, c: Container = De
         if status:
             stmt = stmt.where(Message.status == status)
         msgs = session.scalars(stmt).all()
-        task_counts = dict(session.execute(
-            select(TaskSource.message_id, func.count(func.distinct(TaskSource.task_id))).group_by(TaskSource.message_id)
-        ).all())
-        runs = {r.message_id: r.content_type for r in session.scalars(select(ExtractionRun).where(ExtractionRun.message_id.isnot(None)))}
-        return {"items": [{**message_brief(m), "task_count": task_counts.get(m.id, 0),
-                           "content_type": runs.get(m.id), "skip_reason": m.skip_reason,
-                           "error_code": m.error_code} for m in msgs]}
+        task_counts = dict(
+            session.execute(
+                select(TaskSource.message_id, func.count(func.distinct(TaskSource.task_id))).group_by(
+                    TaskSource.message_id
+                )
+            ).all()
+        )
+        runs = {
+            r.message_id: r.content_type
+            for r in session.scalars(select(ExtractionRun).where(ExtractionRun.message_id.isnot(None)))
+        }
+        return {
+            "items": [
+                {
+                    **message_brief(m),
+                    "task_count": task_counts.get(m.id, 0),
+                    "content_type": runs.get(m.id),
+                    "skip_reason": m.skip_reason,
+                    "error_code": m.error_code,
+                }
+                for m in msgs
+            ]
+        }
 
 
 @router.get("/messages/{message_id}")
@@ -325,8 +366,11 @@ def get_message(message_id: int, c: Container = Depends(get_container)) -> dict[
         msg = session.get(Message, message_id)
         if msg is None:
             raise ApiError("message_not_found", "Message not found", 404)
-        runs = session.scalars(select(ExtractionRun).where(ExtractionRun.message_id == message_id)
-                               .order_by(ExtractionRun.created_at.desc())).all()
+        runs = session.scalars(
+            select(ExtractionRun)
+            .where(ExtractionRun.message_id == message_id)
+            .order_by(ExtractionRun.created_at.desc())
+        ).all()
         return {
             **message_brief(msg),
             "recipients": msg.recipients,
@@ -360,13 +404,23 @@ def delete_message(message_id: int, c: Container = Depends(get_container)) -> di
 @router.get("/failures")
 def failures(c: Container = Depends(get_container)) -> dict[str, Any]:
     with transaction(c.factory) as session:
-        docs = session.scalars(select(Document).where(Document.status == "failed").order_by(Document.imported_at.desc())).all()
-        msgs = session.scalars(select(Message).where(Message.status == "failed").order_by(Message.created_at.desc())).all()
-        jobs = session.scalars(select(SyncJob).where(SyncJob.status.in_(["failed", "interrupted"]))
-                               .order_by(SyncJob.started_at.desc()).limit(50)).all()
+        docs = session.scalars(
+            select(Document).where(Document.status == "failed").order_by(Document.imported_at.desc())
+        ).all()
+        msgs = session.scalars(
+            select(Message).where(Message.status == "failed").order_by(Message.created_at.desc())
+        ).all()
+        jobs = session.scalars(
+            select(SyncJob)
+            .where(SyncJob.status.in_(["failed", "interrupted"]))
+            .order_by(SyncJob.started_at.desc())
+            .limit(50)
+        ).all()
         return {
             "documents": [document_brief(d) for d in docs],
-            "messages": [{**message_brief(m), "error_code": m.error_code, "error_message": m.error_message} for m in msgs],
+            "messages": [
+                {**message_brief(m), "error_code": m.error_code, "error_message": m.error_message} for m in msgs
+            ],
             "jobs": [job_to_dict(j) for j in jobs],
         }
 
@@ -374,5 +428,7 @@ def failures(c: Container = Depends(get_container)) -> dict[str, Any]:
 @router.get("/agent-runs")
 def agent_runs(limit: int = 50, c: Container = Depends(get_container)) -> dict[str, Any]:
     with transaction(c.factory) as session:
-        runs = session.scalars(select(ExtractionRun).order_by(ExtractionRun.created_at.desc()).limit(min(limit, 500))).all()
+        runs = session.scalars(
+            select(ExtractionRun).order_by(ExtractionRun.created_at.desc()).limit(min(limit, 500))
+        ).all()
         return {"items": [run_to_dict(r) for r in runs]}

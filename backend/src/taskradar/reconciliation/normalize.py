@@ -14,13 +14,65 @@ _NON_WORD = re.compile(r"[\W_]+", re.UNICODE)
 
 STOPWORDS = {
     # en
-    "the", "a", "an", "your", "you", "our", "to", "of", "for", "by", "and", "or", "please", "in", "on", "at",
-    "with", "is", "are", "be", "this", "that", "kindly",
+    "the",
+    "a",
+    "an",
+    "your",
+    "you",
+    "our",
+    "to",
+    "of",
+    "for",
+    "by",
+    "and",
+    "or",
+    "please",
+    "in",
+    "on",
+    "at",
+    "with",
+    "is",
+    "are",
+    "be",
+    "this",
+    "that",
+    "kindly",
     # de
-    "die", "der", "das", "den", "dem", "des", "und", "oder", "bitte", "ihre", "ihren", "ihr", "ihrem", "sie",
-    "für", "bis", "zum", "zur", "von", "mit", "im", "in", "an", "am", "auf", "ein", "eine", "einen",
+    "die",
+    "der",
+    "das",
+    "den",
+    "dem",
+    "des",
+    "und",
+    "oder",
+    "bitte",
+    "ihre",
+    "ihren",
+    "ihr",
+    "ihrem",
+    "sie",
+    "für",
+    "bis",
+    "zum",
+    "zur",
+    "von",
+    "mit",
+    "im",
+    "am",
+    "auf",
+    "ein",
+    "eine",
+    "einen",
     # zh (single characters are covered by bigrams; these are common function words)
-    "请", "您", "的", "于", "前", "在", "和", "及",
+    "请",
+    "您",
+    "的",
+    "于",
+    "前",
+    "在",
+    "和",
+    "及",
 }
 
 # Actions that are interchangeable when the object is the same.
@@ -87,14 +139,77 @@ def action_similarity(a: ActionType, b: ActionType) -> float:
 
 
 _GENERIC_CJK_TERMS = (
-    "截止日期", "截止时间", "截止", "提交", "通知", "提醒", "请于", "请在", "之前", "以前", "时间", "日期", "同学",
-    "各位", "您的", "我们", "已经", "收到", "完成", "需要", "办理", "注册",
+    "截止日期",
+    "截止时间",
+    "截止",
+    "提交",
+    "通知",
+    "提醒",
+    "请于",
+    "请在",
+    "之前",
+    "以前",
+    "时间",
+    "日期",
+    "同学",
+    "各位",
+    "您的",
+    "我们",
+    "已经",
+    "收到",
+    "完成",
+    "需要",
+    "办理",
+    "注册",
 )
 _GENERIC_LATIN = {
-    "please", "submit", "deadline", "reminder", "friendly", "required", "action", "document", "documents",
-    "erinnerung", "unterlagen", "bitte", "termin", "appointment", "einreichen", "regards", "grüßen",
-    "freundlichen", "geehrte", "geehrter", "received", "erhalten", "information", "informationen",
+    "please",
+    "submit",
+    "deadline",
+    "reminder",
+    "friendly",
+    "required",
+    "action",
+    "document",
+    "documents",
+    "erinnerung",
+    "unterlagen",
+    "bitte",
+    "termin",
+    "appointment",
+    "einreichen",
+    "regards",
+    "grüßen",
+    "freundlichen",
+    "geehrte",
+    "geehrter",
+    "received",
+    "erhalten",
+    "information",
+    "informationen",
 }
+# Where an action happens is not what it is about: a shared platform or channel name must not make
+# two different obligations look alike (registering for an exam vs. for courses, both "in TUMonline").
+_CHANNEL_LATIN = {
+    "tumonline",
+    "moodle",
+    "online",
+    "portal",
+    "website",
+    "webseite",
+    "homepage",
+    "internet",
+    "outlook",
+    "campus",
+    "plattform",
+    "platform",
+    "webportal",
+    "onlineportal",
+    "studierendenportal",
+    "onlinebanking",
+    "browser",
+}
+_IGNORED_LATIN = _GENERIC_LATIN | _CHANNEL_LATIN
 _NUMBER = re.compile(r"(?<![\d.,/])\d{3,}(?![\d.,/])")
 
 
@@ -129,10 +244,16 @@ def object_overlap(a: str, b: str) -> float:
         score = 0.8
     elif common_cjk >= 3:
         score = 0.6
-    words_a = {w for w in _LATIN_WORD.findall(normalize(a)) if len(w) >= 6 and not w.isdigit()
-               and w not in STOPWORDS and w not in _GENERIC_LATIN}
-    words_b = {w for w in _LATIN_WORD.findall(normalize(b)) if len(w) >= 6 and not w.isdigit()
-               and w not in STOPWORDS and w not in _GENERIC_LATIN}
+    words_a = {
+        w
+        for w in _LATIN_WORD.findall(normalize(a))
+        if len(w) >= 6 and not w.isdigit() and w not in STOPWORDS and w not in _IGNORED_LATIN
+    }
+    words_b = {
+        w
+        for w in _LATIN_WORD.findall(normalize(b))
+        if len(w) >= 6 and not w.isdigit() and w not in STOPWORDS and w not in _IGNORED_LATIN
+    }
     shared = {wa for wa in words_a for wb in words_b if wa == wb or (len(wa) >= 7 and wa[:7] == wb[:7])}
     if shared:
         score = max(score, 0.8 if len(shared) >= 2 else 0.6)

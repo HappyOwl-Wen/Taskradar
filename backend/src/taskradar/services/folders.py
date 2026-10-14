@@ -63,8 +63,13 @@ class FolderService:
             existing = session.scalar(select(Source).where(Source.folder_path == str(resolved)))
             if existing is not None:
                 return existing
-            source = Source(kind=SourceKind.FOLDER.value, name=resolved.name or str(resolved), folder_path=str(resolved),
-                            recursive=recursive, status="idle")
+            source = Source(
+                kind=SourceKind.FOLDER.value,
+                name=resolved.name or str(resolved),
+                folder_path=str(resolved),
+                recursive=recursive,
+                status="idle",
+            )
             session.add(source)
             session.flush()
             return source
@@ -79,9 +84,12 @@ class FolderService:
 
     def scan_all(self, trigger: JobTrigger = JobTrigger.SCHEDULED) -> list[dict[str, Any]]:
         with transaction(self._factory) as session:
-            ids = [s.id for s in session.scalars(
-                select(Source).where(Source.kind == SourceKind.FOLDER.value, Source.enabled.is_(True))
-            )]
+            ids = [
+                s.id
+                for s in session.scalars(
+                    select(Source).where(Source.kind == SourceKind.FOLDER.value, Source.enabled.is_(True))
+                )
+            ]
         results = []
         for source_id in ids:
             results.append(self.scan(source_id, trigger=trigger))
@@ -89,7 +97,11 @@ class FolderService:
 
     def scan(self, source_id: int, *, trigger: JobTrigger = JobTrigger.MANUAL, attempt: int = 1) -> dict[str, Any]:
         return self.jobs.run(
-            JobKind.FOLDER_SCAN, lock_key=f"folder:{source_id}", source_id=source_id, trigger=trigger, attempt=attempt,
+            JobKind.FOLDER_SCAN,
+            lock_key=f"folder:{source_id}",
+            source_id=source_id,
+            trigger=trigger,
+            attempt=attempt,
             fn=lambda ctx: self._scan(ctx, source_id),
         )
 
@@ -146,8 +158,12 @@ class FolderService:
             key = f"folder:{source_id}:{os.path.normcase(str(path))}"
             with transaction(self._factory) as session:
                 doc = session.scalar(select(Document).where(Document.dedupe_key == key))
-                if doc is not None and doc.file_mtime == stat.st_mtime and doc.size_bytes == stat.st_size \
-                        and doc.status != ItemStatus.FAILED.value:
+                if (
+                    doc is not None
+                    and doc.file_mtime == stat.st_mtime
+                    and doc.size_bytes == stat.st_size
+                    and doc.status != ItemStatus.FAILED.value
+                ):
                     ctx.bump("items_skipped")
                     continue
             try:
@@ -202,8 +218,9 @@ class FolderService:
         self._set_source_status(source_id, "ok", None, None, success=True)
         return JobStatus.PARTIAL if failures else JobStatus.SUCCEEDED
 
-    def _set_source_status(self, source_id: int, status: str, code: str | None, message: str | None,
-                           *, success: bool = False) -> None:
+    def _set_source_status(
+        self, source_id: int, status: str, code: str | None, message: str | None, *, success: bool = False
+    ) -> None:
         with transaction(self._factory) as session:
             source = session.get(Source, source_id)
             if source is None:

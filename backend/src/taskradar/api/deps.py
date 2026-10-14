@@ -9,7 +9,7 @@ from taskradar.deadlines.engine import Thresholds
 
 
 def get_container(request: Request) -> Container:
-    return request.app.state.container  # type: ignore[no-any-return]
+    return request.app.state.container
 
 
 def thresholds_for(container: Container) -> Thresholds:

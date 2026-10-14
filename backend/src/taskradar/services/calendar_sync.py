@@ -61,7 +61,11 @@ def build_event(task: Task, *, reminder_minutes: int, base_url: str, language: s
     clock = parse_hhmm(task.due_time)
     if is_deadline:
         prefix = "截止：" if zh else "Deadline: "
-        kind_text = "截止日期（需在此时间之前完成，不是会议时间）" if zh else "Deadline (to be done before this time - not a meeting)"
+        kind_text = (
+            "截止日期（需在此时间之前完成，不是会议时间）"
+            if zh
+            else "Deadline (to be done before this time - not a meeting)"
+        )
     else:
         prefix = ""
         kind_text = "预约 / 会议时间" if zh else "Appointment / meeting time"
@@ -152,8 +156,12 @@ class CalendarSyncService:
         settings = self.settings.get()
         with transaction(self._factory) as session:
             task = self.tasks.get(session, task_id)
-            body = build_event(task, reminder_minutes=settings.calendar.reminder_minutes, base_url=self.base_url,
-                               language=settings.general.language)
+            body = build_event(
+                task,
+                reminder_minutes=settings.calendar.reminder_minutes,
+                base_url=self.base_url,
+                language=settings.general.language,
+            )
             link = session.scalar(select(CalendarLink).where(CalendarLink.task_id == task_id))
             warnings: list[str] = []
             if task.status not in ("confirmed", "in_progress", "waiting_for_reply"):
@@ -176,14 +184,23 @@ class CalendarSyncService:
             task = self.tasks.get(session, task_id)
             try:
                 self.guard.check(
-                    SideEffect.CALENDAR_WRITE, target=task_id, session=session, user_confirmed=user_confirmed,
-                    auto_rule=auto_rule, task_status=task.status, has_due=task.due_date is not None,
+                    SideEffect.CALENDAR_WRITE,
+                    target=task_id,
+                    session=session,
+                    user_confirmed=user_confirmed,
+                    auto_rule=auto_rule,
+                    task_status=task.status,
+                    has_due=task.due_date is not None,
                 )
             except PermissionDenied as exc:
                 status = 409 if exc.code in ("calendar_not_connected", "task_not_confirmed") else 400
                 raise CalendarSyncError(exc.code, exc.message, status) from exc
-            body = build_event(task, reminder_minutes=settings.calendar.reminder_minutes, base_url=self.base_url,
-                               language=settings.general.language)
+            body = build_event(
+                task,
+                reminder_minutes=settings.calendar.reminder_minutes,
+                base_url=self.base_url,
+                language=settings.general.language,
+            )
             digest = payload_hash(body)
             state = self._state(session)
             link = session.scalar(select(CalendarLink).where(CalendarLink.task_id == task_id))
@@ -193,9 +210,15 @@ class CalendarSyncService:
 
         client = self.client_factory()
         try:
-            calendar_id = self._ensure_calendar(client, state, settings.calendar.calendar_name, settings.general.timezone)
+            calendar_id = self._ensure_calendar(
+                client, state, settings.calendar.calendar_name, settings.general.timezone
+            )
             event_id = event_id_for(task_id)
-            if link is not None and link.calendar_id == calendar_id and link.status in ("synced", "out_of_sync", "failed"):
+            if (
+                link is not None
+                and link.calendar_id == calendar_id
+                and link.status in ("synced", "out_of_sync", "failed")
+            ):
                 result = self._update_owned(client, calendar_id, link.event_id or event_id, task_id, body)
             else:
                 try:
@@ -214,8 +237,13 @@ class CalendarSyncService:
             task = self.tasks.get(session, task_id)
             link = session.scalar(select(CalendarLink).where(CalendarLink.task_id == task_id))
             if link is None:
-                link = CalendarLink(task_id=task_id, calendar_id=calendar_id, event_id=result.get("id", event_id),
-                                    event_kind=task.time_semantics, status="synced")
+                link = CalendarLink(
+                    task_id=task_id,
+                    calendar_id=calendar_id,
+                    event_id=result.get("id", event_id),
+                    event_kind=task.time_semantics,
+                    status="synced",
+                )
                 session.add(link)
             link.calendar_id = calendar_id
             link.event_id = result.get("id", event_id)
@@ -228,8 +256,14 @@ class CalendarSyncService:
             link.attempts = (link.attempts or 0) + 1
             link.last_synced_at = self.clock()
             session.flush()
-            self.tasks.record(session, task, EventType.CALENDAR_SYNCED, Actor.USER if user_confirmed else Actor.SYSTEM,
-                              "已写入 Google Calendar", data={"event_id": link.event_id, "calendar_id": calendar_id})
+            self.tasks.record(
+                session,
+                task,
+                EventType.CALENDAR_SYNCED,
+                Actor.USER if user_confirmed else Actor.SYSTEM,
+                "已写入 Google Calendar",
+                data={"event_id": link.event_id, "calendar_id": calendar_id},
+            )
             return link_to_dict(link)
 
     def _ensure_calendar(self, client: CalendarClient, state: dict[str, Any], name: str, tz: str) -> str:
@@ -239,8 +273,9 @@ class CalendarSyncService:
         return client.create_calendar(name, tz)
 
     @staticmethod
-    def _update_owned(client: CalendarClient, calendar_id: str, event_id: str, task_id: str,
-                      body: dict[str, Any]) -> dict[str, Any]:
+    def _update_owned(
+        client: CalendarClient, calendar_id: str, event_id: str, task_id: str, body: dict[str, Any]
+    ) -> dict[str, Any]:
         try:
             current = client.get_event(calendar_id, event_id)
         except NotFoundError:
@@ -255,15 +290,26 @@ class CalendarSyncService:
             task = self.tasks.get(session, task_id)
             link = session.scalar(select(CalendarLink).where(CalendarLink.task_id == task_id))
             if link is None:
-                link = CalendarLink(task_id=task_id, calendar_id=calendar_id or "pending", event_id=event_id_for(task_id),
-                                    event_kind=task.time_semantics, status="failed")
+                link = CalendarLink(
+                    task_id=task_id,
+                    calendar_id=calendar_id or "pending",
+                    event_id=event_id_for(task_id),
+                    event_kind=task.time_semantics,
+                    status="failed",
+                )
                 session.add(link)
             link.status = "failed"
             link.last_error = f"{exc.code}: {exc}"[:1000]
             link.attempts = (link.attempts or 0) + 1
             session.flush()
-            self.tasks.record(session, task, EventType.CALENDAR_FAILED, Actor.SYSTEM, "写入 Google Calendar 失败（可重试）",
-                              data={"error": exc.code})
+            self.tasks.record(
+                session,
+                task,
+                EventType.CALENDAR_FAILED,
+                Actor.SYSTEM,
+                "写入 Google Calendar 失败（可重试）",
+                data={"error": exc.code},
+            )
 
     def mark_out_of_sync(self, session: Session, task: Task) -> None:
         for link in task.calendar_links:

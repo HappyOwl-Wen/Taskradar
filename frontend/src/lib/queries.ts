@@ -1,4 +1,4 @@
-import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useMutation, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { api, type TaskQuery } from "./api";
 import { errorMessage } from "./errors";
@@ -31,12 +31,24 @@ export const useTask = (id: string | undefined) =>
 
 export const useSuggestions = () => useQuery({ queryKey: qk.suggestions, queryFn: api.suggestions });
 
+/** Refetch everything on screen except the session (CSRF token) query. */
+export function refreshAll(queryClient: QueryClient): Promise<void> {
+  return queryClient.invalidateQueries({ predicate: (query) => query.queryKey[0] !== "session" });
+}
+
+let fastPollUntil = 0;
+
+/** Sync jobs start asynchronously after the request returns, so poll quickly for a while. */
+export function expectSourceActivity(ms = 15_000): void {
+  fastPollUntil = Date.now() + ms;
+}
+
 /** Sources poll quickly while a sync is running so progress shows up without a manual refresh. */
 export const useSources = () =>
   useQuery({
     queryKey: qk.sources,
     queryFn: api.sources,
-    refetchInterval: (query) => (query.state.data?.items.some((s) => s.running) ? 1500 : 20_000),
+    refetchInterval: (query) => (Date.now() < fastPollUntil || query.state.data?.items.some((s) => s.running) ? 1500 : 20_000),
   });
 
 export const useDocuments = () => useQuery({ queryKey: qk.documents, queryFn: api.documents });
@@ -76,7 +88,7 @@ export function useAction<TVars, TData>(fn: (vars: TVars) => Promise<TData>, opt
       toast.error(errorMessage(error));
     },
     onSettled: () => {
-      if (options.invalidate !== false) void queryClient.invalidateQueries();
+      if (options.invalidate !== false) void refreshAll(queryClient);
     },
   });
 }

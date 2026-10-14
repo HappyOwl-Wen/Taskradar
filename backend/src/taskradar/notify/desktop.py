@@ -23,10 +23,17 @@ $ErrorActionPreference = 'Stop'
 $title = [System.Security.SecurityElement]::Escape($env:TASKRADAR_TOAST_TITLE)
 $body = [System.Security.SecurityElement]::Escape($env:TASKRADAR_TOAST_BODY)
 $xml = New-Object Windows.Data.Xml.Dom.XmlDocument
-$xml.LoadXml("<toast><visual><binding template='ToastGeneric'><text>$title</text><text>$body</text></binding></visual></toast>")
+$binding = "<binding template='ToastGeneric'><text>$title</text><text>$body</text></binding>"
+$xml.LoadXml("<toast><visual>$binding</visual></toast>")
 $toast = New-Object Windows.UI.Notifications.ToastNotification $xml
 [Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier($env:TASKRADAR_TOAST_APPID).Show($toast)
 """
+
+
+def _powershell() -> str:
+    """Absolute path to Windows PowerShell, so a powershell.exe earlier on PATH is never used."""
+    root = os.environ.get("SYSTEMROOT", r"C:\Windows")
+    return os.path.join(root, "System32", "WindowsPowerShell", "v1.0", "powershell.exe")
 
 
 def desktop_notifications_supported() -> bool:
@@ -42,7 +49,7 @@ def show_toast(title: str, body: str, *, timeout: float = 15.0) -> bool:
     env["TASKRADAR_TOAST_APPID"] = _APP_ID
     try:
         proc = subprocess.run(  # noqa: S603 - constant script, data via environment only
-            ["powershell.exe", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", _SCRIPT],
+            [_powershell(), "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", _SCRIPT],
             env=env,
             capture_output=True,
             timeout=timeout,

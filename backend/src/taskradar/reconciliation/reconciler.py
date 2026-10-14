@@ -15,7 +15,7 @@ from dataclasses import dataclass
 from typing import Literal, Protocol
 
 from taskradar.domain.enums import ACTIVE_STATUSES, MatchRelation, RelationHint
-from taskradar.domain.schemas import CandidateTask, CompletionSignal, MatchDecision, TaskSnapshot
+from taskradar.domain.schemas import CandidateTask, CompletionSignal, DecisionLayer, MatchDecision, TaskSnapshot
 from taskradar.extraction.dates import find_dates
 from taskradar.reconciliation.normalize import action_similarity, entity_similarity, object_overlap, text_similarity
 
@@ -58,8 +58,12 @@ class Reconciler:
         txt = text_similarity(cand_text, _task_text(task))
         # The object may be named in a neighbouring sentence ("... für die Rechnung Nr. 4711 ...").
         obj = object_overlap(f"{cand_text} {cand.description[:600]}", f"{task.title} {task.description[:600]}")
-        reasons = [f"entities={ent if ent is None else round(ent, 2)}", f"action={act:.2f}", f"text={txt:.2f}",
-                   f"object={obj:.2f}"]
+        reasons = [
+            f"entities={ent if ent is None else round(ent, 2)}",
+            f"action={act:.2f}",
+            f"text={txt:.2f}",
+            f"object={obj:.2f}",
+        ]
         txt = max(txt, obj)
         if ent is None:
             # Without specific entities the action type alone must not create a match.
@@ -81,14 +85,17 @@ class Reconciler:
         source_date: dt.datetime | None,
         existing: list[TaskSnapshot],
     ) -> MatchDecision:
-        best: tuple[float, TaskSnapshot, list[str], str] | None = None
+        best: tuple[float, TaskSnapshot, list[str], DecisionLayer] | None = None
         for task in existing:
             score, reasons = self.content_score(cand, task)
-            layer = "normalized"
+            layer: DecisionLayer = "normalized"
             if origin_key in task.origin_keys:
                 if score >= 0.5:
                     return MatchDecision(
-                        relation=MatchRelation.SAME_ORIGIN, task_id=task.id, score=1.0, layer="deterministic",
+                        relation=MatchRelation.SAME_ORIGIN,
+                        task_id=task.id,
+                        score=1.0,
+                        layer="deterministic",
                         reasons=["same_source_item", *reasons],
                     )
                 continue  # a different task extracted from the same item
@@ -121,18 +128,27 @@ class Reconciler:
                         return self._same_task_relation(cand, task, source_date, score, "semantic", reasons)
                     if verdict.relation == "related" and verdict.confidence >= 0.6:
                         return MatchDecision(
-                            relation=MatchRelation.RELATED, task_id=task.id, score=score, layer="semantic", reasons=reasons
+                            relation=MatchRelation.RELATED,
+                            task_id=task.id,
+                            score=score,
+                            layer="semantic",
+                            reasons=reasons,
                         )
                     return MatchDecision(relation=MatchRelation.NEW, score=score, layer="semantic", reasons=reasons)
             same_or_unknown_date = cand.due.date is None or task.due_date is None or cand.due.date == task.due_date
             refers_back = cand.relation_hint in (RelationHint.REMINDER, RelationHint.DEADLINE_CHANGE)
             if same_or_unknown_date or refers_back:
                 return MatchDecision(
-                    relation=MatchRelation.POSSIBLE_DUPLICATE, task_id=task.id, score=score, layer="normalized",
+                    relation=MatchRelation.POSSIBLE_DUPLICATE,
+                    task_id=task.id,
+                    score=score,
+                    layer="normalized",
                     reasons=[*reasons, "grey_zone_needs_user_decision"],
                 )
             return MatchDecision(
-                relation=MatchRelation.NEW, score=score, layer="normalized",
+                relation=MatchRelation.NEW,
+                score=score,
+                layer="normalized",
                 reasons=[*reasons, "similar_but_different_deadline"],
             )
         return MatchDecision(relation=MatchRelation.NEW, score=score, layer="normalized", reasons=reasons)
@@ -143,12 +159,16 @@ class Reconciler:
         task: TaskSnapshot,
         source_date: dt.datetime | None,
         score: float,
-        layer: str,
+        layer: DecisionLayer,
         reasons: list[str],
     ) -> MatchDecision:
         def decision(relation: MatchRelation, *extra: str) -> MatchDecision:
             return MatchDecision(
-                relation=relation, task_id=task.id, score=score, layer=layer, reasons=[*reasons, *extra]  # type: ignore[arg-type]
+                relation=relation,
+                task_id=task.id,
+                score=score,
+                layer=layer,
+                reasons=[*reasons, *extra],
             )
 
         if cand.due.date is None or task.due_date is None or cand.due.date == task.due_date:
@@ -157,7 +177,10 @@ class Reconciler:
         explicit_change = cand.relation_hint == RelationHint.DEADLINE_CHANGE
         if gap > self.config.recurring_gap_days and not explicit_change:
             return MatchDecision(
-                relation=MatchRelation.RELATED, task_id=task.id, score=score, layer=layer,  # type: ignore[arg-type]
+                relation=MatchRelation.RELATED,
+                task_id=task.id,
+                score=score,
+                layer=layer,
                 reasons=[*reasons, f"deadline_gap_{gap}_days_recurring"],
             )
         newer = source_date is None or task.last_source_at is None or source_date >= task.last_source_at
@@ -181,8 +204,10 @@ class Reconciler:
                 continue
             ent = entity_similarity(signal.entities, task.entities)
             act = action_similarity(signal.action_type, task.action_type)
-            txt = max(text_similarity(signal.subject, _task_text(task)),
-                      object_overlap(signal.subject, f"{task.title} {task.description[:600]}"))
+            txt = max(
+                text_similarity(signal.subject, _task_text(task)),
+                object_overlap(signal.subject, f"{task.title} {task.description[:600]}"),
+            )
             if ent is None:
                 score = 0.6 * txt + 0.2 * act * min(1.0, txt * 2.5)
             elif ent == 0.0:
@@ -209,7 +234,11 @@ class Reconciler:
             return MatchDecision(
                 relation=MatchRelation.NEW, score=best_score, reasons=[*reasons, "ambiguous_completion_target"]
             )
-        layer = "deterministic" if "same_mail_thread" in reasons else "normalized"
+        layer: DecisionLayer = "deterministic" if "same_mail_thread" in reasons else "normalized"
         return MatchDecision(
-            relation=MatchRelation.DUPLICATE, task_id=best_task.id, score=best_score, layer=layer, reasons=reasons  # type: ignore[arg-type]
+            relation=MatchRelation.DUPLICATE,
+            task_id=best_task.id,
+            score=best_score,
+            layer=layer,
+            reasons=reasons,
         )

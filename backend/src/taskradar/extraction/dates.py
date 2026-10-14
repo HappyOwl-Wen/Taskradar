@@ -26,38 +26,134 @@ from taskradar.domain.schemas import DueInfo
 # ---------------------------------------------------------------------------------------------
 
 EN_MONTHS = {
-    "january": 1, "jan": 1, "february": 2, "feb": 2, "march": 3, "mar": 3, "april": 4, "apr": 4,
-    "may": 5, "june": 6, "jun": 6, "july": 7, "jul": 7, "august": 8, "aug": 8, "september": 9,
-    "sep": 9, "sept": 9, "october": 10, "oct": 10, "november": 11, "nov": 11, "december": 12, "dec": 12,
+    "january": 1,
+    "jan": 1,
+    "february": 2,
+    "feb": 2,
+    "march": 3,
+    "mar": 3,
+    "april": 4,
+    "apr": 4,
+    "may": 5,
+    "june": 6,
+    "jun": 6,
+    "july": 7,
+    "jul": 7,
+    "august": 8,
+    "aug": 8,
+    "september": 9,
+    "sep": 9,
+    "sept": 9,
+    "october": 10,
+    "oct": 10,
+    "november": 11,
+    "nov": 11,
+    "december": 12,
+    "dec": 12,
 }
 DE_MONTHS = {
-    "januar": 1, "jänner": 1, "februar": 2, "märz": 3, "maerz": 3, "marz": 3, "mär": 3, "mrz": 3,
-    "april": 4, "mai": 5, "juni": 6, "juli": 7, "august": 8, "september": 9, "oktober": 10, "okt": 10,
-    "november": 11, "dezember": 12, "dez": 12,
+    "januar": 1,
+    "jänner": 1,
+    "februar": 2,
+    "märz": 3,
+    "maerz": 3,
+    "marz": 3,
+    "mär": 3,
+    "mrz": 3,
+    "april": 4,
+    "mai": 5,
+    "juni": 6,
+    "juli": 7,
+    "august": 8,
+    "september": 9,
+    "oktober": 10,
+    "okt": 10,
+    "november": 11,
+    "dezember": 12,
+    "dez": 12,
 }
 ALL_MONTHS = {**EN_MONTHS, **DE_MONTHS}
 _MONTH_ALT = "|".join(sorted(ALL_MONTHS, key=len, reverse=True))
 
 EN_WEEKDAYS = {
-    "monday": 0, "mon": 0, "tuesday": 1, "tue": 1, "tues": 1, "wednesday": 2, "wed": 2,
-    "thursday": 3, "thu": 3, "thurs": 3, "friday": 4, "fri": 4, "saturday": 5, "sat": 5,
-    "sunday": 6, "sun": 6,
+    "monday": 0,
+    "mon": 0,
+    "tuesday": 1,
+    "tue": 1,
+    "tues": 1,
+    "wednesday": 2,
+    "wed": 2,
+    "thursday": 3,
+    "thu": 3,
+    "thurs": 3,
+    "friday": 4,
+    "fri": 4,
+    "saturday": 5,
+    "sat": 5,
+    "sunday": 6,
+    "sun": 6,
 }
 DE_WEEKDAYS = {
-    "montag": 0, "dienstag": 1, "mittwoch": 2, "donnerstag": 3, "freitag": 4, "samstag": 5,
-    "sonnabend": 5, "sonntag": 6,
+    "montag": 0,
+    "dienstag": 1,
+    "mittwoch": 2,
+    "donnerstag": 3,
+    "freitag": 4,
+    "samstag": 5,
+    "sonnabend": 5,
+    "sonntag": 6,
 }
 ZH_WEEKDAYS = {"一": 0, "二": 1, "三": 2, "四": 3, "五": 4, "六": 5, "日": 6, "天": 6}
 _WD_EN = "|".join(sorted((k for k in EN_WEEKDAYS if len(k) > 3), key=len, reverse=True))
 _WD_DE = "|".join(sorted(DE_WEEKDAYS, key=len, reverse=True))
 
-_ZH_DIGITS = {"零": 0, "〇": 0, "一": 1, "二": 2, "两": 2, "三": 3, "四": 4, "五": 5, "六": 6, "七": 7, "八": 8, "九": 9}
+_ZH_DIGITS = {
+    "零": 0,
+    "〇": 0,
+    "一": 1,
+    "二": 2,
+    "两": 2,
+    "三": 3,
+    "四": 4,
+    "五": 5,
+    "六": 6,
+    "七": 7,
+    "八": 8,
+    "九": 9,
+}
 WORD_NUMBERS = {
-    "one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "six": 6, "seven": 7, "eight": 8, "nine": 9,
-    "ten": 10, "eleven": 11, "twelve": 12, "fourteen": 14, "thirty": 30,
-    "ein": 1, "eine": 1, "einem": 1, "einer": 1, "einen": 1, "zwei": 2, "drei": 3, "vier": 4,
-    "fünf": 5, "sechs": 6, "sieben": 7, "acht": 8, "neun": 9, "zehn": 10, "elf": 11, "zwölf": 12,
-    "vierzehn": 14, "dreißig": 30,
+    "one": 1,
+    "two": 2,
+    "three": 3,
+    "four": 4,
+    "five": 5,
+    "six": 6,
+    "seven": 7,
+    "eight": 8,
+    "nine": 9,
+    "ten": 10,
+    "eleven": 11,
+    "twelve": 12,
+    "fourteen": 14,
+    "thirty": 30,
+    "ein": 1,
+    "eine": 1,
+    "einem": 1,
+    "einer": 1,
+    "einen": 1,
+    "zwei": 2,
+    "drei": 3,
+    "vier": 4,
+    "fünf": 5,
+    "sechs": 6,
+    "sieben": 7,
+    "acht": 8,
+    "neun": 9,
+    "zehn": 10,
+    "elf": 11,
+    "zwölf": 12,
+    "vierzehn": 14,
+    "dreißig": 30,
 }
 
 
@@ -70,8 +166,8 @@ def zh_to_int(token: str) -> int | None:
         return None
     if "十" in token:
         left, _, right = token.partition("十")
-        tens = _ZH_DIGITS.get(left, None) if left else 1
-        ones = _ZH_DIGITS.get(right, None) if right else 0
+        tens = _ZH_DIGITS.get(left) if left else 1
+        ones = _ZH_DIGITS.get(right) if right else 0
         if tens is None or ones is None:
             return None
         return tens * 10 + ones
@@ -99,7 +195,9 @@ _ABS_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
     ("zh_md", re.compile(r"(?<![\d年])(?P<m>[01]?\d)\s*月\s*(?P<d>[0-3]?\d)\s*[日号]")),
     (
         "zh_md_cn",
-        re.compile(r"(?P<m>十[一二]?|[一二三四五六七八九])月(?P<d>[一二三]?十[一二三四五六七八九]?|[一二三四五六七八九])[日号]"),
+        re.compile(
+            r"(?P<m>十[一二]?|[一二三四五六七八九])月(?P<d>[一二三]?十[一二三四五六七八九]?|[一二三四五六七八九])[日号]"
+        ),
     ),
     ("de_num", re.compile(r"(?<![\d.])(?P<d>[0-3]?\d)\.\s?(?P<m>[01]?\d)\.(?:\s?(?P<y>20\d{2}|\d{2})(?!\d))?(?!\d)")),
     (
@@ -127,7 +225,9 @@ _REL_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
     ("zh_wd", re.compile(r"(?<![下本这个])(?:周|星期|礼拜)(?P<wd>[一二三四五六日天])")),
     (
         "zh_within",
-        re.compile(r"(?P<n>\d{1,3}|[一二三四五六七八九十两]{1,3})\s*(?:个)?(?P<unit>工作日|天|日|周|星期|个月)\s*(?:之内|以内|内)"),
+        re.compile(
+            r"(?P<n>\d{1,3}|[一二三四五六七八九十两]{1,3})\s*(?:个)?(?P<unit>工作日|天|日|周|星期|个月)\s*(?:之内|以内|内)"
+        ),
     ),
     ("zh_month_end", re.compile(r"(?P<which>本月|这个月|下个?月)?\s*(?:月底|月末)")),
     ("zh_m_end", re.compile(r"(?P<m>[01]?\d)\s*月\s*(?:底|末|下旬)")),
@@ -137,13 +237,16 @@ _REL_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
     ("en_this_wd", re.compile(rf"\b(?:this coming|this|coming)\s+(?P<wd>{_WD_EN})\b", re.I)),
     (
         "en_wd",
-        re.compile(rf"\b(?:by|on|until|before|due)\s+(?P<wd>{_WD_EN})\b(?!\s*,?\s*(?:the\s+)?(?:{_MONTH_ALT}|\d))", re.I),
+        re.compile(
+            rf"\b(?:by|on|until|before|due)\s+(?P<wd>{_WD_EN})\b(?!\s*,?\s*(?:the\s+)?(?:{_MONTH_ALT}|\d))", re.I
+        ),
     ),
     (
         "en_within",
         re.compile(
             r"\b(?:within|in)\s+(?:the\s+next\s+)?(?P<n>\d{1,3}|one|two|three|four|five|six|seven|eight|nine|ten|"
-            r"eleven|twelve|fourteen|thirty)\s+(?P<unit>business days?|working days?|calendar days?|days?|weeks?|months?)\b",
+            r"eleven|twelve|fourteen|thirty)\s+"
+            r"(?P<unit>business days?|working days?|calendar days?|days?|weeks?|months?)\b",
             re.I,
         ),
     ),
@@ -220,7 +323,8 @@ _DEADLINE_AFTER = re.compile(r"^\s*(前|之前|以前|截止|为止|到期|at th
 # "within 14 days after contract signing": the period starts at an event we do not know, so the
 # date must not be computed from the mail date. Receipt of the message itself is a known anchor.
 _EVENT_ANCHOR_AFTER = re.compile(
-    r"^\s*(?:(?:of|after|following|from)\s+(?!(?:the\s+)?(?:receipt|date of this|this\s+(?:letter|e-?mail|notice|message)|today))"
+    r"^\s*(?:(?:of|after|following|from)\s+"
+    r"(?!(?:the\s+)?(?:receipt|date of this|this\s+(?:letter|e-?mail|notice|message)|today))"
     r"|(?:nach|ab)\s+(?!(?:dem\s+)?(?:Erhalt|Zugang|Zustellung|Eingang|Datum dieses|heute)))",
     re.I,
 )
@@ -333,6 +437,7 @@ def _absolute_mentions(text: str, anchor: dt.date, lang: str | None) -> list[Dat
             alternatives: list[dt.date] = []
             ambiguous = False
             notes: list[str] = []
+            value: dt.date | None
             if name == "slash":
                 a, b = int(gd["a"]), int(gd["b"])
                 y = int(gd["y"])
@@ -402,7 +507,17 @@ def _relative_mentions(text: str, anchor: dt.date) -> list[DateMention]:
             notes: list[str] = []
 
             if name == "zh_day":
-                offset = {"今天": 0, "今日": 0, "今晚": 0, "当天": 0, "明天": 1, "明日": 1, "明晚": 1, "后天": 2, "大后天": 3}[token]
+                offset = {
+                    "今天": 0,
+                    "今日": 0,
+                    "今晚": 0,
+                    "当天": 0,
+                    "明天": 1,
+                    "明日": 1,
+                    "明晚": 1,
+                    "后天": 2,
+                    "大后天": 3,
+                }[token]
                 value = anchor + dt.timedelta(days=offset)
             elif name in ("en_day", "de_day"):
                 low = token.lower()
@@ -427,8 +542,9 @@ def _relative_mentions(text: str, anchor: dt.date) -> list[DateMention]:
                         alternatives = [anchor + dt.timedelta(days=7)]
                         notes.append("weekday_equals_source_day")
             elif name in ("en_next_wd", "de_next_wd"):
-                wd = _weekday_index(gd["wd"])
-                assert wd is not None
+                parsed_wd = _weekday_index(gd["wd"])
+                assert parsed_wd is not None
+                wd = parsed_wd
                 upcoming = _upcoming(anchor, wd)
                 if upcoming == anchor:
                     upcoming += dt.timedelta(days=7)
@@ -442,8 +558,9 @@ def _relative_mentions(text: str, anchor: dt.date) -> list[DateMention]:
                 ambiguous = True
                 notes.append("next_weekday_ambiguous")
             elif name in ("en_this_wd", "de_this_wd", "en_wd", "de_wd"):
-                wd = _weekday_index(gd["wd"])
-                assert wd is not None
+                parsed_wd = _weekday_index(gd["wd"])
+                assert parsed_wd is not None
+                wd = parsed_wd
                 value = _upcoming(anchor, wd)
                 if value == anchor and name in ("en_wd", "de_wd"):
                     ambiguous = True
@@ -578,9 +695,7 @@ def _time_mentions(text: str) -> list[_TimeMention]:
                     hour += 12
                 elif ampm == "am" and hour == 12:
                     hour = 0
-                if period in ("下午", "晚上", "傍晚") and hour < 12:
-                    hour += 12
-                elif period == "中午" and hour < 6:
+                if (period in ("下午", "晚上", "傍晚") and hour < 12) or (period == "中午" and hour < 6):
                     hour += 12
                 if hour == 24 and minute == 0:
                     hour, minute, note = 23, 59, "explicit_midnight"
@@ -599,7 +714,10 @@ def _time_mentions(text: str) -> list[_TimeMention]:
     return result
 
 
-_GAP_ALLOWED_BEFORE_TIME = re.compile(r"^[\s,，、(（）)\-–—]*(?:\(?[^\d\n。；;]{0,8}\)?)?[\s,，、]*(?:um|at|by|bis|gegen|until|before|um\s+spätestens|前|的)?[\s,，、]*$", re.I)
+_GAP_ALLOWED_BEFORE_TIME = re.compile(
+    r"^[\s,，、(（）)\-–—]*(?:\(?[^\d\n。；;]{0,8}\)?)?[\s,，、]*(?:um|at|by|bis|gegen|until|before|um\s+spätestens|前|的)?[\s,，、]*$",
+    re.I,
+)
 _GAP_ALLOWED_AFTER_TIME = re.compile(r"^\s*(?:am|on|,|，|den|的)?\s*(?:den\s*)?$", re.I)
 
 
@@ -613,14 +731,18 @@ def _attach_times(text: str, dates: list[DateMention], times: list[_TimeMention]
             if idx in used:
                 continue
             if t.start >= mention.end:
-                gap = text[mention.end:t.start]
-                if len(gap) <= t.max_gap and not _SENTENCE_STOP.search(gap) and _GAP_ALLOWED_BEFORE_TIME.match(gap):
-                    if not any(d is not mention and mention.end <= d.start < t.start for d in dates):
-                        best = t
-                        used.add(idx)
-                        break
+                gap = text[mention.end : t.start]
+                if (
+                    len(gap) <= t.max_gap
+                    and not _SENTENCE_STOP.search(gap)
+                    and _GAP_ALLOWED_BEFORE_TIME.match(gap)
+                    and not any(d is not mention and mention.end <= d.start < t.start for d in dates)
+                ):
+                    best = t
+                    used.add(idx)
+                    break
             elif t.end <= mention.start:
-                gap = text[t.end:mention.start]
+                gap = text[t.end : mention.start]
                 if len(gap) <= 8 and _GAP_ALLOWED_AFTER_TIME.match(gap):
                     best = t
                     used.add(idx)
@@ -630,7 +752,7 @@ def _attach_times(text: str, dates: list[DateMention], times: list[_TimeMention]
         mention.time = best.time
         mention.start = min(mention.start, best.start)
         mention.end = max(mention.end, best.end)
-        mention.text = text[mention.start:mention.end]
+        mention.text = text[mention.start : mention.end]
         if best.note:
             mention.notes.append(best.note)
         if best.tz in ("UTC", "GMT"):
@@ -654,7 +776,7 @@ _WEEKDAY_NEAR = re.compile(
 def _check_weekday_consistency(text: str, mention: DateMention) -> None:
     if mention.is_relative or mention.date is None:
         return
-    window = text[max(0, mention.start - 14): mention.start] + " " + text[mention.end: mention.end + 8]
+    window = text[max(0, mention.start - 14) : mention.start] + " " + text[mention.end : mention.end + 8]
     match = _WEEKDAY_NEAR.search(window)
     if not match:
         return
@@ -694,31 +816,31 @@ def find_dates(
     _attach_times(text, selected, _time_mentions(text), tz)
     for mention in selected:
         _check_weekday_consistency(text, mention)
-        before = text[max(0, mention.start - 40): mention.start]
+        before = text[max(0, mention.start - 40) : mention.start]
         before = _SENTENCE_STOP.split(before)[-1]
-        after = text[mention.end: mention.end + 14]
+        after = text[mention.end : mention.end + 14]
         mention.deadline_cue = (
             mention.kind.endswith("_within")
             or bool(_CUE_INSIDE.match(mention.text))
             or bool(_DEADLINE_BEFORE.search(before) or _DEADLINE_AFTER.search(after))
         )
         if mention.kind.endswith("_within"):
-            zh_before = text[max(0, mention.start - 20): mention.start]
-            event_after = bool(_EVENT_ANCHOR_AFTER.match(text[mention.end: mention.end + 60]))
+            zh_before = text[max(0, mention.start - 20) : mention.start]
+            event_after = bool(_EVENT_ANCHOR_AFTER.match(text[mention.end : mention.end + 60]))
             event_before = bool(_EVENT_ANCHOR_BEFORE_ZH.search(zh_before)) and not _RECEIPT_BEFORE_ZH.search(zh_before)
             if event_after or event_before:
                 mention.date = None
                 mention.ambiguous = True
                 mention.notes.append("period_starts_at_unknown_event")
                 if event_after:  # "innerhalb von 14 Tagen | nach Vertragsunterzeichnung"
-                    tail = re.match(r"[^.,;:!?。，；：！？\n]{0,60}", text[mention.end:])
+                    tail = re.match(r"[^.,;:!?。，；：！？\n]{0,60}", text[mention.end :])
                     if tail and tail.group(0).strip():
                         mention.end += len(tail.group(0).rstrip())
                 else:  # "签约后 | 14天内"
                     head = re.search(r"[^，。；：！？\n请在于]{1,10}(?:后|之后|以后)\s*$", zh_before)
                     if head:
                         mention.start -= len(head.group(0))
-                mention.text = text[mention.start: mention.end]
+                mention.text = text[mention.start : mention.end]
     return selected
 
 
@@ -794,8 +916,8 @@ def detect_document_date(text: str) -> dt.date | None:
         line_start = head.rfind("\n", 0, m.start) + 1
         line_end = head.find("\n", m.end)
         line_end = len(head) if line_end == -1 else line_end
-        prefix = head[line_start:m.start]
-        suffix = head[m.end:line_end]
+        prefix = head[line_start : m.start]
+        suffix = head[m.end : line_end]
         if _DOC_DATE_LABEL.search(prefix):
             return m.date
         if _DOC_DATE_CITY.match(prefix) and not suffix.strip():

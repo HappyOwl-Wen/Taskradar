@@ -17,13 +17,29 @@ from taskradar.services.calendar_sync import CalendarSyncError, event_id_for
 from taskradar.services.tasks import Origin
 
 
-def make_task(c: Container, *, due: dt.date | None = dt.date(2026, 11, 20), time: dt.time | None = None,
-              semantics: str = "deadline", status: TaskStatus = TaskStatus.CONFIRMED) -> str:
-    cand = CandidateTask(title="提交在读证明", action_required="通过TUMonline上传在读证明", confidence=0.9,
-                         due=DueInfo(date=due, time=time, semantics=semantics))  # type: ignore[arg-type]
+def make_task(
+    c: Container,
+    *,
+    due: dt.date | None = dt.date(2026, 11, 20),
+    time: dt.time | None = None,
+    semantics: str = "deadline",
+    status: TaskStatus = TaskStatus.CONFIRMED,
+) -> str:
+    cand = CandidateTask(
+        title="提交在读证明",
+        action_required="通过TUMonline上传在读证明",
+        confidence=0.9,
+        due=DueInfo(date=due, time=time, semantics=semantics),
+    )  # type: ignore[arg-type]
     with transaction(c.factory) as session:
-        task = c.tasks.create_from_candidate(session, cand, origin=Origin(key="manual", label="test"),
-                                             candidate_row=None, timezone="Europe/Berlin", review_reasons=[])
+        task = c.tasks.create_from_candidate(
+            session,
+            cand,
+            origin=Origin(key="manual", label="test"),
+            candidate_row=None,
+            timezone="Europe/Berlin",
+            review_reasons=[],
+        )
         c.tasks.change_status(session, task, status, actor=Actor.USER)
         return task.id
 
@@ -70,7 +86,9 @@ def test_timed_deadline_and_appointment_are_distinguished(container: Container) 
     deadline = container.calendar.preview(make_task(container, time=dt.time(12, 0)))["event"]
     assert deadline["start"]["dateTime"] == "2026-11-20T11:45:00+01:00"
     assert deadline["end"]["dateTime"] == "2026-11-20T12:00:00+01:00"
-    appointment = container.calendar.preview(make_task(container, time=dt.time(10, 30), semantics="appointment"))["event"]
+    appointment = container.calendar.preview(make_task(container, time=dt.time(10, 30), semantics="appointment"))[
+        "event"
+    ]
     assert appointment["start"]["dateTime"] == "2026-11-20T10:30:00+01:00"
     assert appointment["end"]["dateTime"] == "2026-11-20T11:30:00+01:00"
     assert not appointment["summary"].startswith("截止")
@@ -105,8 +123,9 @@ def test_changed_deadline_updates_the_same_event(container: Container, calendar_
     assert event["start"] == {"date": "2026-11-27"}
 
 
-def test_lost_link_reuses_existing_event_instead_of_duplicating(container: Container,
-                                                                calendar_client: FakeCalendarClient) -> None:
+def test_lost_link_reuses_existing_event_instead_of_duplicating(
+    container: Container, calendar_client: FakeCalendarClient
+) -> None:
     connect(container)
     task_id = make_task(container)
     container.calendar.sync(task_id, user_confirmed=True)

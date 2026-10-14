@@ -23,10 +23,29 @@ def _iso(value: dt.datetime | dt.date | None) -> str | None:
     return value.isoformat() if value is not None else None
 
 
+def _source_day(ts: TaskSource | None) -> str | None:
+    """The calendar date of a source that carries no time of day (e.g. the date line of a letter).
+
+    Such dates are stored as local midnight; exposing the day separately keeps the UI from showing
+    an invented "00:00".
+    """
+    if ts is None or ts.document is None or ts.document.doc_date is None:
+        return None
+    if ts.message is not None and ts.message.sent_at is not None:
+        return None  # attachments are dated by their e-mail
+    return ts.document.doc_date.isoformat()
+
+
 def task_summary(task: Task, *, now: dt.datetime, thresholds: Thresholds) -> dict[str, Any]:
-    status = evaluate(status=task.status, due_date=task.due_date, due_time=task.due_time, tz_name=task.timezone,
-                      now=now, thresholds=thresholds)
-    kinds = sorted({_source_kind(s) for s in task.sources if _source_kind(s)})
+    status = evaluate(
+        status=task.status,
+        due_date=task.due_date,
+        due_time=task.due_time,
+        tz_name=task.timezone,
+        now=now,
+        thresholds=thresholds,
+    )
+    kinds = sorted({kind for s in task.sources if (kind := _source_kind(s))})
     link = task.calendar_links[0] if task.calendar_links else None
     return {
         "id": task.id,
@@ -56,6 +75,7 @@ def task_summary(task: Task, *, now: dt.datetime, thresholds: Thresholds) -> dic
         "calendar_status": link.status if link else None,
         "detected_at": _iso(task.detected_at),
         "source_published_at": _iso(task.source_published_at),
+        "source_published_day": _source_day(next((s for s in task.sources if s.relation == "origin"), None)),
         "created_at": _iso(task.created_at),
         "updated_at": _iso(task.updated_at),
         "confirmed_at": _iso(task.confirmed_at),
@@ -120,6 +140,7 @@ def source_entry(ts: TaskSource) -> dict[str, Any]:
         "origin_key": ts.origin_key,
         "label": ts.source_label,
         "source_date": _iso(ts.source_date),
+        "source_day": _source_day(ts),
         "evidence": list(ts.evidence or []),
         "created_at": _iso(ts.created_at),
         "message": message_brief(ts.message) if ts.message is not None else None,
@@ -128,9 +149,23 @@ def source_entry(ts: TaskSource) -> dict[str, Any]:
 
 
 _SAFE_EVENT_KEYS = {
-    "before", "after", "origin", "relation", "confidence", "review_reasons", "kind", "suggestion_id",
-    "accepted", "reverted_event_id", "split_task_id", "merged_task_id", "merged_into", "event_id", "error",
-    "evidence", "other",
+    "before",
+    "after",
+    "origin",
+    "relation",
+    "confidence",
+    "review_reasons",
+    "kind",
+    "suggestion_id",
+    "accepted",
+    "reverted_event_id",
+    "split_task_id",
+    "merged_task_id",
+    "merged_into",
+    "event_id",
+    "error",
+    "evidence",
+    "other",
 }
 
 
@@ -163,22 +198,25 @@ def suggestion_entry(s: TaskSuggestion) -> dict[str, Any]:
     }
 
 
-def task_detail(task: Task, *, now: dt.datetime, thresholds: Thresholds,
-                links: list[dict[str, Any]] | None = None) -> dict[str, Any]:
+def task_detail(
+    task: Task, *, now: dt.datetime, thresholds: Thresholds, links: list[dict[str, Any]] | None = None
+) -> dict[str, Any]:
     data = task_summary(task, now=now, thresholds=thresholds)
-    data.update({
-        "description": task.description,
-        "action_required": task.action_required,
-        "entities": list(task.entities or []),
-        "user_locked_fields": list(task.user_locked_fields or []),
-        "due_anchor": task.due_anchor,
-        "due_version": task.due_version,
-        "sources": [source_entry(s) for s in task.sources],
-        "events": [event_entry(e) for e in reversed(task.events)],
-        "suggestions": [suggestion_entry(s) for s in task.suggestions],
-        "calendar": link_to_dict(task.calendar_links[0]) if task.calendar_links else None,
-        "links": links or [],
-    })
+    data.update(
+        {
+            "description": task.description,
+            "action_required": task.action_required,
+            "entities": list(task.entities or []),
+            "user_locked_fields": list(task.user_locked_fields or []),
+            "due_anchor": task.due_anchor,
+            "due_version": task.due_version,
+            "sources": [source_entry(s) for s in task.sources],
+            "events": [event_entry(e) for e in reversed(task.events)],
+            "suggestions": [suggestion_entry(s) for s in task.suggestions],
+            "calendar": link_to_dict(task.calendar_links[0]) if task.calendar_links else None,
+            "links": links or [],
+        }
+    )
     return data
 
 

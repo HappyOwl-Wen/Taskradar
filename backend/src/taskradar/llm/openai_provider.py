@@ -71,7 +71,8 @@ class OpenAIProvider:
         kwargs: dict[str, Any] = {"model": self.model, "messages": messages, "max_completion_tokens": max_output_tokens}
         if self.structured_mode == "json_object":
             messages[0]["content"] = (
-                system + "\n\nReturn ONLY a JSON object that validates against this JSON schema:\n"
+                system
+                + "\n\nReturn ONLY a JSON object that validates against this JSON schema:\n"
                 + json.dumps(schema, ensure_ascii=False)
             )
             kwargs["response_format"] = {"type": "json_object"}

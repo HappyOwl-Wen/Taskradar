@@ -62,8 +62,9 @@ def parse_document(path: Path, kind: str, ocr: OCREngine) -> ParsedDocument:
     raise DocumentParseError(f"Unsupported document kind: {kind}")
 
 
-def _finalize(kind: str, pages: list[PageText], page_count: int, ocr_engine: str | None,
-              warnings_: list[str]) -> ParsedDocument:
+def _finalize(
+    kind: str, pages: list[PageText], page_count: int, ocr_engine: str | None, warnings_: list[str]
+) -> ParsedDocument:
     from taskradar.extraction.dates import detect_document_date
 
     methods = {p.method for p in pages if p.text.strip()}
@@ -131,9 +132,7 @@ def parse_pdf(path: Path, ocr: OCREngine) -> ParsedDocument:
                 result = ocr.recognize(image)
                 used_ocr = True
                 merged = result.text if len(result.text) >= len(text.strip()) else text.strip()
-                pages.append(
-                    PageText(page=index + 1, text=merged, method="ocr", ocr_confidence=result.confidence)
-                )
+                pages.append(PageText(page=index + 1, text=merged, method="ocr", ocr_confidence=result.confidence))
             except OCRUnavailableError:
                 warnings_.append("ocr_unavailable")
                 pages.append(PageText(page=index + 1, text=text.strip(), method="none"))

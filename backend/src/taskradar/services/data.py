@@ -54,8 +54,9 @@ def _row(obj: Any, exclude: set[str] | None = None) -> dict[str, Any]:
 
 
 class DataService:
-    def __init__(self, session_factory: sessionmaker[Session], *, config: AppConfig,
-                 clock: Callable[[], dt.datetime] = utcnow) -> None:
+    def __init__(
+        self, session_factory: sessionmaker[Session], *, config: AppConfig, clock: Callable[[], dt.datetime] = utcnow
+    ) -> None:
         self._factory = session_factory
         self.config = config
         self.clock = clock
@@ -98,9 +99,11 @@ class DataService:
             if doc is None:
                 raise LookupError("Document not found")
             stored = doc.stored_path
-            still_used = session.scalar(
-                select(Document.id).where(Document.stored_path == stored, Document.id != document_id)
-            ) if stored else None
+            still_used = (
+                session.scalar(select(Document.id).where(Document.stored_path == stored, Document.id != document_id))
+                if stored
+                else None
+            )
             session.delete(doc)
         if stored and still_used is None:
             self._remove_owned_file(stored)
@@ -126,8 +129,23 @@ class DataService:
         """Remove all tasks, imported items, history and stored file copies. Settings stay."""
         counts: dict[str, int] = {}
         with transaction(self._factory) as session:
-            for model in (Notification, CalendarLink, TaskSuggestion, TaskLink, TaskEvent, TaskSource, TaskCandidate,
-                          ExtractionRun, Task, DocumentPage, Document, Message, SyncCheckpoint, SyncJob, AuditLog):
+            for model in (
+                Notification,
+                CalendarLink,
+                TaskSuggestion,
+                TaskLink,
+                TaskEvent,
+                TaskSource,
+                TaskCandidate,
+                ExtractionRun,
+                Task,
+                DocumentPage,
+                Document,
+                Message,
+                SyncCheckpoint,
+                SyncJob,
+                AuditLog,
+            ):
                 result = session.execute(delete(model))
                 counts[model.__tablename__] = int(getattr(result, "rowcount", 0) or 0)
             # Keep folder/Gmail source definitions? No - the user asked for a clean slate.

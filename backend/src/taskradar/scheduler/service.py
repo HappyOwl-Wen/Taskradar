@@ -52,9 +52,13 @@ class SchedulerService:
         self.scheduler.start()
         self._started = True
         # A first reminder pass shortly after start-up.
-        self.scheduler.add_job(self._safe(self.reminders), "date",
-                               run_date=dt.datetime.now(dt.UTC) + dt.timedelta(seconds=10), id="reminders-initial",
-                               replace_existing=True)
+        self.scheduler.add_job(
+            self._safe(self.reminders),
+            "date",
+            run_date=dt.datetime.now(dt.UTC) + dt.timedelta(seconds=10),
+            id="reminders-initial",
+            replace_existing=True,
+        )
         log.info("Background scheduler started")
 
     def shutdown(self) -> None:
@@ -74,8 +78,14 @@ class SchedulerService:
             ("retries", self.retries, 2),
         ]
         for job_id, fn, minutes in jobs:
-            self.scheduler.add_job(self._safe(fn), "interval", minutes=minutes, id=job_id, replace_existing=True,
-                                   next_run_time=dt.datetime.now(dt.UTC) + dt.timedelta(minutes=minutes))
+            self.scheduler.add_job(
+                self._safe(fn),
+                "interval",
+                minutes=minutes,
+                id=job_id,
+                replace_existing=True,
+                next_run_time=dt.datetime.now(dt.UTC) + dt.timedelta(minutes=minutes),
+            )
 
     @staticmethod
     def _safe(fn: Any) -> Any:
@@ -102,9 +112,12 @@ class SchedulerService:
         if not self.c.settings.get().gmail.auto_sync or not self.c.oauth.connected("gmail"):
             return
         with transaction(self.c.factory) as session:
-            ids = [s.id for s in session.scalars(
-                select(Source).where(Source.kind == SourceKind.GMAIL.value, Source.enabled.is_(True))
-            )]
+            ids = [
+                s.id
+                for s in session.scalars(
+                    select(Source).where(Source.kind == SourceKind.GMAIL.value, Source.enabled.is_(True))
+                )
+            ]
         for source_id in ids:
             try:
                 self.c.gmail.sync(source_id, trigger=JobTrigger.SCHEDULED)
@@ -138,5 +151,7 @@ class SchedulerService:
         jobs = []
         if self._started:
             for job in self.scheduler.get_jobs():
-                jobs.append({"id": job.id, "next_run_time": job.next_run_time.isoformat() if job.next_run_time else None})
+                jobs.append(
+                    {"id": job.id, "next_run_time": job.next_run_time.isoformat() if job.next_run_time else None}
+                )
         return {"running": self._started, "jobs": jobs}

@@ -45,11 +45,18 @@ class PermissionDenied(Exception):
 
 
 _FORBIDDEN_FOLDER_ROOTS = [
-    os.environ.get("SystemRoot", r"C:\Windows"),
-    os.environ.get("ProgramFiles", r"C:\Program Files"),
-    os.environ.get("ProgramFiles(x86)", r"C:\Program Files (x86)"),
-    os.environ.get("ProgramData", r"C:\ProgramData"),
-    "/bin", "/sbin", "/usr", "/etc", "/proc", "/sys", "/dev", "/var",
+    os.environ.get("SYSTEMROOT", r"C:\Windows"),
+    os.environ.get("PROGRAMFILES", r"C:\Program Files"),
+    os.environ.get("PROGRAMFILES(X86)", r"C:\Program Files (x86)"),
+    os.environ.get("PROGRAMDATA", r"C:\ProgramData"),
+    "/bin",
+    "/sbin",
+    "/usr",
+    "/etc",
+    "/proc",
+    "/sys",
+    "/dev",
+    "/var",
 ]
 
 
@@ -137,7 +144,9 @@ class PermissionGuard:
             llm = settings.llm
             if llm.provider == "none":
                 return False, "llm_disabled", "No model provider is configured"
-            is_local = bool(llm.base_url) and any(h in (llm.base_url or "") for h in ("127.0.0.1", "localhost", "[::1]"))
+            is_local = bool(llm.base_url) and any(
+                h in (llm.base_url or "") for h in ("127.0.0.1", "localhost", "[::1]")
+            )
             if not is_local and not llm.cloud_consent:
                 return False, "cloud_consent_missing", "Sending content to a cloud model requires explicit consent"
             if llm.provider == "openai" and not self.llm_api_key():
@@ -189,14 +198,28 @@ class PermissionGuard:
             return False, "file_missing", "The file no longer exists"
         roots = [self._app_data_dir.resolve()]
         with transaction(self._factory) as session:
-            roots.extend(Path(p).resolve() for (p,) in session.query(Source.folder_path).filter(Source.folder_path.isnot(None)))
+            roots.extend(
+                Path(p).resolve()
+                for (p,) in session.query(Source.folder_path).filter(Source.folder_path.isnot(None))
+                if p
+            )
         if any(path.is_relative_to(root) for root in roots):
             return True, "allowed", "file inside TaskRadar storage or a watched folder"
         return False, "file_outside_allowed_roots", "The file is outside the folders TaskRadar may access"
 
-    def _audit(self, action: SideEffect, allowed: bool, code: str, reason: str, target: str | None,
-               context: dict[str, Any], session: Session | None = None) -> None:
-        safe_details = {k: v for k, v in context.items() if isinstance(v, (bool, int, float)) or k in ("task_id", "kind")}
+    def _audit(
+        self,
+        action: SideEffect,
+        allowed: bool,
+        code: str,
+        reason: str,
+        target: str | None,
+        context: dict[str, Any],
+        session: Session | None = None,
+    ) -> None:
+        safe_details = {
+            k: v for k, v in context.items() if isinstance(v, (bool, int, float)) or k in ("task_id", "kind")
+        }
         entry = AuditLog(
             action=action.value,
             allowed=allowed,

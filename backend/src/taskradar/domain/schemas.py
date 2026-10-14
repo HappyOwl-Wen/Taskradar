@@ -224,9 +224,12 @@ class TaskSnapshot(_Model):
     user_locked_fields: list[str] = Field(default_factory=list)
 
 
+DecisionLayer = Literal["deterministic", "normalized", "semantic", "none"]
+
+
 class MatchDecision(_Model):
     relation: MatchRelation
     task_id: str | None = None
     score: float = 0.0
-    layer: Literal["deterministic", "normalized", "semantic", "none"] = "none"
+    layer: DecisionLayer = "none"
     reasons: list[str] = Field(default_factory=list)

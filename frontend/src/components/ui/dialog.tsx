@@ -1,6 +1,7 @@
 import { AlertDialog as AlertPrimitive, Dialog as DialogPrimitive } from "radix-ui";
 import { X } from "lucide-react";
 import type { ComponentProps, ReactNode } from "react";
+import { useTranslation } from "react-i18next";
 import { cn } from "@/lib/utils";
 import { Button } from "./button";
 import { buttonVariants } from "./variants";
@@ -19,6 +20,7 @@ export function DialogContent({
   showClose = true,
   ...props
 }: ComponentProps<typeof DialogPrimitive.Content> & { showClose?: boolean }) {
+  const { t } = useTranslation();
   return (
     <DialogPrimitive.Portal>
       <DialogPrimitive.Overlay className={overlayClass} />
@@ -27,7 +29,7 @@ export function DialogContent({
         {showClose ? (
           <DialogPrimitive.Close className="absolute top-4 right-4 rounded-md p-1 text-muted-foreground opacity-80 transition-opacity hover:bg-accent hover:opacity-100 focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none">
             <X className="size-4" />
-            <span className="sr-only">Close</span>
+            <span className="sr-only">{t("common.close")}</span>
           </DialogPrimitive.Close>
         ) : null}
       </DialogPrimitive.Content>

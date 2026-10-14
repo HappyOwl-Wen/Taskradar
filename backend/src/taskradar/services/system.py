@@ -32,19 +32,23 @@ class AutostartManager:
         return self.startup_dir / FILENAME if self.startup_dir else None
 
     def enabled(self) -> bool:
-        return bool(self.path and self.path.is_file() and MARKER in self.path.read_text(encoding="utf-8", errors="ignore"))
+        return bool(
+            self.path and self.path.is_file() and MARKER in self.path.read_text(encoding="utf-8", errors="ignore")
+        )
 
     def enable(self) -> None:
         if not self.supported or self.path is None:
             raise RuntimeError("Autostart is only supported on Windows")
         pythonw = Path(self.python_exe).with_name("pythonw.exe")
         exe = pythonw if pythonw.exists() else Path(self.python_exe)
-        content = "\r\n".join([
-            "@echo off",
-            MARKER,
-            f'start "" "{exe}" -m taskradar --no-browser',
-            "",
-        ])
+        content = "\r\n".join(
+            [
+                "@echo off",
+                MARKER,
+                f'start "" "{exe}" -m taskradar --no-browser',
+                "",
+            ]
+        )
         self.startup_dir.mkdir(parents=True, exist_ok=True)  # type: ignore[union-attr]
         self.path.write_text(content, encoding="utf-8")
 

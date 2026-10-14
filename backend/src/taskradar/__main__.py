@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import contextlib
 import logging
 import os
 import socket
@@ -10,6 +11,7 @@ import sys
 import threading
 import webbrowser
 from pathlib import Path
+from typing import BinaryIO
 
 from taskradar import __version__
 
@@ -21,25 +23,25 @@ class InstanceLock:
 
     def __init__(self, path: Path) -> None:
         self.path = path
-        self._fh = None
+        self._fh: BinaryIO | None = None
 
     def acquire(self) -> bool:
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        self._fh = open(self.path, "a+b")  # noqa: SIM115 - kept open for the process lifetime
+        fh = open(self.path, "a+b")  # noqa: SIM115 - kept open for the process lifetime
         try:
             if sys.platform == "win32":
                 import msvcrt
 
-                self._fh.seek(0)
-                msvcrt.locking(self._fh.fileno(), msvcrt.LK_NBLCK, 1)
+                fh.seek(0)
+                msvcrt.locking(fh.fileno(), msvcrt.LK_NBLCK, 1)
             else:
                 import fcntl
 
-                fcntl.flock(self._fh.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+                fcntl.flock(fh.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
         except OSError:
-            self._fh.close()
-            self._fh = None
+            fh.close()
             return False
+        self._fh = fh
         return True
 
 
@@ -155,14 +157,12 @@ def main(argv: list[str] | None = None) -> int:
     ev.set_defaults(func=cmd_eval)
 
     argv = list(sys.argv[1:] if argv is None else argv)
-    if not argv or argv[0].startswith("--") and argv[0] not in ("--version", "-h", "--help"):
+    if not argv or (argv[0].startswith("--") and argv[0] not in ("--version", "-h", "--help")):
         argv = ["serve", *argv]
     args = parser.parse_args(argv)
     if os.environ.get("PYTHONIOENCODING") is None and hasattr(sys.stdout, "reconfigure"):
-        try:
-            sys.stdout.reconfigure(encoding="utf-8")  # type: ignore[union-attr]
-        except (AttributeError, ValueError):
-            pass
+        with contextlib.suppress(AttributeError, ValueError):
+            sys.stdout.reconfigure(encoding="utf-8")
     return int(args.func(args))
 
 

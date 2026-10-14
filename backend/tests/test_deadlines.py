@@ -16,10 +16,16 @@ def at(y: int, mo: int, d: int, h: int = 0, mi: int = 0) -> dt.datetime:
     return dt.datetime(y, mo, d, h, mi, tzinfo=BERLIN).astimezone(dt.UTC)
 
 
-def urgency(now: dt.datetime, due_date: dt.date | None, due_time: str | None = None, status: str = "confirmed",
-            thresholds: Thresholds | None = None) -> Urgency:
-    return evaluate(status=status, due_date=due_date, due_time=due_time, tz_name="Europe/Berlin", now=now,
-                    thresholds=thresholds).urgency
+def urgency(
+    now: dt.datetime,
+    due_date: dt.date | None,
+    due_time: str | None = None,
+    status: str = "confirmed",
+    thresholds: Thresholds | None = None,
+) -> Urgency:
+    return evaluate(
+        status=status, due_date=due_date, due_time=due_time, tz_name="Europe/Berlin", now=now, thresholds=thresholds
+    ).urgency
 
 
 def test_default_thresholds() -> None:
@@ -73,8 +79,16 @@ def test_due_at_representation() -> None:
 
 def _plan(status: str, now: dt.datetime, due: dt.date, settings: ReminderSettings | None = None, version: int = 0):  # type: ignore[no-untyped-def]
     st = evaluate(status=status, due_date=due, due_time=None, tz_name="Europe/Berlin", now=now)
-    return plan_reminder(task_id="t1", title="Pay fee", status=status, due_version=version, due_label=due.isoformat(),
-                         deadline=st, now=now, settings=settings or ReminderSettings())
+    return plan_reminder(
+        task_id="t1",
+        title="Pay fee",
+        status=status,
+        due_version=version,
+        due_label=due.isoformat(),
+        deadline=st,
+        now=now,
+        settings=settings or ReminderSettings(),
+    )
 
 
 def test_reminder_levels_and_dedupe_keys() -> None:

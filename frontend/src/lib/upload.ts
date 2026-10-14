@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { translateKey } from "@/i18n";
 import { api } from "./api";
 import { errorMessage } from "./errors";
+import { refreshAll } from "./queries";
 import type { ImportResult } from "./types";
 
 const BATCH = 20; // backend limit per request
@@ -51,7 +52,7 @@ export function useUpload() {
       toast.error(errorMessage(error));
     },
     onSettled: () => {
-      void queryClient.invalidateQueries();
+      void refreshAll(queryClient);
     },
   });
 }

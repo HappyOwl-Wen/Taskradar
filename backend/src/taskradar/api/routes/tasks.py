@@ -41,9 +41,20 @@ _TASK_LOAD = (
     selectinload(Task.suggestions),
     selectinload(Task.calendar_links),
 )
-_URGENCY_ORDER = {u.value: i for i, u in enumerate(
-    [Urgency.OVERDUE, Urgency.URGENT, Urgency.HIGH, Urgency.UPCOMING, Urgency.NORMAL, Urgency.NO_DEADLINE, Urgency.INACTIVE]
-)}
+_URGENCY_ORDER = {
+    u.value: i
+    for i, u in enumerate(
+        [
+            Urgency.OVERDUE,
+            Urgency.URGENT,
+            Urgency.HIGH,
+            Urgency.UPCOMING,
+            Urgency.NORMAL,
+            Urgency.NO_DEADLINE,
+            Urgency.INACTIVE,
+        ]
+    )
+}
 _PRIORITY_ORDER = {"high": 0, "medium": 1, "low": 2}
 
 
@@ -52,12 +63,21 @@ def _detail(c: Container, session: Session, task_id: str) -> dict[str, Any]:
     if task is None:
         raise ApiError("task_not_found", "Task not found", 404)
     links = []
-    for link in session.scalars(select(TaskLink).where(or_(TaskLink.task_id == task_id, TaskLink.other_task_id == task_id))):
+    for link in session.scalars(
+        select(TaskLink).where(or_(TaskLink.task_id == task_id, TaskLink.other_task_id == task_id))
+    ):
         other_id = link.other_task_id if link.task_id == task_id else link.task_id
         other = session.get(Task, other_id)
         if other is not None:
-            links.append({"kind": link.kind, "task_id": other.id, "title": other.title, "status": other.status,
-                          "direction": "outgoing" if link.task_id == task_id else "incoming"})
+            links.append(
+                {
+                    "kind": link.kind,
+                    "task_id": other.id,
+                    "title": other.title,
+                    "status": other.status,
+                    "direction": "outgoing" if link.task_id == task_id else "incoming",
+                }
+            )
     return task_detail(task, now=c.clock(), thresholds=thresholds_for(c), links=links)
 
 
@@ -101,22 +121,39 @@ def dashboard(c: Container = Depends(get_container)) -> dict[str, Any]:
         return sorted(entries, key=lambda i: (i["effective_deadline"] or "9999", _PRIORITY_ORDER.get(i["priority"], 3)))
 
     overdue = by_deadline([i for i in active if i["urgency"] == Urgency.OVERDUE.value])
-    today_focus = by_deadline([
-        i for i in active
-        if i["urgency"] in (Urgency.OVERDUE.value, Urgency.URGENT.value) or i["due_date"] == today.isoformat()
-    ])
+    today_focus = by_deadline(
+        [
+            i
+            for i in active
+            if i["urgency"] in (Urgency.OVERDUE.value, Urgency.URGENT.value) or i["due_date"] == today.isoformat()
+        ]
+    )
     if len(today_focus) < 5:
         extra = [i for i in by_deadline(active) if i not in today_focus and i["urgency"] == Urgency.HIGH.value]
-        extra += [i for i in active if i not in today_focus and i not in extra and i["priority"] == "high"
-                  and i["urgency"] == Urgency.NO_DEADLINE.value]
+        extra += [
+            i
+            for i in active
+            if i not in today_focus
+            and i not in extra
+            and i["priority"] == "high"
+            and i["urgency"] == Urgency.NO_DEADLINE.value
+        ]
         today_focus += extra[: 5 - len(today_focus)]
     week_end = (today + dt.timedelta(days=7)).isoformat()
-    upcoming = by_deadline([
-        i for i in active
-        if i["due_date"] and today.isoformat() <= i["due_date"] <= week_end and i["urgency"] != Urgency.OVERDUE.value
-    ])
+    upcoming = by_deadline(
+        [
+            i
+            for i in active
+            if i["due_date"]
+            and today.isoformat() <= i["due_date"] <= week_end
+            and i["urgency"] != Urgency.OVERDUE.value
+        ]
+    )
     completed_recent = [
-        i for i in items if i["status"] == "completed" and i["completed_at"]
+        i
+        for i in items
+        if i["status"] == "completed"
+        and i["completed_at"]
         and i["completed_at"] >= (now - dt.timedelta(days=7)).isoformat()
     ]
     return {
@@ -173,15 +210,21 @@ def list_tasks(
             stmt = stmt.where(Task.needs_review.is_(needs_review))
         if q:
             like = f"%{q.strip()}%"
-            stmt = stmt.where(or_(Task.title.ilike(like), Task.description.ilike(like), Task.action_required.ilike(like),
-                                  Task.due_text.ilike(like)))
+            stmt = stmt.where(
+                or_(
+                    Task.title.ilike(like),
+                    Task.description.ilike(like),
+                    Task.action_required.ilike(like),
+                    Task.due_text.ilike(like),
+                )
+            )
         items = [task_summary(t, now=now, thresholds=thresholds) for t in session.scalars(stmt).all()]
     if urgency:
         items = [i for i in items if i["urgency"] in urgency]
     if source_kind:
         items = [i for i in items if set(i["source_kinds"]) & set(source_kind)]
     items.sort(key=lambda i: _sort_key(sort, i), reverse=order == "desc")
-    return {"items": items[offset: offset + limit], "total": len(items)}
+    return {"items": items[offset : offset + limit], "total": len(items)}
 
 
 class TaskCreate(BaseModel):
@@ -198,15 +241,26 @@ class TaskCreate(BaseModel):
 @router.post("/tasks", status_code=201)
 def create_task(body: TaskCreate, c: Container = Depends(get_container)) -> dict[str, Any]:
     cand = CandidateTask(
-        title=body.title.strip(), description=body.description, category=body.category, action_type=ActionType.OTHER,
-        action_required=body.action_required or body.title, priority=body.priority, confidence=1.0,
+        title=body.title.strip(),
+        description=body.description,
+        category=body.category,
+        action_type=ActionType.OTHER,
+        action_required=body.action_required or body.title,
+        priority=body.priority,
+        confidence=1.0,
         due=DueInfo(date=body.due_date, time=body.due_time if body.due_date else None, semantics=body.time_semantics),
     )
     with transaction(c.factory) as session:
         task = c.tasks.create_from_candidate(
-            session, cand, origin=Origin(key="manual", label="手动创建", date=c.clock()), candidate_row=None,
-            timezone=c.settings.get().general.timezone, review_reasons=[], actor=Actor.USER,
-            status=TaskStatus.CONFIRMED, summary="手动创建任务",
+            session,
+            cand,
+            origin=Origin(key="manual", label="手动创建", date=c.clock()),
+            candidate_row=None,
+            timezone=c.settings.get().general.timezone,
+            review_reasons=[],
+            actor=Actor.USER,
+            status=TaskStatus.CONFIRMED,
+            summary="手动创建任务",
         )
         task.manual = True
         task_id = task.id
@@ -286,8 +340,12 @@ class BatchBody(BaseModel):
 
 
 _BATCH_STATUS = {
-    "confirm": TaskStatus.CONFIRMED, "dismiss": TaskStatus.DISMISSED, "complete": TaskStatus.COMPLETED,
-    "restore": TaskStatus.CANDIDATE, "in_progress": TaskStatus.IN_PROGRESS, "waiting_for_reply": TaskStatus.WAITING_FOR_REPLY,
+    "confirm": TaskStatus.CONFIRMED,
+    "dismiss": TaskStatus.DISMISSED,
+    "complete": TaskStatus.COMPLETED,
+    "restore": TaskStatus.CANDIDATE,
+    "in_progress": TaskStatus.IN_PROGRESS,
+    "waiting_for_reply": TaskStatus.WAITING_FOR_REPLY,
 }
 
 

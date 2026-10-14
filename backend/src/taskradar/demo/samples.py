@@ -85,8 +85,9 @@ def text_pdf(path: Path, lines: list[Line], *, cjk: bool) -> Path:
     for line in lines:
         size = line.size * 0.45
         if line.text:
-            page.insert_text((60, y), line.text, fontname=fontname, fontsize=size,
-                             color=pymupdf.utils.getColor("black"))
+            page.insert_text(
+                (60, y), line.text, fontname=fontname, fontsize=size, color=pymupdf.utils.getColor("black")
+            )
         y += size + line.gap * 0.6
     doc.subset_fonts()
     doc.set_metadata({"title": path.stem, "author": "TaskRadar synthetic demo", "producer": "TaskRadar"})
@@ -101,8 +102,16 @@ def text_pdf(path: Path, lines: list[Line], *, cjk: bool) -> Path:
 # ---------------------------------------------------------------------------------------------
 
 
-def render_lines(lines: list[Line], *, width: int, cjk: bool, padding: int = 48, header: str | None = None,
-                 header_color: str = "#2563eb", background: str = "white") -> Image.Image:
+def render_lines(
+    lines: list[Line],
+    *,
+    width: int,
+    cjk: bool,
+    padding: int = 48,
+    header: str | None = None,
+    header_color: str = "#2563eb",
+    background: str = "white",
+) -> Image.Image:
     regular = CJK_FONT_CANDIDATES if cjk else LATIN_FONT_CANDIDATES
     bold = CJK_FONT_CANDIDATES if cjk else LATIN_BOLD_CANDIDATES
     measure = ImageDraw.Draw(Image.new("RGB", (10, 10)))
@@ -147,7 +156,7 @@ def scanned_pdf(path: Path, lines: list[Line], *, cjk: bool, seed: int = 7) -> P
     img = render_lines(lines, width=1240, cjk=cjk, padding=110, background="#fbfaf7")
     canvas = Image.new("RGB", (1240, 1754), "#fbfaf7")
     canvas.paste(img, (0, 40))
-    rng = random.Random(seed)
+    rng = random.Random(seed)  # noqa: S311 - speckle noise for a synthetic test image, not security related
     canvas = canvas.rotate(0.6, resample=Image.Resampling.BICUBIC, expand=False, fillcolor="#fbfaf7")
     grey = canvas.convert("L")
     pixels = grey.load()
@@ -177,75 +186,121 @@ def write_samples(target: Path | None = None) -> list[Path]:
     target = target or SAMPLES_DIR
     files: list[Path] = []
 
-    files.append(text_pdf(target / "01_zh_enrollment_certificate_notice.pdf", [
-        Line("示例大学 · 教务处", 34, bold=True),
-        Line("关于提交在读证明的通知", 30, bold=True, gap=20),
-        Line("发布日期：2026年10月12日"),
-        Line(""),
-        Line("各位同学："),
-        Line("为完成下学期的学籍注册，请于2026年11月20日前通过TUMonline上传"),
-        Line("在读证明（Immatrikulationsbescheinigung）。逾期将影响下学期的注册。"),
-        Line(""),
-        Line("如有疑问，请联系教务处。"),
-        Line("（本文件为 TaskRadar 合成演示数据）", 20),
-    ], cjk=True))
+    files.append(
+        text_pdf(
+            target / "01_zh_enrollment_certificate_notice.pdf",
+            [
+                Line("示例大学 · 教务处", 34, bold=True),
+                Line("关于提交在读证明的通知", 30, bold=True, gap=20),
+                Line("发布日期：2026年10月12日"),
+                Line(""),
+                Line("各位同学："),
+                Line("为完成下学期的学籍注册，请于2026年11月20日前通过TUMonline上传"),
+                Line("在读证明（Immatrikulationsbescheinigung）。逾期将影响下学期的注册。"),
+                Line(""),
+                Line("如有疑问，请联系教务处。"),
+                Line("（本文件为 TaskRadar 合成演示数据）", 20),
+            ],
+            cjk=True,
+        )
+    )
 
-    files.append(screenshot_png(target / "02_de_residence_permit_documents.png", [
-        Line("Von: Kreisverwaltungsreferat - Ausländerbehörde", 24, color="#52606d"),
-        Line("Datum: 09.10.2026", 24, color="#52606d"),
-        Line("Betreff: Ihr Antrag auf Verlängerung des Aufenthaltstitels", 26, bold=True, gap=24),
-        Line("Sehr geehrte Frau Wang,", 26),
-        Line("für die Bearbeitung Ihres Antrags fehlen noch Unterlagen.", 26),
-        Line("Bitte reichen Sie die fehlenden Unterlagen für Ihren Aufenthaltstitel", 26),
-        Line("bis spätestens 27.11.2026 ein.", 26, gap=24),
-        Line("Mit freundlichen Grüßen", 26),
-        Line("Ihre Ausländerbehörde (synthetische Demo)", 22, color="#52606d"),
-    ], cjk=False, header="Posteingang"))
+    files.append(
+        screenshot_png(
+            target / "02_de_residence_permit_documents.png",
+            [
+                Line("Von: Kreisverwaltungsreferat - Ausländerbehörde", 24, color="#52606d"),
+                Line("Datum: 09.10.2026", 24, color="#52606d"),
+                Line("Betreff: Ihr Antrag auf Verlängerung des Aufenthaltstitels", 26, bold=True, gap=24),
+                Line("Sehr geehrte Frau Wang,", 26),
+                Line("für die Bearbeitung Ihres Antrags fehlen noch Unterlagen.", 26),
+                Line("Bitte reichen Sie die fehlenden Unterlagen für Ihren Aufenthaltstitel", 26),
+                Line("bis spätestens 27.11.2026 ein.", 26, gap=24),
+                Line("Mit freundlichen Grüßen", 26),
+                Line("Ihre Ausländerbehörde (synthetische Demo)", 22, color="#52606d"),
+            ],
+            cjk=False,
+            header="Posteingang",
+        )
+    )
 
-    files.append(screenshot_png(target / "03_de_residence_permit_reminder.png", [
-        Line("Von: Kreisverwaltungsreferat - Ausländerbehörde", 24, color="#52606d"),
-        Line("Datum: 30.10.2026", 24, color="#52606d"),
-        Line("Betreff: Erinnerung: fehlende Unterlagen", 26, bold=True, gap=24),
-        Line("Sehr geehrte Frau Wang,", 26),
-        Line("wir möchten Sie daran erinnern, die Unterlagen für Ihren", 26),
-        Line("Aufenthaltstitel bis zum 27.11.2026 einzureichen.", 26, gap=24),
-        Line("Mit freundlichen Grüßen", 26),
-    ], cjk=False, header="Posteingang"))
+    files.append(
+        screenshot_png(
+            target / "03_de_residence_permit_reminder.png",
+            [
+                Line("Von: Kreisverwaltungsreferat - Ausländerbehörde", 24, color="#52606d"),
+                Line("Datum: 30.10.2026", 24, color="#52606d"),
+                Line("Betreff: Erinnerung: fehlende Unterlagen", 26, bold=True, gap=24),
+                Line("Sehr geehrte Frau Wang,", 26),
+                Line("wir möchten Sie daran erinnern, die Unterlagen für Ihren", 26),
+                Line("Aufenthaltstitel bis zum 27.11.2026 einzureichen.", 26, gap=24),
+                Line("Mit freundlichen Grüßen", 26),
+            ],
+            cjk=False,
+            header="Posteingang",
+        )
+    )
 
-    files.append(screenshot_png(target / "04_zh_enrollment_certificate_reminder.png", [
-        Line("发件人：示例大学教务处", 26, color="#52606d"),
-        Line("日期：2026年11月10日", 26, color="#52606d"),
-        Line("主题：提醒：提交在读证明", 28, bold=True, gap=24),
-        Line("同学你好：", 28),
-        Line("提醒您：请在11月20日前提交在读证明。", 28),
-        Line("如果您已经提交，请忽略此提醒。", 28),
-    ], cjk=True, header="Mail"))
+    files.append(
+        screenshot_png(
+            target / "04_zh_enrollment_certificate_reminder.png",
+            [
+                Line("发件人：示例大学教务处", 26, color="#52606d"),
+                Line("日期：2026年11月10日", 26, color="#52606d"),
+                Line("主题：提醒：提交在读证明", 28, bold=True, gap=24),
+                Line("同学你好：", 28),
+                Line("提醒您：请在11月20日前提交在读证明。", 28),
+                Line("如果您已经提交，请忽略此提醒。", 28),
+            ],
+            cjk=True,
+            header="Mail",
+        )
+    )
 
-    files.append(scanned_pdf(target / "05_zh_course_registration_scan.pdf", [
-        Line("示例大学 教务处通知", 40, bold=True, gap=30),
-        Line("日期：2026年10月20日", 32, gap=24),
-        Line("请于2026年11月5日前在TUMonline完成选课。", 34),
-        Line("未按时选课的同学将无法参加本学期考试。", 34),
-    ], cjk=True))
+    files.append(
+        scanned_pdf(
+            target / "05_zh_course_registration_scan.pdf",
+            [
+                Line("示例大学 教务处通知", 40, bold=True, gap=30),
+                Line("日期：2026年10月20日", 32, gap=24),
+                Line("请于2026年11月5日前在TUMonline完成选课。", 34),
+                Line("未按时选课的同学将无法参加本学期考试。", 34),
+            ],
+            cjk=True,
+        )
+    )
 
-    files.append(text_pdf(target / "06_en_rental_contract.pdf", [
-        Line("Example Living GmbH - Tenant Services", 32, bold=True, gap=20),
-        Line("Date: October 8, 2026"),
-        Line(""),
-        Line("Dear Ms. Wang,"),
-        Line("welcome to your new apartment. To complete the move-in process:"),
-        Line("1. Please sign and return the rental contract by November 2, 2026."),
-        Line("2. Please pay the security deposit of 1,200 EUR by November 15, 2026."),
-        Line(""),
-        Line("Best regards, Example Living (synthetic demo data)", 22),
-    ], cjk=False))
+    files.append(
+        text_pdf(
+            target / "06_en_rental_contract.pdf",
+            [
+                Line("Example Living GmbH - Tenant Services", 32, bold=True, gap=20),
+                Line("Date: October 8, 2026"),
+                Line(""),
+                Line("Dear Ms. Wang,"),
+                Line("welcome to your new apartment. To complete the move-in process:"),
+                Line("1. Please sign and return the rental contract by November 2, 2026."),
+                Line("2. Please pay the security deposit of 1,200 EUR by November 15, 2026."),
+                Line(""),
+                Line("Best regards, Example Living (synthetic demo data)", 22),
+            ],
+            cjk=False,
+        )
+    )
 
-    files.append(screenshot_png(target / "07_de_marketing.png", [
-        Line("SUPER SALE: 50% Rabatt auf alles!", 34, bold=True, color="#b91c1c", gap=20),
-        Line("Nur diese Woche - jetzt kaufen und sparen.", 26),
-        Line("Gutschein-Code: SALE50", 26),
-        Line("Newsletter abbestellen", 20, color="#52606d"),
-    ], cjk=False, header="Angebote"))
+    files.append(
+        screenshot_png(
+            target / "07_de_marketing.png",
+            [
+                Line("SUPER SALE: 50% Rabatt auf alles!", 34, bold=True, color="#b91c1c", gap=20),
+                Line("Nur diese Woche - jetzt kaufen und sparen.", 26),
+                Line("Gutschein-Code: SALE50", 26),
+                Line("Newsletter abbestellen", 20, color="#52606d"),
+            ],
+            cjk=False,
+            header="Angebote",
+        )
+    )
     return files
 
 

@@ -23,8 +23,15 @@ log = logging.getLogger(__name__)
 
 
 class ApiError(Exception):
-    def __init__(self, code: str, message: str, status_code: int = 400, *, recoverable: bool = True,
-                 details: dict[str, Any] | None = None):
+    def __init__(
+        self,
+        code: str,
+        message: str,
+        status_code: int = 400,
+        *,
+        recoverable: bool = True,
+        details: dict[str, Any] | None = None,
+    ):
         super().__init__(message)
         self.code = code
         self.message = message
@@ -33,12 +40,19 @@ class ApiError(Exception):
         self.details = details or {}
 
 
-def error_response(code: str, message: str, status_code: int, *, recoverable: bool = True,
-                   details: dict[str, Any] | None = None) -> JSONResponse:
+def error_response(
+    code: str, message: str, status_code: int, *, recoverable: bool = True, details: dict[str, Any] | None = None
+) -> JSONResponse:
     return JSONResponse(
         status_code=status_code,
-        content={"error": {"code": code, "message": redact_secrets(message), "recoverable": recoverable,
-                           "details": details or {}}},
+        content={
+            "error": {
+                "code": code,
+                "message": redact_secrets(message),
+                "recoverable": recoverable,
+                "details": details or {},
+            }
+        },
     )
 
 
@@ -85,9 +99,7 @@ def install_error_handlers(app: FastAPI) -> None:
 
     @app.exception_handler(RequestValidationError)
     async def _validation(_: Request, exc: RequestValidationError) -> JSONResponse:
-        errors = [
-            {"loc": [str(p) for p in e.get("loc", ())], "msg": str(e.get("msg", ""))} for e in exc.errors()[:10]
-        ]
+        errors = [{"loc": [str(p) for p in e.get("loc", ())], "msg": str(e.get("msg", ""))} for e in exc.errors()[:10]]
         return error_response("validation_error", "The request is invalid", 422, details={"errors": errors})
 
     @app.exception_handler(Exception)

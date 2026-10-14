@@ -47,6 +47,7 @@ class RedactionResult:
 def redact_for_llm(text: str, *, max_chars: int = 12000, redact_identifiers: bool = True) -> RedactionResult:
     count = 0
     if redact_identifiers:
+
         def _sub(pattern: re.Pattern[str], repl: str, value: str) -> str:
             nonlocal count
             new, n = pattern.subn(repl, value)

@@ -198,8 +198,8 @@ class TesseractEngine:
             raise OCRUnavailableError("No supported Tesseract language data (chi_sim/deu/eng) found")
         prepared = preprocess_for_ocr(image)
 
-        latin = [lang for lang in ("deu", "eng") if lang in langs]
-        cjk = [lang for lang in ("chi_sim", "eng") if lang in langs]
+        latin: list[str] = [lang for lang in ("deu", "eng") if lang in langs]
+        cjk: list[str] = [lang for lang in ("chi_sim", "eng") if lang in langs]
         attempts: list[list[str]] = []
         if latin:
             attempts.append(latin)

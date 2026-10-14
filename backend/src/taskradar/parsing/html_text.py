@@ -11,8 +11,27 @@ _NBSP = chr(0x00A0)
 _ZWSP = chr(0x200B)
 
 _BLOCK_TAGS = {
-    "p", "div", "br", "tr", "li", "h1", "h2", "h3", "h4", "h5", "h6", "table", "section",
-    "article", "header", "footer", "blockquote", "ul", "ol", "hr", "pre",
+    "p",
+    "div",
+    "br",
+    "tr",
+    "li",
+    "h1",
+    "h2",
+    "h3",
+    "h4",
+    "h5",
+    "h6",
+    "table",
+    "section",
+    "article",
+    "header",
+    "footer",
+    "blockquote",
+    "ul",
+    "ol",
+    "hr",
+    "pre",
 }
 _DROP_TAGS = ["script", "style", "head", "title", "noscript", "template", "svg", "iframe", "object"]
 

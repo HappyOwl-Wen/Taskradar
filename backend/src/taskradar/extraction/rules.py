@@ -56,17 +56,68 @@ class Segment:
 
 _CJK_CLASS = f"{chr(0x4E00)}-{chr(0x9FFF)}{chr(0x3000)}-{chr(0x303F)}{chr(0xFF00)}-{chr(0xFFEF)}"
 _CJK_CHAR = re.compile(f"[{_CJK_CLASS}]")
-_CJK_GAP = re.compile(f"(?<=[{_CJK_CLASS}]) (?=[{_CJK_CLASS}A-Za-z0-9])|(?<=[A-Za-z0-9{_CJK_CLASS}]) (?=[{_CJK_CLASS}])")
+_CJK_GAP = re.compile(
+    f"(?<=[{_CJK_CLASS}]) (?=[{_CJK_CLASS}A-Za-z0-9])|(?<=[A-Za-z0-9{_CJK_CLASS}]) (?=[{_CJK_CLASS}])"
+)
 _LIST_START = re.compile(r"^\s*(?:\d{1,2}[.、)）]\s|[-•*·▪●]\s|[（(]\d{1,2}[)）]|[一二三四五六七八九十]、)")
 _HARD_LINE_END = tuple("。！？!?；;：:.")
 
 
 # A line ending in one of these words cannot end a sentence (articles, prepositions, pronouns...).
 _CONTINUATION_WORDS = {
-    "die", "der", "das", "den", "dem", "des", "ein", "eine", "einen", "einem", "einer", "für", "von", "vom", "mit",
-    "zu", "zum", "zur", "bis", "und", "oder", "in", "im", "an", "am", "auf", "bei", "beim", "nach", "über", "unter",
-    "ihre", "ihren", "ihr", "ihrem", "ihrer", "sie", "sich", "the", "a", "an", "of", "to", "for", "with", "and",
-    "or", "your", "our", "by", "on", "at", "please", "bitte",
+    "die",
+    "der",
+    "das",
+    "den",
+    "dem",
+    "des",
+    "ein",
+    "eine",
+    "einen",
+    "einem",
+    "einer",
+    "für",
+    "von",
+    "vom",
+    "mit",
+    "zu",
+    "zum",
+    "zur",
+    "bis",
+    "und",
+    "oder",
+    "in",
+    "im",
+    "an",
+    "am",
+    "auf",
+    "bei",
+    "beim",
+    "nach",
+    "über",
+    "unter",
+    "ihre",
+    "ihren",
+    "ihr",
+    "ihrem",
+    "ihrer",
+    "sie",
+    "sich",
+    "the",
+    "a",
+    "of",
+    "to",
+    "for",
+    "with",
+    "and",
+    "or",
+    "your",
+    "our",
+    "by",
+    "on",
+    "at",
+    "please",
+    "bitte",
 }
 
 
@@ -95,8 +146,12 @@ def soften_wraps(text: str) -> str:
         cur = lines[i].rstrip()
         if _joinable(cur, lines[i + 1]):
             seps[i] = " "
-        elif not lines[i + 1].strip() and i + 2 < len(lines) and _joinable(cur, lines[i + 2]) \
-                and (_CJK_CHAR.search(cur[-1:]) or lines[i + 2].lstrip()[:1].islower()):
+        elif (
+            not lines[i + 1].strip()
+            and i + 2 < len(lines)
+            and _joinable(cur, lines[i + 2])
+            and (_CJK_CHAR.search(cur[-1:]) or lines[i + 2].lstrip()[:1].islower())
+        ):
             seps[i] = " "
             lines[i + 1] = " " * len(lines[i + 1])
             seps[i + 1] = " "
@@ -123,7 +178,7 @@ def split_segments(inp: ExtractionInput, text: str | None = None) -> list[Segmen
         pieces: list[tuple[int, int]] = []
         last = 0
         for b in _LATIN_BREAK.finditer(chunk):
-            candidate = chunk[last:b.start()]
+            candidate = chunk[last : b.start()]
             if _ABBREVIATIONS.search(candidate.rstrip()):
                 continue
             pieces.append((last, b.start()))
@@ -166,7 +221,9 @@ _DATE_PHRASE = re.compile(
 )
 
 _ZH_STOP = re.compile(
-    r"[，,。；;！!？?\n：:（(、" + _P + r"]|至|到|给|于|前|之前|以前|以便|并且|并|以及|和|及|后|之后|时|截止|期限|延长|延期|推迟"
+    r"[，,。；;！!？?\n：:（(、"
+    + _P
+    + r"]|至|到|给|于|前|之前|以前|以便|并且|并|以及|和|及|后|之后|时|截止|期限|延长|延期|推迟"
 )
 _ZH_LEADING = re.compile(r"^(?:好|一下|您的|你的|我们的|相关的?|有关的?|以下的?|所需的?|全部|所有|本人的?)+")
 _EN_STOP = re.compile(
@@ -178,16 +235,31 @@ _DE_CUT = re.compile(
     r"\s+(?:bei|beim|per|über|unter|innerhalb|binnen|ab|nach|via|online|in|im|an|am|auf|bis|spätestens)\b|"
     r"[.,;:!?\n(" + _P + r"]"
 )
-_DE_LEADING = re.compile(r"^(?:die|den|das|der|dem|Ihre|Ihren|Ihr|Ihrem|Ihrer|eine|einen|ein|uns|sich|bitte|noch|auch)\s+", re.I)
+_DE_LEADING = re.compile(
+    r"^(?:die|den|das|der|dem|Ihre|Ihren|Ihr|Ihrem|Ihrer|eine|einen|ein|uns|sich|bitte|noch|auch)\s+", re.I
+)
 _DE_MODAL = re.compile(r"^\s*(?:könnten|können|würden|wären|möchten)\s+Sie\s+(?:(?:mir|uns)\s+)?(?:bitte\s+)?", re.I)
 _DE_SEPARABLE = {
-    "reichen": "einreichen", "geben": "abgeben", "legen": "vorlegen", "laden": "hochladen",
-    "melden": "anmelden", "füllen": "ausfüllen", "bringen": "mitbringen",
+    "reichen": "einreichen",
+    "geben": "abgeben",
+    "legen": "vorlegen",
+    "laden": "hochladen",
+    "melden": "anmelden",
+    "füllen": "ausfüllen",
+    "bringen": "mitbringen",
 }
 _DE_ZU = {
-    "einzureichen": "einreichen", "abzugeben": "abgeben", "vorzulegen": "vorlegen", "hochzuladen": "hochladen",
-    "anzumelden": "anmelden", "zurückzumelden": "zurückmelden", "nachzureichen": "nachreichen",
-    "zuzusenden": "zusenden", "einzusenden": "einsenden", "auszufüllen": "ausfüllen", "mitzubringen": "mitbringen",
+    "einzureichen": "einreichen",
+    "abzugeben": "abgeben",
+    "vorzulegen": "vorlegen",
+    "hochzuladen": "hochladen",
+    "anzumelden": "anmelden",
+    "zurückzumelden": "zurückmelden",
+    "nachzureichen": "nachreichen",
+    "zuzusenden": "zusenden",
+    "einzusenden": "einsenden",
+    "auszufüllen": "ausfüllen",
+    "mitzubringen": "mitbringen",
 }
 
 
@@ -225,9 +297,9 @@ def _title_zh(seg: str, match: re.Match[str]) -> str | None:
     # "完成本学期选课" / "完成学期注册": keep the generic verb and its object in front of the
     # specific action noun instead of producing "注册学期注册".
     prefix = _ZH_GENERIC_PREFIX.search(seg[: match.start()])
-    phrase = seg[prefix.start(): match.end()] if prefix is not None else verb
+    phrase = seg[prefix.start() : match.end()] if prefix is not None else verb
     phrase = re.sub(r"(?:在|通过)\s*\S{0,20}?(?=完成|办理|进行)", "", phrase)
-    rest = seg[match.end():]
+    rest = seg[match.end() :]
     cut = _ZH_STOP.search(rest)
     obj = rest[: cut.start()] if cut else rest
     obj = _ZH_LEADING.sub("", obj.strip())
@@ -240,7 +312,7 @@ def _title_en(seg: str, match: re.Match[str], action: ActionType) -> str | None:
     verb = match.group(0).lower()
     if "due" in verb:
         return None
-    rest = seg[match.end():].lstrip()
+    rest = seg[match.end() :].lstrip()
     label = lx.ACTION_LABELS["en"][action]
     if action in (ActionType.REGISTER, ActionType.APPLY) and rest.lower().startswith("for "):
         rest = rest[4:]
@@ -281,11 +353,11 @@ def _de_infinitive(verb_text: str) -> str:
 def _title_de(seg: str, match: re.Match[str]) -> str | None:
     verb_text = match.group(0)
     infinitive = _de_infinitive(verb_text)
-    after = seg[match.end():]
+    after = seg[match.end() :]
     sie_inside = re.search(r"\bSie\b", verb_text)
     if sie_inside:
         # Separable verb spanning the object: "reichen Sie <obj> ein"
-        obj = verb_text[sie_inside.end():].strip()
+        obj = verb_text[sie_inside.end() :].strip()
         obj = re.sub(r"\s*\S+$", "", obj)
     elif re.match(r"\s+Sie\b", after):
         # Imperative: "überweisen Sie <obj> bis ..."
@@ -377,7 +449,11 @@ def _priority(text: str, category: Category, action: ActionType) -> Priority:
     if lx.CONSEQUENCE_CUES.search(text):
         return Priority.HIGH
     if category in (Category.ADMINISTRATIVE, Category.FINANCIAL) and action in (
-        ActionType.PAY, ActionType.SUBMIT, ActionType.RENEW, ActionType.APPLY, ActionType.UPLOAD,
+        ActionType.PAY,
+        ActionType.SUBMIT,
+        ActionType.RENEW,
+        ActionType.APPLY,
+        ActionType.UPLOAD,
     ):
         return Priority.HIGH
     return Priority.MEDIUM
@@ -428,8 +504,11 @@ class RuleBasedExtractor:
             if found is None:
                 continue
             action, match = found
-            if action in lx.GENERIC_ACTIONS and seg_text.rstrip().endswith((":", "：")) \
-                    and not _mentions_in(mentions, seg):
+            if (
+                action in lx.GENERIC_ACTIONS
+                and seg_text.rstrip().endswith((":", "："))
+                and not _mentions_in(mentions, seg)
+            ):
                 continue  # list header such as "本周需要完成：" / "Please complete the following:"
             obligation = bool(lx.OBLIGATION_CUES.search(seg_text))
             seg_mentions = _mentions_in(mentions, seg)
@@ -444,16 +523,24 @@ class RuleBasedExtractor:
             lang = detect_language(seg_text) or lang_doc
             entities = lx.detect_entities(seg_text) or context_entities
             uncertainties: list[str] = []
-            evidence = [Evidence(quote=display_quote(seg_text), page=seg.page, start=seg.start, end=seg.end,
-                                 kind="action")]
+            evidence = [
+                Evidence(quote=display_quote(seg_text), page=seg.page, start=seg.start, end=seg.end, kind="action")
+            ]
 
             chosen: DateMention | None = choose_deadline(seg_mentions)
             semantics = TimeSemantics.DEADLINE
             if chosen is None:
                 chosen, ctx_seg, semantics = self._context_date(segments, idx, mentions)
                 if chosen is not None and ctx_seg is not None:
-                    evidence.append(Evidence(quote=display_quote(ctx_seg.text), page=ctx_seg.page,
-                                             start=ctx_seg.start, end=ctx_seg.end, kind="deadline"))
+                    evidence.append(
+                        Evidence(
+                            quote=display_quote(ctx_seg.text),
+                            page=ctx_seg.page,
+                            start=ctx_seg.start,
+                            end=ctx_seg.end,
+                            kind="deadline",
+                        )
+                    )
             elif not chosen.deadline_cue and lx.APPOINTMENT_CUES.search(seg_text):
                 semantics = TimeSemantics.APPOINTMENT
 
@@ -496,13 +583,16 @@ class RuleBasedExtractor:
             elif doc_reminder or negated_done or conditional_done:
                 relation = RelationHint.REMINDER
 
-            context = display_quote(" ".join(s.text for s in segments[max(0, idx - 1): idx + 2]))
+            context = display_quote(" ".join(s.text for s in segments[max(0, idx - 1) : idx + 2]))
             title_line = f"{inp.title}\n" if inp.title else ""
             tasks.append(
                 CandidateTask(
                     title=build_title(
                         mask_dates(seg_text, [(m.start - seg.start, m.end - seg.start) for m in seg_mentions]),
-                        action, lang, entities, inp.title,
+                        action,
+                        lang,
+                        entities,
+                        inp.title,
                     ),
                     description=_clip(f"{title_line}{context}", 600),
                     category=category,
@@ -532,8 +622,14 @@ class RuleBasedExtractor:
             signals = []
 
         content_type = self._content_type(tasks, signals, marketing, doc_reminder, inp)
-        trace.append({"step": "rules.result", "tasks": len(tasks), "completion_signals": len(signals),
-                      "content_type": content_type.value})
+        trace.append(
+            {
+                "step": "rules.result",
+                "tasks": len(tasks),
+                "completion_signals": len(signals),
+                "content_type": content_type.value,
+            }
+        )
         return ExtractionResult(
             content_type=content_type,
             is_actionable=bool(tasks),
@@ -598,8 +694,9 @@ class RuleBasedExtractor:
             return CompletionSignal(
                 subject=_clip(display_quote(seg.text), 300),
                 kind=kind,
-                evidence=Evidence(quote=display_quote(seg.text), page=seg.page, start=seg.start, end=seg.end,
-                                  kind="completion"),
+                evidence=Evidence(
+                    quote=display_quote(seg.text), page=seg.page, start=seg.start, end=seg.end, kind="completion"
+                ),
                 confidence=confidence,
                 explicit=explicit,
                 entities=entities,
@@ -619,14 +716,19 @@ class RuleBasedExtractor:
                 continue
             both_explicit = current.explicit and signal.explicit
             best = signal if len(signal.evidence.quote) > len(current.evidence.quote) else current
-            merged[signal.kind] = best.model_copy(update={
-                "subject": _clip(f"{current.subject} {signal.subject}", 300),
-                "entities": list(dict.fromkeys([*current.entities, *signal.entities])),
-                "explicit": both_explicit,
-                "confidence": max(current.confidence, signal.confidence) if both_explicit
-                else min(current.confidence, signal.confidence),
-                "action_type": current.action_type if current.action_type != ActionType.OTHER else signal.action_type,
-            })
+            merged[signal.kind] = best.model_copy(
+                update={
+                    "subject": _clip(f"{current.subject} {signal.subject}", 300),
+                    "entities": list(dict.fromkeys([*current.entities, *signal.entities])),
+                    "explicit": both_explicit,
+                    "confidence": max(current.confidence, signal.confidence)
+                    if both_explicit
+                    else min(current.confidence, signal.confidence),
+                    "action_type": current.action_type
+                    if current.action_type != ActionType.OTHER
+                    else signal.action_type,
+                }
+            )
         return list(merged.values())
 
     @staticmethod
@@ -657,7 +759,10 @@ class RuleBasedExtractor:
 
     @staticmethod
     def _content_type(
-        tasks: list[CandidateTask], signals: list[CompletionSignal], marketing: int, reminder: bool,
+        tasks: list[CandidateTask],
+        signals: list[CompletionSignal],
+        marketing: int,
+        reminder: bool,
         inp: ExtractionInput,
     ) -> ContentType:
         if marketing >= 3:

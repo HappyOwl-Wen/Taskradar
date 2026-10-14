@@ -8,7 +8,10 @@ from taskradar.domain.schemas import ExtractionInput, ExtractionResult
 
 
 class Extractor(Protocol):
-    name: str
-    version: str
+    @property
+    def name(self) -> str: ...
+
+    @property
+    def version(self) -> str: ...
 
     def extract(self, inp: ExtractionInput) -> ExtractionResult: ...

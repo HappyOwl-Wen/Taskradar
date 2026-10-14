@@ -84,7 +84,9 @@ class FakeGmailClient:
             return False
         return not ({"SPAM", "TRASH"} & labels)
 
-    def list_message_ids(self, query: str, page_token: str | None, max_results: int = 100) -> tuple[list[str], str | None]:
+    def list_message_ids(
+        self, query: str, page_token: str | None, max_results: int = 100
+    ) -> tuple[list[str], str | None]:
         self._maybe_fail("list_message_ids")
         ordered = sorted(
             (m for m in self._messages.values() if self._matches(m, query)),

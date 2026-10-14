@@ -13,7 +13,7 @@ import { SimpleSelect } from "@/components/ui/select";
 import { translateKey } from "@/i18n";
 import { api } from "@/lib/api";
 import { formatDateTime, formatRelativeTime } from "@/lib/format";
-import { useAction, useSettings, useSystemStatus } from "@/lib/queries";
+import { expectSourceActivity, useAction, useSettings, useSystemStatus } from "@/lib/queries";
 import type { Settings, Source } from "@/lib/types";
 
 const STATUS_TONE: Record<string, BadgeTone> = {
@@ -65,7 +65,7 @@ function SourceError({ source }: { source: Source }) {
 
 function SyncButton({ source, label }: { source: Source; label?: string }) {
   const { t } = useTranslation();
-  const sync = useAction(() => api.syncSource(source.id), { success: t("sources.gmail.syncStarted") });
+  const sync = useAction(() => api.syncSource(source.id), { success: t("sources.gmail.syncStarted"), onSuccess: () => expectSourceActivity() });
   const busy = sync.isPending || Boolean(source.running);
   return (
     <Button variant="outline" size="xs" onClick={() => sync.mutate(undefined)} disabled={busy || !source.enabled}>
@@ -159,7 +159,7 @@ export function DemoCard({ sources, timezone }: { sources: Source[]; timezone: s
       await api.syncSource(created.id);
       return created;
     },
-    { success: t("onboarding.demoCreated") },
+    { success: t("onboarding.demoCreated"), onSuccess: () => expectSourceActivity() },
   );
   const advance = useAction(() => api.advanceDemo(), { success: t("sources.demo.advanced") });
   const failure = useAction((mode: string) => api.setFailureMode(mode));
@@ -278,6 +278,7 @@ export function FoldersCard({ sources, timezone }: { sources: Source[]; timezone
   const add = useAction(() => api.addFolder(path.trim(), recursive), {
     success: t("sources.folders.added"),
     onSuccess: () => {
+      expectSourceActivity();
       setPath("");
       setRecursive(false);
     },

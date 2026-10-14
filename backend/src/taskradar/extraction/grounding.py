@@ -84,7 +84,8 @@ def ground_evidence(quotes: list[str], inp: ExtractionInput, kind: str = "action
 
 
 INJECTION_PATTERNS = re.compile(
-    r"ignore (?:all |any )?(?:previous|prior|above) (?:instructions|prompts)|disregard (?:all |the )?(?:previous|above)|"
+    r"ignore (?:all |any )?(?:previous|prior|above) (?:instructions|prompts)|"
+    r"disregard (?:all |the )?(?:previous|above)|"
     r"system prompt|you are now|act as (?:an? )?(?:assistant|ai|admin)|"
     r"忽略(?:之前|以上|所有)的?(?:指令|指示|提示)|你现在是|系统提示|"
     r"ignoriere (?:alle )?(?:vorherigen|bisherigen) (?:Anweisungen|Instruktionen)|"

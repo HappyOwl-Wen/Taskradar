@@ -57,8 +57,14 @@ def create_app(
                 scheduler.shutdown()
             app.state.executor.shutdown(wait=False, cancel_futures=True)
 
-    app = FastAPI(title="TaskRadar", version=__version__, lifespan=lifespan, docs_url="/api/docs",
-                  redoc_url=None, openapi_url="/api/openapi.json")
+    app = FastAPI(
+        title="TaskRadar",
+        version=__version__,
+        lifespan=lifespan,
+        docs_url="/api/docs",
+        redoc_url=None,
+        openapi_url="/api/openapi.json",
+    )
     app.state.container = container
     app.state.csrf_token = secrets.token_urlsafe(32)
     app.state.executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix="taskradar-bg")
@@ -72,7 +78,9 @@ def create_app(
         origins.add(container.config.dev_origin)
         dev_host = container.config.dev_origin.split("://", 1)[-1]
         hosts.add(dev_host)
-    app.add_middleware(SecurityMiddleware, allowed_hosts=hosts, allowed_origins=origins, csrf_token=app.state.csrf_token)
+    app.add_middleware(
+        SecurityMiddleware, allowed_hosts=hosts, allowed_origins=origins, csrf_token=app.state.csrf_token
+    )
     install_error_handlers(app)
 
     for router in (system.router, tasks.router, sources.router, integrations.router):
@@ -80,8 +88,12 @@ def create_app(
 
     @app.api_route("/api/{rest:path}", methods=["GET", "POST", "PUT", "PATCH", "DELETE"], include_in_schema=False)
     def api_not_found(rest: str) -> JSONResponse:
-        return JSONResponse(status_code=404, content={"error": {"code": "not_found", "message": "Unknown API endpoint",
-                                                                "recoverable": False, "details": {}}})
+        return JSONResponse(
+            status_code=404,
+            content={
+                "error": {"code": "not_found", "message": "Unknown API endpoint", "recoverable": False, "details": {}}
+            },
+        )
 
     assets = static_root / "assets"
     if assets.is_dir():

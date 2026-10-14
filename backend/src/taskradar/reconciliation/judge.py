@@ -45,7 +45,10 @@ class _Verdict(BaseModel):
 
 def _describe(title: str, action: str, due: str | None, entities: list[str], detail: str) -> str:
     detail = redact_for_llm(detail, max_chars=300).text
-    return f"title: {title}\naction_type: {action}\ndeadline: {due or 'none'}\nentities: {', '.join(entities) or 'none'}\ndetail: {detail}"
+    return (
+        f"title: {title}\naction_type: {action}\ndeadline: {due or 'none'}\n"
+        f"entities: {', '.join(entities) or 'none'}\ndetail: {detail}"
+    )
 
 
 class LLMRelationJudge:
@@ -58,16 +61,25 @@ class LLMRelationJudge:
         try:
             if self.authorize is not None:
                 self.authorize()
-        except Exception:  # noqa: BLE001 - any refusal means: no semantic layer
+        except Exception:
             return None
         user = (
             "ITEM A (new):\n"
-            + _describe(candidate.title, candidate.action_type.value,
-                        candidate.due.date.isoformat() if candidate.due.date else None,
-                        candidate.entities, candidate.action_required)
+            + _describe(
+                candidate.title,
+                candidate.action_type.value,
+                candidate.due.date.isoformat() if candidate.due.date else None,
+                candidate.entities,
+                candidate.action_required,
+            )
             + "\n\nITEM B (existing):\n"
-            + _describe(task.title, task.action_type.value, task.due_date.isoformat() if task.due_date else None,
-                        task.entities, task.description)
+            + _describe(
+                task.title,
+                task.action_type.value,
+                task.due_date.isoformat() if task.due_date else None,
+                task.entities,
+                task.description,
+            )
         )
         try:
             self.calls += 1

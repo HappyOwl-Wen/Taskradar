@@ -40,7 +40,7 @@ def session_info(request: Request, c: Container = Depends(get_container)) -> dic
 
 
 def _autostart(request: Request) -> AutostartManager:
-    return request.app.state.autostart  # type: ignore[no-any-return]
+    return request.app.state.autostart
 
 
 @router.get("/system/status")
@@ -53,7 +53,7 @@ def system_status(request: Request, c: Container = Depends(get_container)) -> di
     try:
         if c.secrets.get(sk.OPENAI_API_KEY):
             key_source = "credential_store"
-    except Exception:  # noqa: BLE001 - store may be unavailable; reported below
+    except Exception:
         key_source = None
     if key_source is None and c.guard.llm_api_key():
         key_source = "environment"
@@ -134,15 +134,29 @@ def test_llm(c: Container = Depends(get_container)) -> dict[str, Any]:
     if provider is None:
         raise ApiError("llm_not_configured", "No model provider or API key is configured", 409)
     c.guard.check(SideEffect.LLM_SEND, target="connection_test", kind="test")
-    schema = {"type": "object", "additionalProperties": False, "properties": {"ok": {"type": "boolean"}},
-              "required": ["ok"]}
+    schema = {
+        "type": "object",
+        "additionalProperties": False,
+        "properties": {"ok": {"type": "boolean"}},
+        "required": ["ok"],
+    }
     try:
-        response = provider.complete_json(system="Reply with JSON {\"ok\": true}.", user="ping",
-                                          schema_name="connection_test", schema=schema, max_output_tokens=200)
+        response = provider.complete_json(
+            system='Reply with JSON {"ok": true}.',
+            user="ping",
+            schema_name="connection_test",
+            schema=schema,
+            max_output_tokens=200,
+        )
     except LLMError as exc:
         raise ApiError(exc.code, str(exc), 502) from exc
-    return {"ok": True, "model": response.model, "latency_ms": response.latency_ms,
-            "input_tokens": response.input_tokens, "output_tokens": response.output_tokens}
+    return {
+        "ok": True,
+        "model": response.model,
+        "latency_ms": response.latency_ms,
+        "input_tokens": response.input_tokens,
+        "output_tokens": response.output_tokens,
+    }
 
 
 # ---------------------------------------------------------------------------------------------
@@ -151,9 +165,13 @@ def test_llm(c: Container = Depends(get_container)) -> dict[str, Any]:
 
 
 @router.get("/notifications")
-def list_notifications(unread_only: bool = False, limit: int = 50, c: Container = Depends(get_container)) -> dict[str, Any]:
-    return {"items": c.notifications.list_notifications(unread_only=unread_only, limit=min(limit, 200)),
-            "unread": c.notifications.unread_count()}
+def list_notifications(
+    unread_only: bool = False, limit: int = 50, c: Container = Depends(get_container)
+) -> dict[str, Any]:
+    return {
+        "items": c.notifications.list_notifications(unread_only=unread_only, limit=min(limit, 200)),
+        "unread": c.notifications.unread_count(),
+    }
 
 
 class ReadBody(BaseModel):
@@ -195,7 +213,9 @@ def export_data(include_content: bool = True, c: Container = Depends(get_contain
     c.guard.check(SideEffect.DATA_EXPORT, target="export", include_content=include_content)
     payload = c.data.export(include_content=include_content)
     stamp = dt.datetime.now().strftime("%Y%m%d-%H%M")
-    return JSONResponse(payload, headers={"Content-Disposition": f'attachment; filename="taskradar-export-{stamp}.json"'})
+    return JSONResponse(
+        payload, headers={"Content-Disposition": f'attachment; filename="taskradar-export-{stamp}.json"'}
+    )
 
 
 class DeleteAllBody(BaseModel):
@@ -221,7 +241,11 @@ class AutostartBody(BaseModel):
 @router.get("/system/autostart")
 def get_autostart(request: Request) -> dict[str, Any]:
     manager = _autostart(request)
-    return {"supported": manager.supported, "enabled": manager.enabled(), "path": str(manager.path) if manager.path else None}
+    return {
+        "supported": manager.supported,
+        "enabled": manager.enabled(),
+        "path": str(manager.path) if manager.path else None,
+    }
 
 
 @router.post("/system/autostart")

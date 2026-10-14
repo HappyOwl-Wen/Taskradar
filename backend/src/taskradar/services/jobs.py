@@ -45,10 +45,16 @@ class RecoverableJobError(Exception):
 @dataclass
 class JobContext:
     job_id: int
-    counters: dict[str, int] = field(default_factory=lambda: {
-        "items_seen": 0, "items_processed": 0, "items_skipped": 0, "items_failed": 0,
-        "tasks_created": 0, "tasks_updated": 0,
-    })
+    counters: dict[str, int] = field(
+        default_factory=lambda: {
+            "items_seen": 0,
+            "items_processed": 0,
+            "items_skipped": 0,
+            "items_failed": 0,
+            "tasks_created": 0,
+            "tasks_updated": 0,
+        }
+    )
     details: dict[str, Any] = field(default_factory=dict)
 
     def bump(self, name: str, n: int = 1) -> None:
@@ -56,7 +62,7 @@ class JobContext:
 
 
 def retry_delay(attempt: int) -> dt.timedelta:
-    return dt.timedelta(minutes=min(60, 2 ** attempt))
+    return dt.timedelta(minutes=min(60, 2**attempt))
 
 
 class JobRunner:
@@ -126,20 +132,47 @@ class JobRunner:
         try:
             status = fn(ctx)
         except AuthRequiredError as exc:
-            return self.finish(job_id, ctx, status=JobStatus.FAILED, error_code=exc.code, error_message=str(exc),
-                               recoverable=True, next_retry_at=None)
+            return self.finish(
+                job_id,
+                ctx,
+                status=JobStatus.FAILED,
+                error_code=exc.code,
+                error_message=str(exc),
+                recoverable=True,
+                next_retry_at=None,
+            )
         except RecoverableJobError as exc:
             next_retry = self.clock() + retry_delay(attempt) if exc.auto_retry and attempt < MAX_ATTEMPTS else None
-            return self.finish(job_id, ctx, status=JobStatus.FAILED, error_code=exc.code, error_message=exc.message,
-                               recoverable=True, next_retry_at=next_retry)
+            return self.finish(
+                job_id,
+                ctx,
+                status=JobStatus.FAILED,
+                error_code=exc.code,
+                error_message=exc.message,
+                recoverable=True,
+                next_retry_at=next_retry,
+            )
         except ConnectorError as exc:
             next_retry = self.clock() + retry_delay(attempt) if exc.recoverable and attempt < MAX_ATTEMPTS else None
-            return self.finish(job_id, ctx, status=JobStatus.FAILED, error_code=exc.code, error_message=str(exc),
-                               recoverable=exc.recoverable, next_retry_at=next_retry)
+            return self.finish(
+                job_id,
+                ctx,
+                status=JobStatus.FAILED,
+                error_code=exc.code,
+                error_message=str(exc),
+                recoverable=exc.recoverable,
+                next_retry_at=next_retry,
+            )
         except Exception as exc:
             log.exception("Job %s (%s) failed unexpectedly", job_id, kind.value)
-            return self.finish(job_id, ctx, status=JobStatus.FAILED, error_code="internal_error",
-                               error_message=f"{exc.__class__.__name__}: {exc}", recoverable=False)
+            return self.finish(
+                job_id,
+                ctx,
+                status=JobStatus.FAILED,
+                error_code="internal_error",
+                error_message=f"{exc.__class__.__name__}: {exc}",
+                recoverable=False,
+            )
         return self.finish(job_id, ctx, status=status)
 
     def recover_interrupted(self) -> int:

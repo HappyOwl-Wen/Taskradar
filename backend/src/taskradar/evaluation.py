@@ -94,7 +94,8 @@ class EvalReport:
             "",
             "Completion evidence",
             f"  detected: {pct(self.completion_detected, self.completion_cases)}   "
-            f"explicit/uncertain classified correctly: {pct(self.completion_explicitness_correct, self.completion_cases)}   "
+            "explicit/uncertain classified correctly: "
+            f"{pct(self.completion_explicitness_correct, self.completion_cases)}   "
             f"matched to the right task: {pct(self.completion_targets_correct, self.completion_targets_expected)}",
             "",
             "Per-case problems:",
@@ -114,9 +115,15 @@ def _input(case: dict[str, Any], default_sent: str, idx: int) -> ExtractionInput
     text = f"{subject}\n\n{body}" if subject else body
     sent = dt.datetime.fromisoformat(case.get("sent_at") or default_sent)
     return ExtractionInput(
-        origin_kind="message", origin_id=idx, title=subject or None, text=text,
-        segments=[TextSegment(text=text, page=None, offset=0)], sent_at=sent, received_at=sent,
-        labels=case.get("labels", []), is_bulk=bool(case.get("bulk")),
+        origin_kind="message",
+        origin_id=idx,
+        title=subject or None,
+        text=text,
+        segments=[TextSegment(text=text, page=None, offset=0)],
+        sent_at=sent,
+        received_at=sent,
+        labels=case.get("labels", []),
+        is_bulk=bool(case.get("bulk")),
     )
 
 
@@ -142,9 +149,30 @@ def run_evaluation(dataset: Path | None = None, extractor: Extractor | None = No
     groups_seen: set[str] = set()
     details: list[CaseResult] = []
     totals: dict[str, int] = dict.fromkeys(
-        ("expected", "predicted", "tp", "due_checked", "due_date", "due_time", "nodue_checked", "nodue_ok",
-         "noise", "noise_fp", "exp_merges", "merges_ok", "merges_bad", "merges_missed", "flagged",
-         "comp_cases", "comp_detected", "comp_explicit_ok", "comp_targets", "comp_targets_ok"), 0)
+        (
+            "expected",
+            "predicted",
+            "tp",
+            "due_checked",
+            "due_date",
+            "due_time",
+            "nodue_checked",
+            "nodue_ok",
+            "noise",
+            "noise_fp",
+            "exp_merges",
+            "merges_ok",
+            "merges_bad",
+            "merges_missed",
+            "flagged",
+            "comp_cases",
+            "comp_detected",
+            "comp_explicit_ok",
+            "comp_targets",
+            "comp_targets_ok",
+        ),
+        0,
+    )
     elapsed_total = 0.0
     counter = 0
 
@@ -200,8 +228,9 @@ def run_evaluation(dataset: Path | None = None, extractor: Extractor | None = No
             group = hit["group"] if hit else f"fp:{case['id']}"
             if hit and group in groups_seen:
                 totals["exp_merges"] += 1
-            decision = reconciler.match_task(pred, origin_key=f"case:{case['id']}", thread_id=None,
-                                             source_date=inp.sent_at, existing=existing)
+            decision = reconciler.match_task(
+                pred, origin_key=f"case:{case['id']}", thread_id=None, source_date=inp.sent_at, existing=existing
+            )
             if decision.relation in (MatchRelation.DUPLICATE, MatchRelation.DEADLINE_UPDATE) and decision.task_id:
                 if group_of.get(decision.task_id) == group:
                     totals["merges_ok"] += 1
@@ -224,11 +253,21 @@ def run_evaluation(dataset: Path | None = None, extractor: Extractor | None = No
             task_id = f"t{counter}"
             group_of[task_id] = group
             groups_seen.add(group)
-            existing.append(TaskSnapshot(
-                id=task_id, title=pred.title, description=pred.description, action_type=pred.action_type,
-                category=pred.category, entities=pred.entities, due_date=pred.due.date, due_time=pred.due.time,
-                status="confirmed", origin_keys=[f"case:{case['id']}"], last_source_at=inp.sent_at,
-            ))
+            existing.append(
+                TaskSnapshot(
+                    id=task_id,
+                    title=pred.title,
+                    description=pred.description,
+                    action_type=pred.action_type,
+                    category=pred.category,
+                    entities=pred.entities,
+                    due_date=pred.due.date,
+                    due_time=pred.due.time,
+                    status="confirmed",
+                    origin_keys=[f"case:{case['id']}"],
+                    last_source_at=inp.sent_at,
+                )
+            )
 
         # -- completion evidence -----------------------------------------------------------------
         expected_completion = case.get("completion")
@@ -241,7 +280,9 @@ def run_evaluation(dataset: Path | None = None, extractor: Extractor | None = No
                 totals["comp_detected"] += 1
                 explicit_ok = signal.explicit == expected_completion["explicit"]
                 totals["comp_explicit_ok"] += int(explicit_ok)
-                res.completion = "ok" if explicit_ok else f"explicit={signal.explicit} expected {expected_completion['explicit']}"
+                res.completion = (
+                    "ok" if explicit_ok else f"explicit={signal.explicit} expected {expected_completion['explicit']}"
+                )
                 if expected_completion.get("group"):
                     totals["comp_targets"] += 1
                     decision = reconciler.match_completion(signal, thread_id=None, existing=existing)
@@ -258,16 +299,29 @@ def run_evaluation(dataset: Path | None = None, extractor: Extractor | None = No
     return EvalReport(
         extractor=getattr(extractor, "name", "?") + ":" + getattr(extractor, "version", "?"),
         cases=len(data["cases"]),
-        expected_tasks=totals["expected"], predicted_tasks=totals["predicted"], true_positives=totals["tp"],
-        precision=round(precision, 3), recall=round(recall, 3), f1=round(f1, 3),
-        due_checked=totals["due_checked"], due_date_correct=totals["due_date"], due_time_correct=totals["due_time"],
-        no_deadline_checked=totals["nodue_checked"], no_deadline_correct=totals["nodue_ok"],
-        noise_cases=totals["noise"], noise_with_tasks=totals["noise_fp"],
-        expected_merges=totals["exp_merges"], correct_merges=totals["merges_ok"], false_merges=totals["merges_bad"],
-        missed_merges=totals["merges_missed"], flagged_possible_duplicates=totals["flagged"],
-        completion_cases=totals["comp_cases"], completion_detected=totals["comp_detected"],
+        expected_tasks=totals["expected"],
+        predicted_tasks=totals["predicted"],
+        true_positives=totals["tp"],
+        precision=round(precision, 3),
+        recall=round(recall, 3),
+        f1=round(f1, 3),
+        due_checked=totals["due_checked"],
+        due_date_correct=totals["due_date"],
+        due_time_correct=totals["due_time"],
+        no_deadline_checked=totals["nodue_checked"],
+        no_deadline_correct=totals["nodue_ok"],
+        noise_cases=totals["noise"],
+        noise_with_tasks=totals["noise_fp"],
+        expected_merges=totals["exp_merges"],
+        correct_merges=totals["merges_ok"],
+        false_merges=totals["merges_bad"],
+        missed_merges=totals["merges_missed"],
+        flagged_possible_duplicates=totals["flagged"],
+        completion_cases=totals["comp_cases"],
+        completion_detected=totals["comp_detected"],
         completion_explicitness_correct=totals["comp_explicit_ok"],
-        completion_targets_expected=totals["comp_targets"], completion_targets_correct=totals["comp_targets_ok"],
+        completion_targets_expected=totals["comp_targets"],
+        completion_targets_correct=totals["comp_targets_ok"],
         avg_ms_per_item=round(elapsed_total / max(1, len(data["cases"])), 2),
         details=details,
     )

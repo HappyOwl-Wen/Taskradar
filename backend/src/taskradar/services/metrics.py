@@ -44,47 +44,71 @@ class MetricsService:
             by_extractor = [
                 {"extractor": name, "runs": count, "avg_latency_ms": round(avg or 0, 1)}
                 for name, count, avg in session.execute(
-                    select(ExtractionRun.extractor, func.count(), func.avg(ExtractionRun.latency_ms))
-                    .group_by(ExtractionRun.extractor)
+                    select(ExtractionRun.extractor, func.count(), func.avg(ExtractionRun.latency_ms)).group_by(
+                        ExtractionRun.extractor
+                    )
                 ).all()
             ]
             fallbacks = session.scalar(select(func.count()).where(ExtractionRun.status == "fallback")) or 0
             llm_runs = session.scalar(select(func.count()).where(ExtractionRun.provider.isnot(None))) or 0
-            avg_doc_ms = session.scalar(select(func.avg(Document.processing_ms)).where(Document.processing_ms.isnot(None)))
+            avg_doc_ms = session.scalar(
+                select(func.avg(Document.processing_ms)).where(Document.processing_ms.isnot(None))
+            )
 
-            duplicates = session.scalar(
-                select(func.count()).select_from(TaskSource).where(TaskSource.relation == "duplicate")
-            ) or 0
-            reverted_merges = session.scalar(
-                select(func.count()).select_from(TaskEvent).where(
-                    TaskEvent.event_type == "source_attached",
-                    TaskEvent.reverted_at.isnot(None),
+            duplicates = (
+                session.scalar(select(func.count()).select_from(TaskSource).where(TaskSource.relation == "duplicate"))
+                or 0
+            )
+            reverted_merges = (
+                session.scalar(
+                    select(func.count())
+                    .select_from(TaskEvent)
+                    .where(
+                        TaskEvent.event_type == "source_attached",
+                        TaskEvent.reverted_at.isnot(None),
+                    )
                 )
-            ) or 0
-            dup_suggestions = dict(session.execute(
-                select(TaskSuggestion.status, func.count())
-                .where(TaskSuggestion.kind == "possible_duplicate")
-                .group_by(TaskSuggestion.status)
-            ).all())
+                or 0
+            )
+            dup_suggestions = dict(
+                session.execute(
+                    select(TaskSuggestion.status, func.count())
+                    .where(TaskSuggestion.kind == "possible_duplicate")
+                    .group_by(TaskSuggestion.status)
+                ).all()
+            )
 
             agent_tasks = select(Task).where(Task.manual.is_(False))
-            status_counts = dict(session.execute(
-                select(Task.status, func.count()).where(Task.manual.is_(False)).group_by(Task.status)
-            ).all())
+            status_counts = dict(
+                session.execute(
+                    select(Task.status, func.count()).where(Task.manual.is_(False)).group_by(Task.status)
+                ).all()
+            )
             total_tasks = session.scalar(select(func.count()).select_from(agent_tasks.subquery())) or 0
-            accepted = sum(status_counts.get(s, 0) for s in ("confirmed", "in_progress", "waiting_for_reply", "completed"))
+            accepted = sum(
+                status_counts.get(s, 0) for s in ("confirmed", "in_progress", "waiting_for_reply", "completed")
+            )
             dismissed = status_counts.get("dismissed", 0)
-            auto_completed = session.scalar(
-                select(func.count()).select_from(TaskEvent).where(
-                    TaskEvent.event_type == "status_changed", TaskEvent.actor == "agent"
+            auto_completed = (
+                session.scalar(
+                    select(func.count())
+                    .select_from(TaskEvent)
+                    .where(TaskEvent.event_type == "status_changed", TaskEvent.actor == "agent")
                 )
-            ) or 0
-            auto_completed_reverted = session.scalar(
-                select(func.count()).select_from(TaskEvent).where(
-                    TaskEvent.event_type == "status_changed", TaskEvent.actor == "agent",
-                    TaskEvent.reverted_at.isnot(None),
+                or 0
+            )
+            auto_completed_reverted = (
+                session.scalar(
+                    select(func.count())
+                    .select_from(TaskEvent)
+                    .where(
+                        TaskEvent.event_type == "status_changed",
+                        TaskEvent.actor == "agent",
+                        TaskEvent.reverted_at.isnot(None),
+                    )
                 )
-            ) or 0
+                or 0
+            )
 
         return {
             "documents": {

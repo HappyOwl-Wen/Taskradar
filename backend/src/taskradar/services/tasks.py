@@ -7,6 +7,7 @@ independent task) and manual merges.
 
 from __future__ import annotations
 
+import contextlib
 import datetime as dt
 import re
 from collections.abc import Callable
@@ -71,7 +72,14 @@ class Origin:
 
 
 USER_EDITABLE_FIELDS = {
-    "title", "description", "category", "action_required", "priority", "due_date", "due_time", "time_semantics",
+    "title",
+    "description",
+    "category",
+    "action_required",
+    "priority",
+    "due_date",
+    "due_time",
+    "time_semantics",
 }
 _DUE_FIELDS = {"due_date", "due_time"}
 _HHMM = re.compile(r"^([01]\d|2[0-3]):[0-5]\d$")
@@ -122,8 +130,12 @@ def candidate_from_row(row: TaskCandidate) -> CandidateTask:
 
 
 STATUS_LABELS_ZH = {
-    "candidate": "待确认", "confirmed": "已确认", "in_progress": "进行中", "waiting_for_reply": "等待回复",
-    "completed": "已完成", "dismissed": "已忽略",
+    "candidate": "待确认",
+    "confirmed": "已确认",
+    "in_progress": "进行中",
+    "waiting_for_reply": "等待回复",
+    "completed": "已完成",
+    "dismissed": "已忽略",
 }
 
 
@@ -263,7 +275,10 @@ class TaskService:
         session.flush()
         self._add_source(session, task, origin, candidate_row, SourceRelation.ORIGIN, cand.evidence)
         self.record(
-            session, task, EventType.CREATED, actor,
+            session,
+            task,
+            EventType.CREATED,
+            actor,
             summary or (f"从「{origin.label}」中识别出任务" if origin.label else "任务已创建"),
             data={"origin": origin.key, "confidence": cand.confidence, "review_reasons": review_reasons},
         )
@@ -324,9 +339,17 @@ class TaskService:
         if source is None:
             return None
         self.record(
-            session, task, EventType.SOURCE_ATTACHED, actor, summary,
-            data={"task_source_id": source.id, "relation": relation.value, "origin": origin.key,
-                  "candidate_id": candidate_row.id if candidate_row else None},
+            session,
+            task,
+            EventType.SOURCE_ATTACHED,
+            actor,
+            summary,
+            data={
+                "task_source_id": source.id,
+                "relation": relation.value,
+                "origin": origin.key,
+                "candidate_id": candidate_row.id if candidate_row else None,
+            },
             revertible=revertible,
         )
         if candidate_row is not None:
@@ -374,8 +397,14 @@ class TaskService:
             f"{STATUS_LABELS_ZH.get(new_status.value, new_status.value)}"
         )
         return self.record(
-            session, task, EventType.STATUS_CHANGED, actor, label,
-            data={"before": before, "after": after, **(extra_data or {})}, reason=reason, revertible=revertible,
+            session,
+            task,
+            EventType.STATUS_CHANGED,
+            actor,
+            label,
+            data={"before": before, "after": after, **(extra_data or {})},
+            reason=reason,
+            revertible=revertible,
         )
 
     def update_fields(
@@ -427,15 +456,19 @@ class TaskService:
             locked.update("due" if k in _DUE_FIELDS else k for k in after if k in USER_EDITABLE_FIELDS)
             task.user_locked_fields = sorted(locked)
         if {"title", "action_required"} & set(after):
-            try:
+            with contextlib.suppress(ValueError):  # unknown legacy action type: keep the old fingerprint
                 task.fingerprint = fingerprint(ActionType(task.action_type), list(task.entities or []), task.title)
-            except ValueError:
-                pass
         task.updated_at = self.clock()
         names = ", ".join(k for k in after if k in USER_EDITABLE_FIELDS)
         return self.record(
-            session, task, EventType.FIELDS_UPDATED, actor, summary or f"修改了 {names}",
-            data={"before": before, "after": after}, reason=reason, revertible=revertible,
+            session,
+            task,
+            EventType.FIELDS_UPDATED,
+            actor,
+            summary or f"修改了 {names}",
+            data={"before": before, "after": after},
+            reason=reason,
+            revertible=revertible,
         )
 
     @staticmethod
@@ -506,7 +539,11 @@ class TaskService:
         task.updated_at = now
         event.reverted_at = now
         revert = self.record(
-            session, task, EventType.REVERTED, actor, f"已撤销：{event.summary}",
+            session,
+            task,
+            EventType.REVERTED,
+            actor,
+            f"已撤销：{event.summary}",
             data={"reverted_event_id": event.id, **extra},
         )
         event.reverted_by_event_id = revert.id
@@ -519,18 +556,29 @@ class TaskService:
         relation = source.relation
         candidate = session.get(TaskCandidate, source.candidate_id) if source.candidate_id else None
         origin = Origin(
-            key=source.origin_key, message_id=source.message_id, document_id=source.document_id,
-            label=source.source_label, date=source.source_date,
+            key=source.origin_key,
+            message_id=source.message_id,
+            document_id=source.document_id,
+            label=source.source_label,
+            date=source.source_date,
         )
         task.sources.remove(source)
         session.delete(source)
         session.flush()
-        if relation in (SourceRelation.DUPLICATE.value, SourceRelation.DEADLINE_UPDATE.value) and candidate is not None \
-                and candidate.kind == "task":
+        if (
+            relation in (SourceRelation.DUPLICATE.value, SourceRelation.DEADLINE_UPDATE.value)
+            and candidate is not None
+            and candidate.kind == "task"
+        ):
             cand = candidate_from_row(candidate)
             new_task = self.create_from_candidate(
-                session, cand, origin=origin, candidate_row=candidate, timezone=task.timezone,
-                review_reasons=["split_from_merge"], actor=Actor.USER,
+                session,
+                cand,
+                origin=origin,
+                candidate_row=candidate,
+                timezone=task.timezone,
+                review_reasons=["split_from_merge"],
+                actor=Actor.USER,
                 summary=f"从「{task.title}」拆分为独立任务",
             )
             candidate.decision = "split_by_user"
@@ -569,11 +617,19 @@ class TaskService:
             sugg.status = SuggestionStatus.OBSOLETE.value
             sugg.resolved_at = now
         self.record(
-            session, source, EventType.STATUS_CHANGED, actor, f"已合并到任务「{target.title}」",
+            session,
+            source,
+            EventType.STATUS_CHANGED,
+            actor,
+            f"已合并到任务「{target.title}」",
             data={"before": before_status, "after": _status_fields(source), "merged_into": target.id},
         )
         return self.record(
-            session, target, EventType.MERGED, actor, f"合并了任务「{source.title}」",
+            session,
+            target,
+            EventType.MERGED,
+            actor,
+            f"合并了任务「{source.title}」",
             data={"merged_task_id": source.id, "moved_source_ids": moved, "source_before": before_status},
             revertible=True,
         )
@@ -589,8 +645,9 @@ class TaskService:
         for key, value in data.get("source_before", {}).items():
             setattr(source, key, _from_json(key, value))
         link = session.scalar(
-            select(TaskLink).where(TaskLink.task_id == source.id, TaskLink.other_task_id == target.id,
-                                   TaskLink.kind == "merged_into")
+            select(TaskLink).where(
+                TaskLink.task_id == source.id, TaskLink.other_task_id == target.id, TaskLink.kind == "merged_into"
+            )
         )
         if link is not None:
             session.delete(link)
@@ -598,11 +655,15 @@ class TaskService:
 
     def link_tasks(self, session: Session, task: Task, other: Task, kind: str = "related") -> None:
         exists = session.scalar(
-            select(TaskLink.id).where(TaskLink.task_id == task.id, TaskLink.other_task_id == other.id, TaskLink.kind == kind)
+            select(TaskLink.id).where(
+                TaskLink.task_id == task.id, TaskLink.other_task_id == other.id, TaskLink.kind == kind
+            )
         )
         if exists is None:
             session.add(TaskLink(task_id=task.id, other_task_id=other.id, kind=kind, created_at=self.clock()))
-            self.record(session, task, EventType.LINKED, Actor.AGENT, f"与任务「{other.title}」相关", data={"other": other.id})
+            self.record(
+                session, task, EventType.LINKED, Actor.AGENT, f"与任务「{other.title}」相关", data={"other": other.id}
+            )
 
     # ------------------------------------------------------------------------------------------
     # Suggestions
@@ -640,8 +701,14 @@ class TaskService:
         )
         session.add(suggestion)
         session.flush()
-        self.record(session, task, EventType.SUGGESTION_CREATED, Actor.AGENT, summary,
-                    data={"suggestion_id": suggestion.id, "kind": kind.value})
+        self.record(
+            session,
+            task,
+            EventType.SUGGESTION_CREATED,
+            Actor.AGENT,
+            summary,
+            data={"suggestion_id": suggestion.id, "kind": kind.value},
+        )
         task.updated_at = self.clock()
         return suggestion
 
@@ -657,9 +724,12 @@ class TaskService:
             self.change_status(session, task, TaskStatus.WAITING_FOR_REPLY, actor=actor, reason="accepted_suggestion")
         elif kind == SuggestionKind.UPDATE_DUE:
             self.update_fields(
-                session, task,
+                session,
+                task,
                 {"due_date": suggestion.payload.get("due_date"), "due_time": suggestion.payload.get("due_time")},
-                actor=actor, reason="accepted_suggestion", due_text=suggestion.payload.get("due_text"),
+                actor=actor,
+                reason="accepted_suggestion",
+                due_text=suggestion.payload.get("due_text"),
                 summary="根据新来源更新截止日期",
             )
         elif kind == SuggestionKind.POSSIBLE_DUPLICATE:
@@ -669,16 +739,28 @@ class TaskService:
             self.merge_tasks(session, task, other, actor=actor)
         suggestion.status = SuggestionStatus.ACCEPTED.value
         suggestion.resolved_at = self.clock()
-        self.record(session, task, EventType.SUGGESTION_RESOLVED, actor, "已采纳建议",
-                    data={"suggestion_id": suggestion.id, "kind": kind.value, "accepted": True})
+        self.record(
+            session,
+            task,
+            EventType.SUGGESTION_RESOLVED,
+            actor,
+            "已采纳建议",
+            data={"suggestion_id": suggestion.id, "kind": kind.value, "accepted": True},
+        )
         return suggestion
 
     def reject_suggestion(self, session: Session, suggestion_id: int, *, actor: Actor = Actor.USER) -> TaskSuggestion:
         suggestion = self._pending_suggestion(session, suggestion_id)
         suggestion.status = SuggestionStatus.REJECTED.value
         suggestion.resolved_at = self.clock()
-        self.record(session, suggestion.task, EventType.SUGGESTION_RESOLVED, actor, "已拒绝建议",
-                    data={"suggestion_id": suggestion.id, "kind": suggestion.kind, "accepted": False})
+        self.record(
+            session,
+            suggestion.task,
+            EventType.SUGGESTION_RESOLVED,
+            actor,
+            "已拒绝建议",
+            data={"suggestion_id": suggestion.id, "kind": suggestion.kind, "accepted": False},
+        )
         return suggestion
 
     @staticmethod

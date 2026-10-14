@@ -89,8 +89,11 @@ class HybridExtractor:
         except LLMError as exc:
             trace.append({"step": "hybrid.fallback_to_rules", "error": exc.code})
             return base.model_copy(
-                update={"extractor": f"{base.extractor}(fallback)", "trace": trace,
-                        "notes": [*base.notes, f"llm_fallback:{exc.code}"]}
+                update={
+                    "extractor": f"{base.extractor}(fallback)",
+                    "trace": trace,
+                    "notes": [*base.notes, f"llm_fallback:{exc.code}"],
+                }
             )
 
         return self._merge(llm_result, base, trace)
@@ -108,7 +111,9 @@ class HybridExtractor:
             return True
         return txt >= 0.5 and act >= 0.7
 
-    def _merge(self, llm_result: ExtractionResult, base: ExtractionResult, trace: list[dict[str, object]]) -> ExtractionResult:
+    def _merge(
+        self, llm_result: ExtractionResult, base: ExtractionResult, trace: list[dict[str, object]]
+    ) -> ExtractionResult:
         tasks = list(llm_result.tasks)
         added = 0
         if llm_result.content_type not in (ContentType.MARKETING, ContentType.NEWSLETTER):
@@ -128,8 +133,11 @@ class HybridExtractor:
         for rs in base.completion_signals:
             if not any(s.kind == rs.kind and set(s.entities) & set(rs.entities) for s in signals):
                 signals.append(rs)
-        trace = [*trace, *llm_result.trace, {"step": "hybrid.merge", "llm_tasks": len(llm_result.tasks),
-                                            "rule_only_tasks_added": added}]
+        trace = [
+            *trace,
+            *llm_result.trace,
+            {"step": "hybrid.merge", "llm_tasks": len(llm_result.tasks), "rule_only_tasks_added": added},
+        ]
         return llm_result.model_copy(
             update={
                 "tasks": tasks,

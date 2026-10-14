@@ -47,6 +47,8 @@ export interface TaskSummary {
   calendar_status: string | null;
   detected_at: string | null;
   source_published_at: string | null;
+  /** Set when the source only has a calendar date (no time of day). */
+  source_published_day: string | null;
   created_at: string | null;
   updated_at: string | null;
   confirmed_at: string | null;
@@ -107,6 +109,8 @@ export interface TaskSourceEntry {
   origin_key: string;
   label: string;
   source_date: string | null;
+  /** Set when the source only has a calendar date (no time of day). */
+  source_day: string | null;
   evidence: Evidence[];
   created_at: string | null;
   message: MessageBrief | null;

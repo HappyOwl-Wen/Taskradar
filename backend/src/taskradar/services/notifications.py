@@ -61,12 +61,24 @@ class NotificationService:
             ).all()
             for task in tasks:
                 ctx.bump("items_seen")
-                status = evaluate(status=task.status, due_date=task.due_date, due_time=task.due_time,
-                                  tz_name=task.timezone, now=now, thresholds=thresholds)
+                status = evaluate(
+                    status=task.status,
+                    due_date=task.due_date,
+                    due_time=task.due_time,
+                    tz_name=task.timezone,
+                    now=now,
+                    thresholds=thresholds,
+                )
                 decision = plan_reminder(
-                    task_id=task.id, title=task.title, status=task.status, due_version=task.due_version,
+                    task_id=task.id,
+                    title=task.title,
+                    status=task.status,
+                    due_version=task.due_version,
                     due_label=format_due_at(task.due_date, task.due_time, task.timezone) or "",
-                    deadline=status, now=now, settings=reminder_settings, language=cfg.general.language,
+                    deadline=status,
+                    now=now,
+                    settings=reminder_settings,
+                    language=cfg.general.language,
                 )
                 if decision is None:
                     continue
@@ -80,8 +92,14 @@ class NotificationService:
                 # The scan runs under the "reminders" job lock and dedupe keys are unique in the
                 # database, so a concurrent duplicate is impossible; a violation would abort the
                 # whole scan (rolled back) and the next scan would redo it.
-                note = Notification(task_id=task.id, level=decision.level.value, title=decision.title,
-                                    body=decision.body, dedupe_key=decision.dedupe_key, created_at=now)
+                note = Notification(
+                    task_id=task.id,
+                    level=decision.level.value,
+                    title=decision.title,
+                    body=decision.body,
+                    dedupe_key=decision.dedupe_key,
+                    created_at=now,
+                )
                 session.add(note)
                 session.flush()
                 created.append((note.id, decision.title, decision.body))
