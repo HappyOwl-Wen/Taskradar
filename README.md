@@ -75,9 +75,10 @@ Requirements: **Python 3.12+**, **Node.js 20+** (only to build the web UI) and, 
 1. **Set up** — double-click `Setup.cmd` (or run
    `powershell -ExecutionPolicy Bypass -File scripts\setup.ps1`). It creates `backend\.venv`, builds the web
    UI and prepares the database in `%LOCALAPPDATA%\TaskRadar`.
-2. **OCR (recommended)** — `powershell -ExecutionPolicy Bypass -File scripts\install-tesseract.ps1`
-   downloads Tesseract 5.4 (UB Mannheim build) plus the German and Chinese models, verifies pinned SHA-256
-   checksums and unpacks them into `%LOCALAPPDATA%\TaskRadar\tools\tesseract`.
+2. **OCR (recommended)** — the setup asks whether to install it; you can also run
+   `powershell -ExecutionPolicy Bypass -File scripts\install-tesseract.ps1` at any time. It downloads Tesseract
+   5.4 (UB Mannheim build) plus the German and Chinese models, verifies pinned SHA-256 checksums and unpacks them
+   into `%LOCALAPPDATA%\TaskRadar\tools\tesseract`.
 3. **Start** — double-click `TaskRadar.cmd`. The dashboard opens at <http://127.0.0.1:8000>; closing the
    window stops the server. `scripts\start.ps1 -Background` starts it without a window.
 
@@ -225,8 +226,8 @@ TaskRadar.cmd       double-click launcher       Setup.cmd   one-time setup
 ## 中文快速上手
 
 1. 安装 Python 3.12+ 和 Node.js 20+；如需识别扫描件/截图，再安装 7-Zip。
-2. 双击 `Setup.cmd` 完成一次性安装（无需管理员权限）；运行
-   `powershell -ExecutionPolicy Bypass -File scripts\install-tesseract.ps1` 安装 OCR（会校验 SHA-256）。
+2. 双击 `Setup.cmd` 完成一次性安装（无需管理员权限）。安装过程中会询问是否下载 OCR 引擎（约 110 MB，会校验 SHA-256），
+   也可以之后运行 `powershell -ExecutionPolicy Bypass -File scripts\install-tesseract.ps1`。
 3. 双击 `TaskRadar.cmd` 启动，浏览器打开 <http://127.0.0.1:8000>。关闭窗口即停止。
 4. 不连接任何账号也能体验：「来源 → 演示邮箱 → 创建」，或把 `backend/src/taskradar/demo/samples/` 中的示例文件拖进窗口。
 5. 连接 Gmail / Google 日历需要你本人在 Google Cloud Console 创建“桌面应用”OAuth 客户端并登录授权，步骤见上文
