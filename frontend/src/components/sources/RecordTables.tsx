@@ -6,7 +6,7 @@ import type { BadgeTone } from "@/components/ui/variants";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger, Tip } from "@/components/ui/menu";
-import { translateKey } from "@/i18n";
+import { describeCode, translateKey } from "@/i18n";
 import { api } from "@/lib/api";
 import { formatBytes, formatDateTime } from "@/lib/format";
 import { useAction } from "@/lib/queries";
@@ -172,7 +172,10 @@ export function MessagesTable({ messages, timezone }: { messages: MessageListIte
                   <p className="max-w-[22rem] truncate pl-6 text-xs text-muted-foreground">{m.sender}</p>
                 </td>
                 <td className={td}>
-                  <ItemStatusBadge status={m.status} error={m.error_code ? translateKey(`errors.${m.error_code}`, m.error_code) : m.skip_reason} />
+                  <ItemStatusBadge
+                    status={m.status}
+                    error={m.error_code ? translateKey(`errors.${m.error_code}`, m.error_code) : m.skip_reason ? describeCode(m.skip_reason) : null}
+                  />
                 </td>
                 <td className={`${td} text-xs text-muted-foreground`}>
                   {m.content_type ? translateKey(`contentType.${m.content_type}`, m.content_type) : "—"}

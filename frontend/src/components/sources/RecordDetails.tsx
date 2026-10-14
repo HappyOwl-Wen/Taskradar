@@ -6,7 +6,7 @@ import { StatusBadge } from "@/components/tasks/badges";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ErrorState, LoadingRows } from "@/components/ui/states";
-import { translateKey } from "@/i18n";
+import { describeCode, translateKey } from "@/i18n";
 import { api } from "@/lib/api";
 import { formatDateTime, formatMs, formatPercent } from "@/lib/format";
 import type { AgentRun, LinkedTask } from "@/lib/types";
@@ -98,7 +98,7 @@ export function DocumentDetailsDialog({ id, onClose, timezone }: { id: number | 
               <div className="flex flex-wrap gap-1.5">
                 {data.warnings.map((w) => (
                   <Badge key={w} tone="high">
-                    {w}
+                    {describeCode(w)}
                   </Badge>
                 ))}
               </div>
@@ -144,7 +144,7 @@ export function MessageDetailsDialog({ id, onClose, timezone }: { id: number | n
           {data ? (
             <DialogDescription>
               {data.sender} · {formatDateTime(data.sent_at, i18n.language, timezone)}
-              {data.skip_reason ? ` · ${data.skip_reason}` : ""}
+              {data.skip_reason ? ` · ${describeCode(data.skip_reason)}` : ""}
             </DialogDescription>
           ) : null}
         </DialogHeader>

@@ -6,6 +6,8 @@ have confirmed the task. Everything runs on your own computer at `http://127.0.0
 
 > 中文简介见下方 [中文快速上手](#中文快速上手)。The UI is Chinese by default and switchable to English.
 
+![TaskRadar dashboard (dark mode, English, synthetic demo data)](docs/screenshots/dashboard-dark-en.jpg)
+
 ---
 
 ## The problem
@@ -146,7 +148,7 @@ cd backend
 .venv\Scripts\python.exe -m taskradar eval    # extraction / dedup evaluation on the labelled dataset
 
 cd ..\frontend
-npm run lint; npm run typecheck; npm test      # 27 tests
+npm run lint; npm run typecheck; npm test      # 29 tests
 ```
 
 The workflow in `.github/workflows/ci.yml` runs the same checks on Ubuntu, with Tesseract and the same pinned

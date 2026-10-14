@@ -1,4 +1,5 @@
-import { describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
+import i18n, { describeCode } from "./index";
 import en from "./en";
 import zhCN from "./zh-CN";
 
@@ -32,5 +33,21 @@ describe("translations", () => {
 
   it("have no empty strings", () => {
     for (const [key, text] of [...zh, ...english]) expect(text.trim(), key).not.toBe("");
+  });
+});
+
+describe("describeCode", () => {
+  beforeAll(async () => {
+    await i18n.changeLanguage("en");
+  });
+
+  it("translates parametrised backend codes", () => {
+    expect(describeCode("page_2_ocr_failed")).toBe("OCR failed on page 2");
+    expect(describeCode("duplicate_content_of:12")).toBe("Same content as file #12");
+    expect(describeCode("sent_or_draft")).toBe("Sent mail or draft, not analysed");
+  });
+
+  it("falls back to the raw code for unknown values", () => {
+    expect(describeCode("something_new")).toBe("something_new");
   });
 });

@@ -59,3 +59,6 @@ desktop.ini
 .idea/
 .vscode/*
 !.vscode/extensions.json
+
+# --- Local Claude Code preview configuration (machine-specific paths) ---
+.claude/launch.json
