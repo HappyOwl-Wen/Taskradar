@@ -39,9 +39,8 @@ frontend/dist/
 frontend/coverage/
 *.tsbuildinfo
 
-# --- Built frontend copied into the backend package ---
-backend/src/taskradar/static/*
-!backend/src/taskradar/static/.gitkeep
+# --- Built frontend (vite build output, served by the backend) ---
+backend/src/taskradar/static/
 
 # --- Demo output generated at runtime (fixtures live in backend/tests/fixtures) ---
 demo/generated/

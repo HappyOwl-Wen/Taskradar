@@ -67,6 +67,8 @@ def cmd_serve(args: argparse.Namespace) -> int:
         overrides["port"] = args.port
     if args.no_browser:
         overrides["open_browser"] = False
+    if args.data_dir:
+        overrides["data_dir"] = Path(args.data_dir).expanduser().resolve()
     config = load_config(**overrides)
     configure_logging(config.logs_dir, config.log_level)
 
@@ -96,12 +98,12 @@ def cmd_serve(args: argparse.Namespace) -> int:
     return 0
 
 
-def cmd_migrate(_: argparse.Namespace) -> int:
+def cmd_migrate(args: argparse.Namespace) -> int:
     from taskradar.config import load_config
     from taskradar.db.migrate import upgrade_to_head
     from taskradar.db.session import create_sqlite_engine
 
-    config = load_config()
+    config = load_config(**({"data_dir": Path(args.data_dir).expanduser().resolve()} if args.data_dir else {}))
     config.ensure_dirs()
     upgrade_to_head(create_sqlite_engine(config.database_url))
     print(f"Database at {config.db_path} is up to date.")
@@ -136,9 +138,11 @@ def main(argv: list[str] | None = None) -> int:
     serve = sub.add_parser("serve", help="start the local server (default)")
     serve.add_argument("--port", type=int, default=None)
     serve.add_argument("--no-browser", action="store_true")
+    serve.add_argument("--data-dir", default=None, help=r"data folder (default: %%LOCALAPPDATA%%\TaskRadar)")
     serve.set_defaults(func=cmd_serve)
 
     migrate = sub.add_parser("migrate", help="apply database migrations")
+    migrate.add_argument("--data-dir", default=None)
     migrate.set_defaults(func=cmd_migrate)
 
     demo = sub.add_parser("demo-files", help="write synthetic demo PDFs / screenshots into a folder")
