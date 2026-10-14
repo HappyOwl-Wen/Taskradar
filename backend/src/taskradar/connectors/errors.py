@@ -51,6 +51,18 @@ class PermanentError(ConnectorError):
     recoverable = False
 
 
+class ApiNotEnabledError(ConnectorError):
+    """The API is switched off in the user's Google Cloud project: only the user can enable it, so this
+    is never retried automatically. ``activation_url`` is Google's link to the switch, if it sent one."""
+
+    code = "api_not_enabled"
+    recoverable = False
+
+    def __init__(self, message: str, *, activation_url: str | None = None):
+        super().__init__(message)
+        self.activation_url = activation_url
+
+
 RETRYABLE = (RateLimitedError, TransientError)
 
 

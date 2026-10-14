@@ -303,6 +303,7 @@ const en: Messages = {
     encrypted_file: "The PDF is encrypted and cannot be read.",
     ocr_failed: "OCR failed.",
     ocr_unavailable: "No OCR engine (Tesseract) installed, so text in images cannot be read.",
+    api_not_enabled: "The required Google API is not enabled in your Google Cloud project.",
     extraction_failed: "Task extraction failed.",
     parse_failed: "Parsing the file failed.",
     time_without_date: "Choose a date before setting a time.",
@@ -497,6 +498,8 @@ const en: Messages = {
     unchanged: "The calendar event is already up to date",
     outOfSync: "The task changed; the calendar event needs an update",
     failed: "Last write failed: {{error}}",
+    apiNotEnabled: "The Google Calendar API is not enabled in your Google Cloud project. Enable it, wait 1–2 minutes, then click “Confirm & write” again.",
+    enableApi: "Enable it in the Google Cloud Console",
     openEvent: "View in Google Calendar",
     update: "Update calendar event",
     warnings: {
@@ -696,7 +699,7 @@ const en: Messages = {
     },
     calendar: {
       intro:
-        "Calendar writes use a separate authorization (calendar.app.created), so TaskRadar can only access calendars it created. Nothing syncs automatically by default and every write shows a preview first.",
+        "Calendar writes use a separate authorization (calendar.app.created), so TaskRadar can only access calendars it created. Nothing syncs automatically by default and every write shows a preview first. Prerequisite: the Google Calendar API is enabled in your Google Cloud project.",
       connect: "Connect Google Calendar",
       disconnect: "Disconnect calendar",
       disconnected: "Google Calendar disconnected and token revoked",

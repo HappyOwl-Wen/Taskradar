@@ -71,7 +71,7 @@ def install_error_handlers(app: FastAPI) -> None:
 
     @app.exception_handler(CalendarSyncError)
     async def _calendar(_: Request, exc: CalendarSyncError) -> JSONResponse:
-        return error_response(exc.code, exc.message, exc.status_code)
+        return error_response(exc.code, exc.message, exc.status_code, recoverable=exc.recoverable, details=exc.details)
 
     @app.exception_handler(OAuthError)
     async def _oauth(_: Request, exc: OAuthError) -> JSONResponse:

@@ -8,9 +8,11 @@ from __future__ import annotations
 import base64
 import json
 import logging
+import re
 from typing import Any, Protocol
 
 from taskradar.connectors.errors import (
+    ApiNotEnabledError,
     AuthRequiredError,
     NotFoundError,
     PermanentError,
@@ -42,15 +44,37 @@ class GmailClient(Protocol):
     ) -> tuple[list[str], str | None, str | None]: ...
 
 
-def map_http_error(status: int, content: bytes | str | None, headers: dict[str, str] | None = None) -> Exception:
+# Google's link to switch an API on; only ever shown as a link, so accept nothing but the Cloud Console.
+_ACTIVATION_URL = re.compile(r"https://console\.(?:developers|cloud)\.google\.com/[^\s\"'<>]+")
+
+
+def _activation_url(error: dict[str, Any]) -> str | None:
+    for detail in error.get("details") or []:
+        url = ((detail or {}).get("metadata") or {}).get("activationUrl")
+        if isinstance(url, str) and _ACTIVATION_URL.fullmatch(url):
+            return url
+    found = _ACTIVATION_URL.search(str(error.get("message") or ""))
+    return found.group(0).rstrip(".,;)") if found else None
+
+
+def map_http_error(
+    status: int,
+    content: bytes | str | None,
+    headers: dict[str, str] | None = None,
+    *,
+    api: str = "Gmail API",
+) -> Exception:
     """Translate an HTTP failure from a Google API into the connector error taxonomy."""
     reason = ""
+    error: dict[str, Any] = {}
     try:
         payload = json.loads(content or b"{}")
-        errors = payload.get("error", {}).get("errors") or []
-        reason = (errors[0].get("reason") if errors else "") or payload.get("error", {}).get("status", "")
+        error = payload.get("error", {}) if isinstance(payload.get("error"), dict) else {}
+        errors = error.get("errors") or []
+        reason = (errors[0].get("reason") if errors else "") or error.get("status", "")
     except (ValueError, AttributeError, TypeError):
         pass
+    detail_reasons = {(d or {}).get("reason") for d in error.get("details") or [] if isinstance(d, dict)}
     retry_after = None
     if headers:
         raw = headers.get("retry-after") or headers.get("Retry-After")
@@ -58,15 +82,22 @@ def map_http_error(status: int, content: bytes | str | None, headers: dict[str, 
             retry_after = float(raw)
     if status == 401:
         return AuthRequiredError("Google rejected the stored credentials; please reconnect")
+    if status == 403 and (
+        reason in ("accessNotConfigured", "SERVICE_DISABLED") or "SERVICE_DISABLED" in detail_reasons
+    ):
+        return ApiNotEnabledError(
+            f"The {api} is not enabled in your Google Cloud project. Enable it, wait a minute, then try again.",
+            activation_url=_activation_url(error),
+        )
     if status == 429 or (status == 403 and reason in ("rateLimitExceeded", "userRateLimitExceeded", "quotaExceeded")):
-        return RateLimitedError("Gmail API rate limit reached", retry_after=retry_after)
+        return RateLimitedError(f"{api} rate limit reached", retry_after=retry_after)
     if status == 403 and reason in ("insufficientPermissions", "forbidden", "PERMISSION_DENIED"):
         return AuthRequiredError("The Google authorization does not include the required permission")
     if status == 404:
         return NotFoundError("Resource not found")
     if status >= 500:
-        return TransientError(f"Gmail API server error ({status})")
-    return PermanentError(f"Gmail API request failed ({status} {reason})".strip())
+        return TransientError(f"{api} server error ({status})")
+    return PermanentError(f"{api} request failed ({status} {reason})".strip())
 
 
 class GoogleGmailClient:

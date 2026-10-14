@@ -300,6 +300,7 @@ const zhCN = {
     encrypted_file: "PDF 已加密，无法读取。",
     ocr_failed: "OCR 识别失败。",
     ocr_unavailable: "未安装 OCR 引擎（Tesseract），无法识别图片中的文字。",
+    api_not_enabled: "你的 Google Cloud 项目中尚未启用所需的 Google API。",
     extraction_failed: "任务提取失败。",
     parse_failed: "文件解析失败。",
     time_without_date: "设置时间前请先选择日期。",
@@ -488,6 +489,8 @@ const zhCN = {
     unchanged: "日历事件已是最新",
     outOfSync: "任务已修改，日历事件需要更新",
     failed: "上次写入失败：{{error}}",
+    apiNotEnabled: "你的 Google Cloud 项目还没有启用 Google Calendar API。启用后等 1–2 分钟，再点「确认写入」。",
+    enableApi: "在 Google Cloud Console 中启用",
     openEvent: "在 Google 日历中查看",
     update: "更新日历事件",
     warnings: {
@@ -679,7 +682,7 @@ const zhCN = {
       queryExtraHint: "可选，例如 -category:promotions",
     },
     calendar: {
-      intro: "日历写入使用单独的授权（calendar.app.created），TaskRadar 只能访问它自己创建的日历。默认不会自动同步，每次写入前都会显示预览。",
+      intro: "日历写入使用单独的授权（calendar.app.created），TaskRadar 只能访问它自己创建的日历。默认不会自动同步，每次写入前都会显示预览。前提：在你的 Google Cloud 项目中启用了 Google Calendar API。",
       connect: "连接 Google 日历",
       disconnect: "断开日历",
       disconnected: "已断开 Google 日历并撤销令牌",

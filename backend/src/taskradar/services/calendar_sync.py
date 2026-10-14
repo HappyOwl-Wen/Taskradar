@@ -22,7 +22,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
 
 from taskradar.connectors.calendar import CalendarClient
-from taskradar.connectors.errors import ConflictError, ConnectorError, NotFoundError
+from taskradar.connectors.errors import ApiNotEnabledError, ConflictError, ConnectorError, NotFoundError
 from taskradar.db.base import utcnow
 from taskradar.db.models import CalendarLink, Setting, Task
 from taskradar.db.session import transaction
@@ -40,11 +40,21 @@ APPOINTMENT_DEFAULT_MINUTES = 60
 
 
 class CalendarSyncError(Exception):
-    def __init__(self, code: str, message: str, status_code: int = 400):
+    def __init__(
+        self,
+        code: str,
+        message: str,
+        status_code: int = 400,
+        *,
+        recoverable: bool = True,
+        details: dict[str, Any] | None = None,
+    ):
         super().__init__(message)
         self.code = code
         self.message = message
         self.status_code = status_code
+        self.recoverable = recoverable
+        self.details = details or {}
 
 
 def event_id_for(task_id: str) -> str:
@@ -229,7 +239,11 @@ class CalendarSyncService:
             raise
         except ConnectorError as exc:
             self._record_failure(task_id, state.get("calendar_id") or "", exc)
-            raise CalendarSyncError(exc.code, f"{exc} - you can retry", 502) from exc
+            details = {}
+            if isinstance(exc, ApiNotEnabledError) and exc.activation_url:
+                details["activation_url"] = exc.activation_url
+            message = f"{exc} - you can retry" if exc.recoverable else str(exc)
+            raise CalendarSyncError(exc.code, message, 502, recoverable=exc.recoverable, details=details) from exc
 
         with transaction(self._factory) as session:
             state["calendar_id"] = calendar_id

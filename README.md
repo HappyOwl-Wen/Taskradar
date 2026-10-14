@@ -99,7 +99,8 @@ asks for read-only Gmail access and for calendars it creates itself.
 
 1. Open the [Google Cloud Console](https://console.cloud.google.com/) and create a project (e.g. "TaskRadar").
 2. *APIs & Services → Library*: enable the **Gmail API** and, if you want calendar entries, the
-   **Google Calendar API**.
+   **Google Calendar API** (connecting works without it, but writing an event then fails; the calendar
+   dialog links to the switch).
 3. *OAuth consent screen*: user type **External**, publishing status **Testing**, add your own Google account
    under **Test users**. Scopes: `.../auth/gmail.readonly` and `.../auth/calendar.app.created`.
 4. *Credentials → Create credentials → OAuth client ID*, application type **Desktop app**. Download the JSON.
@@ -142,14 +143,14 @@ See [SECURITY.md](SECURITY.md) for the threat model.
 
 ```powershell
 cd backend
-.venv\Scripts\python.exe -m pytest            # 192 tests, about 18 s, includes real OCR
+.venv\Scripts\python.exe -m pytest            # 197 tests, about 18 s, includes real OCR
 .venv\Scripts\python.exe -m ruff check .
 .venv\Scripts\python.exe -m ruff format --check .
 .venv\Scripts\python.exe -m mypy
 .venv\Scripts\python.exe -m taskradar eval    # extraction / dedup evaluation on the labelled dataset
 
 cd ..\frontend
-npm run lint; npm run typecheck; npm test      # 33 tests
+npm run lint; npm run typecheck; npm test      # 35 tests
 ```
 
 The workflow in `.github/workflows/ci.yml` runs the same checks on Ubuntu, with Tesseract and the same pinned
@@ -232,7 +233,8 @@ TaskRadar.cmd       double-click launcher       Setup.cmd   one-time setup
 3. 双击 `TaskRadar.cmd` 启动，浏览器打开 <http://127.0.0.1:8000>。关闭窗口即停止。
 4. 不连接任何账号也能体验：「来源 → 演示邮箱 → 创建」，或把 `backend/src/taskradar/demo/samples/` 中的示例文件拖进窗口。
    如果在安装 OCR 之前就已导入截图或扫描件，装好 OCR 后在「来源」页点「立即识别」即可补识别，无需重启。
-5. 连接 Gmail / Google 日历需要你本人在 Google Cloud Console 创建“桌面应用”OAuth 客户端并登录授权，步骤见上文
+5. 连接 Gmail / Google 日历需要你本人在 Google Cloud Console 创建“桌面应用”OAuth 客户端并登录授权，并在
+   「API 和服务 → 库」中启用 Gmail API；要写入日历，还需启用 Google Calendar API。步骤见上文
    [Connecting Gmail and Google Calendar](#connecting-gmail-and-google-calendar)。Gmail 只申请只读权限。
 6. 默认使用本地规则引擎，不会把内容发给任何云服务；启用 OpenAI 前需要在设置中明确同意数据发送说明。
 

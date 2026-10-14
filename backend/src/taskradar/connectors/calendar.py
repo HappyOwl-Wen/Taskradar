@@ -46,7 +46,7 @@ class GoogleCalendarClient:
             status = int(exc.resp.status)
             if status == 409:
                 raise ConflictError("The event already exists") from exc
-            raise map_http_error(status, exc.content) from exc
+            raise map_http_error(status, exc.content, api="Google Calendar API") from exc
         except RefreshError as exc:
             raise AuthRequiredError("The Google Calendar authorization expired; please reconnect") from exc
         except (TransportError, TimeoutError, ConnectionError, OSError) as exc:

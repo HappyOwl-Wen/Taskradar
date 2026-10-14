@@ -8,10 +8,33 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ErrorState, Skeleton } from "@/components/ui/states";
 import { translateKey } from "@/i18n";
-import { api } from "@/lib/api";
+import { api, ApiError } from "@/lib/api";
+import { errorCode } from "@/lib/errors";
 import { formatDate, formatDateTime, formatMinutes, formatTime } from "@/lib/format";
 import { useAction, useSystemStatus } from "@/lib/queries";
 import type { CalendarPreview, TaskDetail } from "@/lib/types";
+
+const CALENDAR_API_LIBRARY = "https://console.cloud.google.com/apis/library/calendar-json.googleapis.com";
+
+/** Google's own link to enable the API (only Cloud Console links are trusted), else the API's library page. */
+function activationLink(error: unknown): string {
+  const url = error instanceof ApiError ? error.details.activation_url : undefined;
+  return typeof url === "string" && /^https:\/\/console\.(developers|cloud)\.google\.com\//.test(url) ? url : CALENDAR_API_LIBRARY;
+}
+
+function ApiNotEnabled({ href }: { href: string }) {
+  const { t } = useTranslation();
+  return (
+    <div className="grid gap-2 rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm">
+      <p>{t("calendar.apiNotEnabled")}</p>
+      <Button variant="outline" size="xs" className="w-fit" asChild>
+        <a href={href} target="_blank" rel="noreferrer noopener">
+          <ExternalLink /> {t("calendar.enableApi")}
+        </a>
+      </Button>
+    </div>
+  );
+}
 
 function When({ preview }: { preview: CalendarPreview }) {
   const { t, i18n } = useTranslation();
@@ -75,6 +98,7 @@ function PreviewDialog({ task, open, onOpenChange, connected }: { task: TaskDeta
                 ))}
               </ul>
             ) : null}
+            {errorCode(write.error) === "api_not_enabled" ? <ApiNotEnabled href={activationLink(write.error)} /> : null}
             {!connected ? (
               <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-high/40 bg-high/10 px-3 py-2 text-sm">
                 <span>{t("calendar.notConnected")}</span>
@@ -107,6 +131,7 @@ export function CalendarCard({ task }: { task: TaskDetail }) {
   const confirmed = ["confirmed", "in_progress", "waiting_for_reply"].includes(task.status);
   const link = task.calendar;
   const outdated = link && (link.status === "out_of_sync" || link.synced_due_version !== task.due_version);
+  const failureCode = (link?.last_error ?? "").split(":")[0];
 
   let body: React.ReactNode;
   if (!task.due_date) {
@@ -129,7 +154,10 @@ export function CalendarCard({ task }: { task: TaskDetail }) {
         {link ? (
           <div className="grid gap-1 text-sm">
             {link.status === "failed" ? (
-              <p className="text-destructive">{t("calendar.failed", { error: translateKey(`errors.${link.last_error}`, link.last_error ?? "") })}</p>
+              <>
+                <p className="text-destructive">{t("calendar.failed", { error: translateKey(`errors.${failureCode}`, link.last_error ?? "") })}</p>
+                {failureCode === "api_not_enabled" ? <ApiNotEnabled href={CALENDAR_API_LIBRARY} /> : null}
+              </>
             ) : outdated ? (
               <p className="text-high">{t("calendar.outOfSync")}</p>
             ) : (
