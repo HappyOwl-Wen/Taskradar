@@ -3,7 +3,8 @@
 * processing success rate (documents / messages)
 * agent runs: average latency, fallbacks, token usage and estimated cost
 * deduplication: merged duplicates, merges undone by the user (wrong-merge rate)
-* user feedback on agent-created tasks: confirmed vs. dismissed (precision proxy)
+* user feedback on agent-created tasks: confirmed vs. dismissed (precision proxy); a task the user merged into
+  another one is a missed duplicate, not a rejected extraction, and is counted separately
 """
 
 from __future__ import annotations
@@ -13,7 +14,16 @@ from typing import Any
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, sessionmaker
 
-from taskradar.db.models import Document, ExtractionRun, Message, Task, TaskEvent, TaskSource, TaskSuggestion
+from taskradar.db.models import (
+    Document,
+    ExtractionRun,
+    Message,
+    Task,
+    TaskEvent,
+    TaskLink,
+    TaskSource,
+    TaskSuggestion,
+)
 from taskradar.db.session import transaction
 
 
@@ -88,7 +98,16 @@ class MetricsService:
             accepted = sum(
                 status_counts.get(s, 0) for s in ("confirmed", "in_progress", "waiting_for_reply", "completed")
             )
-            dismissed = status_counts.get("dismissed", 0)
+            # Merging a duplicate dismisses it; that is a deduplication miss, not a rejected extraction.
+            merged_away = (
+                session.scalar(
+                    select(func.count(func.distinct(Task.id)))
+                    .join(TaskLink, TaskLink.task_id == Task.id)
+                    .where(Task.manual.is_(False), Task.status == "dismissed", TaskLink.kind == "merged_into")
+                )
+                or 0
+            )
+            dismissed = status_counts.get("dismissed", 0) - merged_away
             auto_completed = (
                 session.scalar(
                     select(func.count())
@@ -144,6 +163,7 @@ class MetricsService:
                 "by_status": status_counts,
                 "accepted": accepted,
                 "dismissed": dismissed,
+                "merged_into_other": merged_away,
                 "precision_proxy": _rate(accepted, accepted + dismissed),
                 "automatic_status_changes": auto_completed,
                 "automatic_status_changes_undone": auto_completed_reverted,

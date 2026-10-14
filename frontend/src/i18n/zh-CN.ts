@@ -769,6 +769,7 @@ const zhCN = {
     feedback: "用户反馈",
     accepted: "确认或完成",
     dismissedCount: "被忽略",
+    mergedAway: "作为重复合并",
     precisionProxy: "确认率（精度代理指标）",
     autoChanges: "Agent 自动状态变更",
     autoChangesUndone: "其中被撤销",

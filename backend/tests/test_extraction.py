@@ -160,6 +160,56 @@ def test_appointment_semantics_and_time() -> None:
     assert task.action_type == ActionType.BRING
 
 
+@pytest.mark.parametrize(
+    ("header", "instruction", "expected", "ambiguous"),
+    [
+        # Layout of a real payment reminder: the due date is a header line above the instruction, with a
+        # status line ("未支付" contains the verb 支付 but is no instruction) in between.
+        (
+            "Due date: 10/28/2026\nPayment status: 未支付",
+            "Please pay the outstanding amount soon.",
+            (2026, 10, 28),
+            False,
+        ),
+        ("Due date: 10/11/2026", "Please pay the outstanding amount soon.", (2026, 10, 11), True),
+        (
+            "Fälligkeitsdatum: 28.10.2026\nRechnungsnummer: 4711",
+            "Bitte überweisen Sie den offenen Betrag.",
+            (2026, 10, 28),
+            False,
+        ),
+        ("Zahlungsziel: 28.10.2026", "Bitte überweisen Sie den offenen Betrag.", (2026, 10, 28), False),
+        ("截止日期：2026年10月28日\n订单状态：待支付", "请尽快完成缴费。", (2026, 10, 28), False),
+    ],
+)
+def test_deadline_line_above_the_instruction(
+    header: str, instruction: str, expected: tuple[int, int, int], ambiguous: bool
+) -> None:
+    [task] = RULES.extract(make_input(f"Rechnung / Invoice 7781\n{header}\n\n{instruction}")).tasks
+    assert task.due.date == dt.date(*expected)
+    assert task.due.ambiguous is ambiguous
+    assert [e.kind for e in task.evidence] == ["action", "deadline"]
+    assert header.splitlines()[0] in task.evidence[1].quote
+
+
+def test_deadline_line_after_an_earlier_instruction_is_not_reused() -> None:
+    first, second = RULES.extract(
+        make_input(
+            "Bitte reichen Sie den Antrag ein.\nFrist: 01.11.2026\n\n"
+            "Bitte bringen Sie zum Termin außerdem Ihren Reisepass mit."
+        )
+    ).tasks
+    assert first.due.date == dt.date(2026, 11, 1)
+    assert second.due.date is None
+
+
+def test_past_date_above_the_instruction_is_not_a_deadline() -> None:
+    [task] = RULES.extract(
+        make_input("Am 01.10.2026 haben wir Ihre Unterlagen erhalten.\n\nBitte laden Sie noch das Formular hoch.")
+    ).tasks
+    assert task.due.date is None
+
+
 def test_prompt_injection_text_creates_no_tasks() -> None:
     result = RULES.extract(
         make_input(

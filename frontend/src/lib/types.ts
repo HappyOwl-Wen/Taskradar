@@ -442,7 +442,10 @@ export interface Metrics {
     agent_tasks: number;
     by_status: Record<string, number>;
     accepted: number;
+    /** Dismissed by the user, not counting tasks merged into another task. */
     dismissed: number;
+    /** Dismissed because the user merged them into another task (missed duplicates). */
+    merged_into_other: number;
     precision_proxy: number | null;
     automatic_status_changes: number;
     automatic_status_changes_undone: number;

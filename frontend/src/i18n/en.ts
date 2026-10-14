@@ -790,6 +790,7 @@ const en: Messages = {
     feedback: "User feedback",
     accepted: "Confirmed or completed",
     dismissedCount: "Dismissed",
+    mergedAway: "Merged as duplicate",
     precisionProxy: "Acceptance rate (precision proxy)",
     autoChanges: "Automatic status changes",
     autoChangesUndone: "of which undone",

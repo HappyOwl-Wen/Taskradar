@@ -142,7 +142,7 @@ See [SECURITY.md](SECURITY.md) for the threat model.
 
 ```powershell
 cd backend
-.venv\Scripts\python.exe -m pytest            # 183 tests, about 18 s, includes real OCR
+.venv\Scripts\python.exe -m pytest            # 192 tests, about 18 s, includes real OCR
 .venv\Scripts\python.exe -m ruff check .
 .venv\Scripts\python.exe -m ruff format --check .
 .venv\Scripts\python.exe -m mypy
@@ -156,18 +156,18 @@ The workflow in `.github/workflows/ci.yml` runs the same checks on Ubuntu, with 
 language models. It has not run on GitHub yet (the repository has not been pushed); the backend checks were run
 locally on Windows 11 and on Ubuntu 24.04 (WSL), where the four OCR tests were skipped for lack of Tesseract.
 
-### Evaluation (rule engine, `rules-1.3`)
+### Evaluation (rule engine, `rules-1.4`)
 
 Measured with `python -m taskradar eval` on synthetic, hand-labelled cases. The development set was used while
 building the rules; the held-out set was written separately and run without tuning on it (one bug it exposed,
-an invented date for "within 14 days after signing", was fixed afterwards — see
-[docs/EVALUATION.md](docs/EVALUATION.md)).
+an invented date for "within 14 days after signing", was fixed afterwards, and one case improved as a side
+effect of a later fix — see [docs/EVALUATION.md](docs/EVALUATION.md)).
 
 | Metric | Development set (36 cases) | Held-out set (30 cases) |
 | --- | --- | --- |
-| Task precision / recall / F1 | 1.00 / 1.00 / 1.00 | 0.93 / 0.72 / 0.81 |
-| Deadline date correct | 21/21 | 12/12 |
-| Deadline time correct | 21/21 | 11/12 |
+| Task precision / recall / F1 | 1.00 / 1.00 / 1.00 | 1.00 / 0.78 / 0.88 |
+| Deadline date correct | 21/21 | 13/13 |
+| Deadline time correct | 21/21 | 12/13 |
 | Marketing/info cases with false tasks | 0/7 | 0/7 |
 | Correct merges / wrong merges | 5/5 / 0 | 1/1 / 0 |
 | Completion evidence detected | 6/6 | 3/5 |
@@ -203,7 +203,7 @@ TaskRadar.cmd       double-click launcher       Setup.cmd   one-time setup
 
 ## Limitations
 
-* The rule engine misses phrasings it has not seen (held-out recall 0.72), e.g. library loans
+* The rule engine misses phrasings it has not seen (held-out recall 0.78), e.g. library loans
   ("归还/续借"), parcel pick-ups ("abholen"), passive bookings ("must be booked") and some completion phrasings
   ("has been confirmed", "was submitted successfully"). Titles can be vague when the instruction uses a pronoun
   ("Diese hochladen"); the evidence quote still shows the full context.

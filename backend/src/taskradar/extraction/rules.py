@@ -35,7 +35,7 @@ from taskradar.extraction import lexicon as lx
 from taskradar.extraction.dates import DateMention, choose_deadline, find_dates, mention_to_due
 from taskradar.parsing.language import detect_language
 
-RULES_VERSION = "rules-1.3"
+RULES_VERSION = "rules-1.4"
 RULES_CONFIDENCE_CAP = 0.85
 
 _HARD_BREAK = re.compile(r"[^\n。！？!?；;]+[。！？!?；;]?")
@@ -463,6 +463,12 @@ def _mentions_in(mentions: list[DateMention], seg: Segment) -> list[DateMention]
     return [m for m in mentions if seg.start <= m.start < seg.end]
 
 
+def _is_instruction(seg: Segment) -> bool:
+    """An action verb together with an obligation cue ("please pay", "请缴纳"); a bare verb in a status
+    line ("Payment status: 未支付") is not an instruction."""
+    return lx.detect_action(seg.text) is not None and bool(lx.OBLIGATION_CUES.search(seg.text))
+
+
 class RuleBasedExtractor:
     name = "rules"
     version = RULES_VERSION
@@ -653,7 +659,7 @@ class RuleBasedExtractor:
         # A following short "deadline line" (e.g. "Frist: 27.11.2026") without its own action.
         for j in range(idx + 1, min(len(segments), idx + 3)):
             seg = segments[j]
-            if lx.detect_action(seg.text) is not None and lx.OBLIGATION_CUES.search(seg.text):
+            if _is_instruction(seg):
                 break
             cued = [m for m in _mentions_in(mentions, seg) if m.deadline_cue]
             if cued:
@@ -664,6 +670,19 @@ class RuleBasedExtractor:
             prev_mentions = _mentions_in(mentions, prev)
             if prev_mentions and lx.APPOINTMENT_CUES.search(prev.text):
                 return prev_mentions[0], prev, TimeSemantics.APPOINTMENT
+        # A preceding deadline line without its own action, e.g. an invoice header
+        # ("Due date: 10/28/2026" / "Fälligkeitsdatum: 28.10.2026" / "截止日期：…") above "Please pay ...".
+        for j in range(idx - 1, max(-1, idx - 4), -1):
+            seg = segments[j]
+            if _is_instruction(seg):
+                break  # an earlier instruction: its dates are its own
+            cued = [m for m in _mentions_in(mentions, seg) if m.deadline_cue]
+            if not cued:
+                continue
+            # A deadline line directly after an earlier instruction belongs to that instruction
+            # (see the forward search above), not to this one.
+            claimed = any(_is_instruction(segments[k]) for k in range(max(0, j - 2), j))
+            return (None, None, TimeSemantics.DEADLINE) if claimed else (cued[0], seg, TimeSemantics.DEADLINE)
         return None, None, TimeSemantics.DEADLINE
 
     @staticmethod

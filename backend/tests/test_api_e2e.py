@@ -8,6 +8,8 @@ from typing import Any
 import pytest
 
 from taskradar.container import Container
+from taskradar.domain.enums import TimeSemantics
+from taskradar.extraction.rules import RuleBasedExtractor
 
 from .conftest import SAMPLES, requires_ocr
 
@@ -142,6 +144,59 @@ def test_demo_mailbox_flow_and_undo(api: Any) -> None:
     assert api.get("/api/suggestions").status_code == 200
     candidates = api.get("/api/tasks", params={"status": "candidate"}).json()["items"]
     assert any(t["needs_review"] for t in candidates)  # e.g. the ambiguous "nächsten Freitag"
+
+
+def test_merged_duplicates_are_not_counted_as_rejected(api: Any) -> None:
+    source = api.post("/api/demo/mailbox").json()
+    assert api.post(f"/api/sources/{source['id']}/sync", params={"wait": True}).json()["job"]["status"] == "succeeded"
+    first, second, third = api.get("/api/tasks", params={"sort": "created_at"}).json()["items"][:3]
+    api.post(f"/api/tasks/{first['id']}/status", json={"status": "confirmed"})
+    merged = api.post(f"/api/tasks/{second['id']}/merge", json={"into_task_id": first["id"]})
+    assert merged.status_code == 200, merged.text
+    api.post(f"/api/tasks/{third['id']}/status", json={"status": "dismissed"})
+
+    feedback = api.get("/api/metrics").json()["feedback"]
+    assert feedback["by_status"]["dismissed"] == 2  # the raw status of both
+    assert (feedback["dismissed"], feedback["merged_into_other"], feedback["accepted"]) == (1, 1, 1)
+    assert feedback["precision_proxy"] == 0.5  # 1 confirmed / (1 confirmed + 1 really dismissed)
+
+    # Undoing the merge brings the task back and it no longer counts as merged.
+    detail = api.get(f"/api/tasks/{first['id']}").json()
+    merge_event = next(e for e in detail["events"] if e["type"] == "merged")
+    api.post(f"/api/events/{merge_event['id']}/undo")
+    feedback = api.get("/api/metrics").json()["feedback"]
+    assert (feedback["dismissed"], feedback["merged_into_other"]) == (1, 0)
+
+
+def test_reanalysis_fills_a_deadline_the_first_run_missed(api: Any, monkeypatch: pytest.MonkeyPatch) -> None:
+    eml = (
+        "From: Billing <billing@shop.example>\r\nTo: me@example.com\r\nSubject: Payment reminder\r\n"
+        "Message-ID: <bill-7781@shop.example>\r\nDate: Wed, 14 Oct 2026 08:00:00 +0000\r\n"
+        "Content-Type: text/plain; charset=utf-8\r\nContent-Transfer-Encoding: 8bit\r\n\r\n"
+        "Invoice 7781\r\nDue date: 10/28/2026\r\nPayment status: 未支付\r\n\r\n"
+        "Please pay the outstanding amount soon.\r\n"
+    ).encode()
+    # The previous rule engine only looked for deadline lines *after* the instruction.
+    monkeypatch.setattr(
+        RuleBasedExtractor, "_context_date", staticmethod(lambda *_: (None, None, TimeSemantics.DEADLINE))
+    )
+    imported = api.post("/api/documents/upload", files=[("files", ("bill.eml", eml, "message/rfc822"))]).json()
+    message_id = imported["results"][0]["message_id"]
+    task = find(api, "Pay")
+    assert task["due_date"] is None
+    monkeypatch.undo()
+
+    api.post(f"/api/messages/{message_id}/reprocess")
+    detail = api.get(f"/api/tasks/{task['id']}").json()
+    assert detail["due_date"] == "2026-10-28"
+    filled = next(e for e in detail["events"] if e["type"] == "fields_updated")
+    assert filled["actor"] == "agent" and filled["revertible"]
+    assert len(api.get("/api/tasks").json()["items"]) == 1  # re-analysis never duplicates the task
+
+    # A date the user set is never overridden by a later re-analysis.
+    api.patch(f"/api/tasks/{task['id']}", json={"due_date": "2026-10-30"})
+    api.post(f"/api/messages/{message_id}/reprocess")
+    assert api.get(f"/api/tasks/{task['id']}").json()["due_date"] == "2026-10-30"
 
 
 def test_task_editing_validation_and_manual_tasks(api: Any) -> None:

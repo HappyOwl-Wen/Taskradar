@@ -371,6 +371,13 @@ class IngestService:
         if relation == MatchRelation.SAME_ORIGIN:
             row.task_id = decision.task_id
             outcome.unchanged += 1
+            if decision.task_id:
+                # Re-analysis (after an extractor improvement or once OCR is installed) may find a deadline
+                # the first run missed; it fills a gap but never overrides an existing or user-set date.
+                task = self.tasks.get(session, decision.task_id)
+                if self._enrich_due(session, task, cand, origin, reanalysis=True):
+                    outcome.tasks_updated += 1
+                    self._refresh(session, existing, task)
             return
 
         if relation in (MatchRelation.DUPLICATE, MatchRelation.DEADLINE_UPDATE) and decision.task_id:
@@ -472,12 +479,17 @@ class IngestService:
             self.tasks.link_tasks(session, task, other)
         self._refresh(session, existing, task)
 
-    def _enrich_due(self, session: Session, task: Task, cand: CandidateTask, origin: Origin) -> None:
-        """A duplicate notice may add information the original lacked (a date or a time)."""
+    def _enrich_due(
+        self, session: Session, task: Task, cand: CandidateTask, origin: Origin, *, reanalysis: bool = False
+    ) -> bool:
+        """A duplicate notice (or a re-analysis of the same source) may add information the task lacked
+        (a date or a time). Returns whether the task changed."""
         if "due" in (task.user_locked_fields or []) or cand.due.date is None:
-            return
+            return False
+        reason = "enriched_on_reanalysis" if reanalysis else "enriched_from_duplicate"
+        where = f"重新分析「{origin.label}」后" if reanalysis else f"根据「{origin.label}」"
         if task.due_date is None:
-            self.tasks.update_fields(
+            event = self.tasks.update_fields(
                 session,
                 task,
                 {
@@ -485,20 +497,23 @@ class IngestService:
                     "due_time": cand.due.time.strftime("%H:%M") if cand.due.time else None,
                 },
                 actor=Actor.AGENT,
-                reason="enriched_from_duplicate",
+                reason=reason,
                 due_text=cand.due.text,
-                summary=f"根据「{origin.label}」补充截止日期（可撤销）",
+                summary=f"{where}补充截止日期（可撤销）",
             )
             task.due_needs_confirmation = cand.due.needs_confirmation
-        elif task.due_date == cand.due.date and task.due_time is None and cand.due.time is not None:
-            self.tasks.update_fields(
+            return event is not None
+        if task.due_date == cand.due.date and task.due_time is None and cand.due.time is not None:
+            event = self.tasks.update_fields(
                 session,
                 task,
                 {"due_time": cand.due.time.strftime("%H:%M")},
                 actor=Actor.AGENT,
-                reason="enriched_from_duplicate",
-                summary=f"根据「{origin.label}」补充具体时间（可撤销）",
+                reason=reason,
+                summary=f"{where}补充具体时间（可撤销）",
             )
+            return event is not None
+        return False
 
     def _apply_completion(
         self,

@@ -315,8 +315,9 @@ _DEADLINE_BEFORE = re.compile(
     r"(截止(日期|时间)?|截至|最晚|最迟|不晚于|期限|务必于|务必在|请于|请在|须于|须在|需于|需在|应于|应在|于|在|deadline|"
     r"due( date)?|due (by|on)|by|before|until|till|no later than|not later than|latest( by)?|on or before|prior to|"
     r"closes?( on)?|expires?( on)?|ends?( on)?|bis( zum| zur| spätestens)?|spätestens( am| bis| zum| bis zum)?|"
-    r"frist|abgabe( bis| am)?|fällig( am| bis)?|vor dem|einsendeschluss|anmeldeschluss|bewerbungsschluss|"
-    r"stichtag|zahlbar bis)\s*[:：为是]?\s*(the\s+|den\s+|dem\s+)?(\w+,?\s*)?$",
+    r"frist|abgabe( bis| am)?|fällig( am| bis)?|fälligkeit(sdatum)?( am)?|zahlungsziel|zahlungsfrist|vor dem|"
+    r"einsendeschluss|anmeldeschluss|bewerbungsschluss|stichtag|zahlbar bis|到期日(期)?)"
+    r"\s*[:：为是]?\s*(the\s+|den\s+|dem\s+)?(\w+,?\s*)?$",
     re.I,
 )
 _DEADLINE_AFTER = re.compile(r"^\s*(前|之前|以前|截止|为止|到期|at the latest|deadline|spätestens|fällig)", re.I)

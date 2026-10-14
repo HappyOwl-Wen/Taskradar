@@ -37,7 +37,7 @@ Definitions:
 | Completion cases | 6 | 5 |
 | Use | written and used while developing the rules | written separately; not used for tuning |
 
-## Results (`rules-1.3`)
+## Results (`rules-1.4`)
 
 ```powershell
 cd backend
@@ -47,17 +47,19 @@ cd backend
 
 | Metric | Development set | Held-out set |
 | --- | --- | --- |
-| Precision / recall / F1 | 1.00 / 1.00 / 1.00 (TP 24, predicted 24, expected 24) | 0.93 / 0.72 / 0.81 (TP 13, predicted 14, expected 18) |
-| Deadline date correct | 21/21 | 12/12 |
-| Deadline time correct | 21/21 | 11/12 |
+| Precision / recall / F1 | 1.00 / 1.00 / 1.00 (TP 24, predicted 24, expected 24) | 1.00 / 0.78 / 0.88 (TP 14, predicted 14, expected 18) |
+| Deadline date correct | 21/21 | 13/13 |
+| Deadline time correct | 21/21 | 12/13 |
 | "No deadline" kept empty | 3/3 | 1/1 (see history) |
 | Marketing/info cases with false tasks | 0/7 | 0/7 |
 | Merges correct / wrong / missed / flagged | 5/5 / 0 / 0 / 0 | 1/1 / 0 / 0 / 0 |
 | Completion detected / explicit-vs-hedged correct / right task | 6/6 / 6/6 / 4/4 | 3/5 / 3/5 / 0/2 |
-| Extractor time per case (Windows 11, Ryzen 9 7940H) | 1.3 ms | 0.8 ms |
+| Extractor time per case (Windows 11, Ryzen 9 7940H, three runs) | 0.7 – 0.8 ms | 0.7 ms |
 
 The development numbers show that the rules handle the phrasings they were built for; they are not evidence of
-generalisation. The held-out numbers are the honest estimate.
+generalisation. The held-out numbers are the honest estimate. One held-out case (h-en-01) became correct
+with `rules-1.4` after its failure had been analysed (see History); without it, `rules-1.3` and `rules-1.4`
+score the same on the held-out set: precision 1.00, recall 0.76 (TP 13 of 17).
 
 ### Held-out failures (analysis)
 
@@ -69,13 +71,13 @@ generalisation. The held-out numbers are the honest estimate.
 | h-zh-09 | Missed "请及时归还或续借" (library loan) | 归还 / 续借 are not in the action lexicon |
 | h-de-05 | Missed "Bitte holen Sie es … ab" (parcel) | The separable verb abholen is not in the action lexicon |
 | h-de-06 | Missed "Ihre Kopie des Mietvertrags fehlt noch. Frist: 25.10.2026." | A reminder that states what is missing instead of what to do |
-| h-en-01 | One wrong task and one miss | The task was built from "make sure the transfer arrives on time" (title "Pay arrives", no date) instead of "your rent … is due on November 1st" |
 | h-en-04 | Missed "oral exam slots must be booked by October 22" | The passive "must be booked" is not covered |
 | h-en-05, h-en-10 | Completion not detected | "has been confirmed" and "was submitted successfully" are not in the completion lexicon |
 
-Two weaknesses are not visible in the scores: task titles built from pronoun sentences ("Diese hochladen") are
-counted as correct when action and date match, and completion matching depends on the confirmation naming the
-same object as the request.
+Two weaknesses are not visible in the scores: task titles built from pronoun sentences ("Diese hochladen") or
+from a follow-up sentence (h-en-01: "Pay arrives" for *"make sure the transfer arrives on time"*) are counted
+as correct when action and date match, and completion matching depends on the confirmation naming the same
+object as the request.
 
 These are typical recall limits of hand-written rules; they motivate the optional LLM extractor, whose quality
 has **not** been measured yet (no API key was available while building this project).
@@ -91,6 +93,20 @@ has **not** been measured yet (no API key was available while building this proj
   shared the platform name "TUMonline". Platform and channel names no longer count as object evidence. Both
   evaluation sets gave identical results before and after; a regression test was added
   (`test_shared_platform_name_does_not_make_tasks_duplicates`).
+* **rules-1.3 → rules-1.4 (2026-10-14, real mailbox).** On a real mailbox, 10 of the open tasks had no
+  deadline. A local check that printed only counts and masked line layouts (no mail text was copied into this
+  project) found that 9 of these mails state no deadline at all; the tenth was a payment reminder whose due date
+  was a header line ("Due date: …") *above* the
+  instruction, separated by a status line. The rules only looked for such deadline lines *after* an
+  instruction. Now a preceding line with a deadline cue (up to three segments back) is used as well, unless
+  an earlier instruction lies in between or the line directly follows an earlier instruction (then it
+  belongs to that one); a status line with a verb but no obligation cue no longer counts as an instruction.
+  New cue words: *Fälligkeit(sdatum)*, *Zahlungsziel*, *Zahlungsfrist*, *到期日*. Regression tests were
+  added for English, German and Chinese headers, an ambiguous slash date and two negative cases
+  (`test_deadline_line_above_the_instruction` and the two tests after it). The development set is
+  unchanged. On the held-out set, h-en-01 ("your rent … is due on November 1st. Please make sure the
+  transfer arrives on time.") now gets the right date from the preceding sentence. That case's failure
+  had been analysed before, so this gain is not an independent measurement (see above).
 
 ## End-to-end performance
 

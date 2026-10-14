@@ -19,9 +19,21 @@ function Stat({ label, value, hint }: { label: string; value: ReactNode; hint?: 
   );
 }
 
-function MetricCard({ icon, title, children, breakdown }: { icon: ReactNode; title: string; children: ReactNode; breakdown?: Record<string, number> }) {
+function MetricCard({
+  icon,
+  title,
+  children,
+  breakdown,
+  labels,
+}: {
+  icon: ReactNode;
+  title: string;
+  children: ReactNode;
+  breakdown?: Record<string, number>;
+  labels?: Record<string, string>;
+}) {
   const { t } = useTranslation();
-  const entries = Object.entries(breakdown ?? {});
+  const entries = Object.entries(breakdown ?? {}).filter(([, v]) => v > 0);
   return (
     <Card>
       <CardHeader className="pb-3">
@@ -33,7 +45,8 @@ function MetricCard({ icon, title, children, breakdown }: { icon: ReactNode; tit
         <dl className="grid grid-cols-2 gap-4">{children}</dl>
         {entries.length ? (
           <p className="text-xs text-muted-foreground">
-            {t("insights.byStatus")}: {entries.map(([k, v]) => `${translateKey(`itemStatus.${k}`, translateKey(`status.${k}`, k))} ${v}`).join(" · ")}
+            {t("insights.byStatus")}:{" "}
+            {entries.map(([k, v]) => `${labels?.[k] ?? translateKey(`itemStatus.${k}`, translateKey(`status.${k}`, k))} ${v}`).join(" · ")}
           </p>
         ) : null}
       </CardContent>
@@ -76,9 +89,15 @@ export default function InsightsPage() {
             <Stat label={t("insights.mergesUndone")} value={m.dedup.merges_undone} />
             <Stat label={t("insights.wrongMergeRate")} value={formatPercent(m.dedup.wrong_merge_rate, 1)} />
           </MetricCard>
-          <MetricCard icon={<ThumbsUp className="size-4" />} title={t("insights.feedback")} breakdown={m.feedback.by_status}>
+          <MetricCard
+            icon={<ThumbsUp className="size-4" />}
+            title={t("insights.feedback")}
+            breakdown={{ ...m.feedback.by_status, dismissed: m.feedback.dismissed, merged: m.feedback.merged_into_other }}
+            labels={{ merged: t("insights.mergedAway") }}
+          >
             <Stat label={t("insights.accepted")} value={m.feedback.accepted} />
             <Stat label={t("insights.dismissedCount")} value={m.feedback.dismissed} />
+            <Stat label={t("insights.mergedAway")} value={m.feedback.merged_into_other} />
             <Stat label={t("insights.precisionProxy")} value={formatPercent(m.feedback.precision_proxy, 1)} />
             <Stat
               label={t("insights.autoChanges")}
