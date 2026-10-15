@@ -315,3 +315,112 @@ def test_dashboard_never_hides_unconfirmed_tasks_due_soon(api: Any) -> None:
     counts = dashboard["counts"]
     assert (counts["overdue"], counts["due_soon"], counts["due_soon_candidates"]) == (1, 1, 1)
     assert counts["needs_action"] == 1 and counts["candidates"] == 1  # the candidate, counted once
+
+
+def _duplicate_suggestion(api: Any, new_id: str, existing: dict[str, Any]) -> int:
+    from taskradar.db.session import transaction
+    from taskradar.domain.enums import SuggestionKind
+
+    c = api.container
+    with transaction(c.factory) as session:
+        task = c.tasks.get(session, new_id)
+        task.review_reasons = ["possible_duplicate"]
+        task.needs_review = True
+        suggestion = c.tasks.suggest(
+            session,
+            task,
+            kind=SuggestionKind.POSSIBLE_DUPLICATE,
+            payload={"other_task_id": existing["id"], "other_title": existing["title"], "score": 0.7},
+            evidence=[],
+            confidence=0.7,
+            reason="grey_zone_needs_user_decision",
+            dedupe_key=f"{new_id}:possible_duplicate:{existing['id']}",
+            related_task_id=existing["id"],
+            summary="test",
+        )
+        assert suggestion is not None
+        return suggestion.id
+
+
+def test_undoing_an_accepted_duplicate_reopens_the_question(api: Any) -> None:
+    existing = api.post("/api/tasks", json={"title": "Rückmeldung bezahlen", "due_date": "2026-11-15"}).json()
+    new = api.post("/api/tasks", json={"title": "Semesterbeitrag zahlen", "due_date": "2026-11-20"}).json()
+    api.post(f"/api/tasks/{new['id']}/status", json={"status": "candidate"})
+    suggestion_id = _duplicate_suggestion(api, new["id"], existing)
+
+    merged = api.post(f"/api/suggestions/{suggestion_id}/accept", json={"due_choice": "new"}).json()
+    assert merged["due_date"] == "2026-11-20" and merged["undo_event_id"]
+    assert api.get(f"/api/tasks/{new['id']}").json()["status"] == "dismissed"
+
+    api.post(f"/api/events/{merged['undo_event_id']}/undo").raise_for_status()
+    assert api.get(f"/api/tasks/{existing['id']}").json()["due_date"] == "2026-11-15"
+    restored = api.get(f"/api/tasks/{new['id']}").json()
+    assert restored["status"] == "candidate" and "possible_duplicate" in restored["review_reasons"]
+    assert [s["id"] for s in api.get("/api/suggestions").json()["items"]] == [suggestion_id]  # decide again
+
+
+def test_keeping_tasks_separate_clears_the_duplicate_flag_and_can_be_undone(api: Any) -> None:
+    existing = api.post("/api/tasks", json={"title": "Visa appointment", "due_date": "2026-11-02"}).json()
+    new = api.post("/api/tasks", json={"title": "Visa documents", "due_date": "2026-11-02"}).json()
+    api.post(f"/api/tasks/{new['id']}/status", json={"status": "candidate"})
+    suggestion_id = _duplicate_suggestion(api, new["id"], existing)
+
+    kept = api.post(f"/api/suggestions/{suggestion_id}/reject").json()
+    assert kept["id"] == new["id"] and kept["status"] == "candidate"
+    assert "possible_duplicate" not in kept["review_reasons"] and kept["needs_review"] is False
+    assert api.get("/api/suggestions").json()["items"] == []
+    assert api.get(f"/api/tasks/{existing['id']}").json()["status"] == "confirmed"  # both tasks stay
+
+    api.post(f"/api/events/{kept['undo_event_id']}/undo").raise_for_status()
+    again = api.get(f"/api/tasks/{new['id']}").json()
+    assert again["review_reasons"] == ["possible_duplicate"] and again["needs_review"] is True
+    assert [s["id"] for s in api.get("/api/suggestions").json()["items"]] == [suggestion_id]
+
+
+def test_undo_ids_for_status_changes_and_batches(api: Any) -> None:
+    a = api.post("/api/tasks", json={"title": "Formular A"}).json()
+    b = api.post("/api/tasks", json={"title": "Formular B"}).json()
+    for task in (a, b):
+        api.post(f"/api/tasks/{task['id']}/status", json={"status": "candidate"})
+
+    confirmed = api.post(f"/api/tasks/{a['id']}/status", json={"status": "confirmed"}).json()
+    api.post(f"/api/events/{confirmed['undo_event_id']}/undo").raise_for_status()
+    assert api.get(f"/api/tasks/{a['id']}").json()["status"] == "candidate"
+    unchanged = api.post(f"/api/tasks/{a['id']}/status", json={"status": "candidate"}).json()
+    assert unchanged["undo_event_id"] is None  # nothing changed, nothing to undo
+
+    batch = api.post("/api/tasks/batch", json={"ids": [a["id"], b["id"]], "action": "dismiss"}).json()
+    assert batch["count"] == 2 and len(batch["undo_event_ids"]) == 2
+    for event_id in batch["undo_event_ids"]:
+        api.post(f"/api/events/{event_id}/undo").raise_for_status()
+    assert {api.get(f"/api/tasks/{t['id']}").json()["status"] for t in (a, b)} == {"candidate"}
+
+
+def test_undoing_an_accepted_status_suggestion(api: Any) -> None:
+    from taskradar.db.session import transaction
+    from taskradar.domain.enums import SuggestionKind
+
+    task = api.post("/api/tasks", json={"title": "Bescheinigung hochladen"}).json()
+    c = api.container
+    with transaction(c.factory) as session:
+        suggestion = c.tasks.suggest(
+            session,
+            c.tasks.get(session, task["id"]),
+            kind=SuggestionKind.MARK_COMPLETED,
+            payload={},
+            evidence=[],
+            confidence=0.8,
+            reason="completion_signal",
+            dedupe_key=f"{task['id']}:mark_completed:test",
+            summary="test",
+        )
+        assert suggestion is not None
+        suggestion_id = suggestion.id
+
+    done = api.post(f"/api/suggestions/{suggestion_id}/accept").json()
+    assert done["status"] == "completed"
+    api.post(f"/api/events/{done['undo_event_id']}/undo").raise_for_status()
+    assert api.get(f"/api/tasks/{task['id']}").json()["status"] == "confirmed"
+    assert [s["id"] for s in api.get("/api/suggestions").json()["items"]] == [suggestion_id]
+    # A second undo of the same decision is refused instead of silently doing something else.
+    assert api.post(f"/api/events/{done['undo_event_id']}/undo").status_code == 409

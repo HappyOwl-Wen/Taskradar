@@ -22,6 +22,7 @@ from taskradar.db.models import (
     Message,
     SyncJob,
     Task,
+    TaskEvent,
     TaskLink,
     TaskSource,
     TaskSuggestion,
@@ -32,6 +33,7 @@ from taskradar.domain.enums import (
     ActionType,
     Actor,
     Category,
+    EventType,
     Priority,
     TaskStatus,
     TimeSemantics,
@@ -439,7 +441,8 @@ def _remove_calendar_events(c: Container, task_ids: Iterable[str]) -> list[str]:
 def change_status(task_id: str, body: StatusBody, c: Container = Depends(get_container)) -> dict[str, Any]:
     with transaction(c.factory) as session:
         task = c.tasks.get(session, task_id)
-        c.tasks.change_status(session, task, body.status, actor=Actor.USER, reason=body.note)
+        event = c.tasks.change_status(session, task, body.status, actor=Actor.USER, reason=body.note)
+        undo_event_id = event.id if event is not None else None
     not_removed: list[str] = []
     if body.status == TaskStatus.CONFIRMED:
         _maybe_auto_calendar(c, task_id)
@@ -449,6 +452,7 @@ def change_status(task_id: str, body: StatusBody, c: Container = Depends(get_con
         detail = _detail(c, session, task_id)
     if not_removed:
         detail["calendar_warning"] = "event_not_removed"
+    detail["undo_event_id"] = undo_event_id  # the change just made, for an "undo" button
     return detail
 
 
@@ -471,18 +475,26 @@ _BATCH_STATUS = {
 def batch(body: BatchBody, c: Container = Depends(get_container)) -> dict[str, Any]:
     target = _BATCH_STATUS[body.action]
     changed: list[str] = []
+    undo_event_ids: list[int] = []
     with transaction(c.factory) as session:
         for task_id in dict.fromkeys(body.ids):
             task = c.tasks.get(session, task_id)
-            if c.tasks.change_status(session, task, target, actor=Actor.USER, reason=f"batch:{body.action}"):
+            event = c.tasks.change_status(session, task, target, actor=Actor.USER, reason=f"batch:{body.action}")
+            if event is not None:
                 changed.append(task_id)
+                undo_event_ids.append(event.id)
     not_removed: list[str] = []
     if target == TaskStatus.CONFIRMED:
         for task_id in changed:
             _maybe_auto_calendar(c, task_id)
     elif target == TaskStatus.DISMISSED:
         not_removed = _remove_calendar_events(c, changed)
-    return {"changed": changed, "count": len(changed), "calendar_not_removed": not_removed}
+    return {
+        "changed": changed,
+        "count": len(changed),
+        "calendar_not_removed": not_removed,
+        "undo_event_ids": undo_event_ids,
+    }
 
 
 class MergeBody(BaseModel):
@@ -496,11 +508,14 @@ def merge(task_id: str, body: MergeBody, c: Container = Depends(get_container)) 
     with transaction(c.factory) as session:
         source = c.tasks.get(session, task_id)
         target = c.tasks.get(session, body.into_task_id)
-        c.tasks.merge_tasks(session, source, target, actor=Actor.USER, due_choice=body.due_choice)
+        event = c.tasks.merge_tasks(session, source, target, actor=Actor.USER, due_choice=body.due_choice)
         c.calendar.mark_out_of_sync(session, target)  # the kept task may have taken over the other deadline
+        undo_event_id = event.id
     _remove_calendar_events(c, [task_id])  # the merged-away task is dismissed
     with transaction(c.factory) as session:
-        return _detail(c, session, body.into_task_id)
+        detail = _detail(c, session, body.into_task_id)
+    detail["undo_event_id"] = undo_event_id
+    return detail
 
 
 @router.delete("/tasks/{task_id}")
@@ -567,10 +582,13 @@ def accept_suggestion(
         task_id = suggestion.task_id
         kind = suggestion.kind
         target_id = suggestion.related_task_id if kind == "possible_duplicate" else task_id
+        undo_event_id = _resolution_event_id(session, suggestion)
     if kind in ("possible_duplicate", "mark_dismissed"):  # both dismiss suggestion.task_id
         _remove_calendar_events(c, [task_id])
     with transaction(c.factory) as session:
-        return _detail(c, session, target_id or task_id)
+        detail = _detail(c, session, target_id or task_id)
+    detail["undo_event_id"] = undo_event_id
+    return detail
 
 
 @router.post("/suggestions/{suggestion_id}/reject")
@@ -578,8 +596,21 @@ def reject_suggestion(suggestion_id: int, c: Container = Depends(get_container))
     with transaction(c.factory) as session:
         suggestion = c.tasks.reject_suggestion(session, suggestion_id, actor=Actor.USER)
         task_id = suggestion.task_id
+        undo_event_id = _resolution_event_id(session, suggestion)
     with transaction(c.factory) as session:
-        return _detail(c, session, task_id)
+        detail = _detail(c, session, task_id)
+    detail["undo_event_id"] = undo_event_id
+    return detail
+
+
+def _resolution_event_id(session: Session, suggestion: TaskSuggestion) -> int | None:
+    """The event that records the decision on ``suggestion`` (undoing it reverts the decision)."""
+    events = session.scalars(
+        select(TaskEvent)
+        .where(TaskEvent.task_id == suggestion.task_id, TaskEvent.event_type == EventType.SUGGESTION_RESOLVED.value)
+        .order_by(TaskEvent.id.desc())
+    )
+    return next((e.id for e in events if (e.data or {}).get("suggestion_id") == suggestion.id), None)
 
 
 # ---------------------------------------------------------------------------------------------

@@ -566,6 +566,8 @@ class TaskService:
                 extra["split_task_id"] = new_task.id
         elif event.event_type == EventType.MERGED.value:
             self._unmerge(session, task, data)
+        elif event.event_type == EventType.SUGGESTION_RESOLVED.value:
+            self._reopen_suggestion(session, task, data, actor=actor)
         else:
             raise NotRevertible("This change cannot be undone")
 
@@ -582,6 +584,27 @@ class TaskService:
         )
         event.reverted_by_event_id = revert.id
         return revert
+
+    def _reopen_suggestion(self, session: Session, task: Task, data: dict[str, Any], *, actor: Actor) -> None:
+        """Undo a decision on a suggestion: revert what accepting it changed and make it pending again."""
+        suggestion = session.get(TaskSuggestion, data.get("suggestion_id"))
+        if suggestion is None:
+            raise RevertConflict("The suggestion no longer exists")
+        decided = SuggestionStatus.ACCEPTED.value if data.get("accepted") else SuggestionStatus.REJECTED.value
+        allowed = (decided, SuggestionStatus.OBSOLETE.value, SuggestionStatus.PENDING.value)
+        if suggestion.status not in allowed:
+            raise RevertConflict("The suggestion was decided again since; undo is no longer possible")
+        applied_id = data.get("applied_event_id")
+        if applied_id is not None:
+            applied = session.get(TaskEvent, applied_id)
+            if applied is not None and applied.reverted_at is None:
+                self.revert_event(session, applied_id, actor=actor)  # RevertConflict if the task changed since
+        suggestion.status = SuggestionStatus.PENDING.value
+        suggestion.resolved_at = None
+        cleared = [r for r in data.get("cleared_review_reasons", []) if r not in (task.review_reasons or [])]
+        if cleared:
+            task.review_reasons = [*(task.review_reasons or []), *cleared]
+            task.needs_review = bool(data.get("needs_review_before", True))
 
     def _detach_source(self, session: Session, task: Task, data: dict[str, Any]) -> Task | None:
         source = session.get(TaskSource, data.get("task_source_id"))
@@ -666,6 +689,7 @@ class TaskService:
         source.updated_at = now
         target.updated_at = now
         session.add(TaskLink(task_id=source.id, other_task_id=target.id, kind="merged_into", created_at=now))
+        closed: list[int] = []
         for sugg in session.scalars(
             select(TaskSuggestion).where(
                 TaskSuggestion.status == SuggestionStatus.PENDING.value,
@@ -676,6 +700,7 @@ class TaskService:
         ):
             sugg.status = SuggestionStatus.OBSOLETE.value
             sugg.resolved_at = now
+            closed.append(sugg.id)
         self.record(
             session,
             source,
@@ -696,6 +721,7 @@ class TaskService:
                 "source_before": before_status,
                 "due_choice": due_choice if conflict else None,
                 "target_due_before": target_due_before,
+                "closed_suggestion_ids": closed,
             },
             revertible=True,
         )
@@ -721,6 +747,12 @@ class TaskService:
             for key, value in data["target_due_before"].items():
                 setattr(target, key, _from_json(key, value))
             target.due_version += 1
+        # The duplicate question is open again: the user can decide anew.
+        for sugg_id in data.get("closed_suggestion_ids", []):
+            sugg = session.get(TaskSuggestion, sugg_id)
+            if sugg is not None and sugg.status in (SuggestionStatus.OBSOLETE.value, SuggestionStatus.ACCEPTED.value):
+                sugg.status = SuggestionStatus.PENDING.value
+                sugg.resolved_at = None
         source.updated_at = self.clock()
 
     def link_tasks(self, session: Session, task: Task, other: Task, kind: str = "related") -> None:
@@ -788,14 +820,17 @@ class TaskService:
         suggestion = self._pending_suggestion(session, suggestion_id)
         task = suggestion.task
         kind = SuggestionKind(suggestion.kind)
+        applied: TaskEvent | None = None
         if kind == SuggestionKind.MARK_COMPLETED:
-            self.change_status(session, task, TaskStatus.COMPLETED, actor=actor, reason="accepted_suggestion")
+            applied = self.change_status(session, task, TaskStatus.COMPLETED, actor=actor, reason="accepted_suggestion")
         elif kind == SuggestionKind.MARK_DISMISSED:
-            self.change_status(session, task, TaskStatus.DISMISSED, actor=actor, reason="accepted_suggestion")
+            applied = self.change_status(session, task, TaskStatus.DISMISSED, actor=actor, reason="accepted_suggestion")
         elif kind == SuggestionKind.MARK_WAITING:
-            self.change_status(session, task, TaskStatus.WAITING_FOR_REPLY, actor=actor, reason="accepted_suggestion")
+            applied = self.change_status(
+                session, task, TaskStatus.WAITING_FOR_REPLY, actor=actor, reason="accepted_suggestion"
+            )
         elif kind == SuggestionKind.UPDATE_DUE:
-            self.update_fields(
+            applied = self.update_fields(
                 session,
                 task,
                 {"due_date": suggestion.payload.get("due_date"), "due_time": suggestion.payload.get("due_time")},
@@ -808,7 +843,7 @@ class TaskService:
             other = session.get(Task, suggestion.related_task_id) if suggestion.related_task_id else None
             if other is None:
                 raise TaskError("The related task no longer exists", code="related_task_missing")
-            self.merge_tasks(session, task, other, actor=actor, due_choice=due_choice)
+            applied = self.merge_tasks(session, task, other, actor=actor, due_choice=due_choice)
         suggestion.status = SuggestionStatus.ACCEPTED.value
         suggestion.resolved_at = self.clock()
         self.record(
@@ -817,7 +852,13 @@ class TaskService:
             EventType.SUGGESTION_RESOLVED,
             actor,
             "已采纳建议",
-            data={"suggestion_id": suggestion.id, "kind": kind.value, "accepted": True},
+            data={
+                "suggestion_id": suggestion.id,
+                "kind": kind.value,
+                "accepted": True,
+                "applied_event_id": applied.id if applied is not None else None,
+            },
+            revertible=True,
         )
         return suggestion
 
@@ -825,13 +866,32 @@ class TaskService:
         suggestion = self._pending_suggestion(session, suggestion_id)
         suggestion.status = SuggestionStatus.REJECTED.value
         suggestion.resolved_at = self.clock()
+        task = suggestion.task
+        data: dict[str, Any] = {"suggestion_id": suggestion.id, "kind": suggestion.kind, "accepted": False}
+        if suggestion.kind == SuggestionKind.POSSIBLE_DUPLICATE.value and "possible_duplicate" in (
+            task.review_reasons or []
+        ):
+            still_open = session.scalar(
+                select(TaskSuggestion.id).where(
+                    TaskSuggestion.task_id == task.id,
+                    TaskSuggestion.kind == SuggestionKind.POSSIBLE_DUPLICATE.value,
+                    TaskSuggestion.status == SuggestionStatus.PENDING.value,
+                    TaskSuggestion.id != suggestion.id,
+                )
+            )
+            if still_open is None:
+                data["cleared_review_reasons"] = ["possible_duplicate"]
+                data["needs_review_before"] = task.needs_review
+                task.review_reasons = [r for r in task.review_reasons if r != "possible_duplicate"]
+                task.needs_review = task.needs_review and bool(task.review_reasons)
         self.record(
             session,
-            suggestion.task,
+            task,
             EventType.SUGGESTION_RESOLVED,
             actor,
-            "已拒绝建议",
-            data={"suggestion_id": suggestion.id, "kind": suggestion.kind, "accepted": False},
+            "保留为独立任务" if suggestion.kind == SuggestionKind.POSSIBLE_DUPLICATE.value else "已拒绝建议",
+            data=data,
+            revertible=True,
         )
         return suggestion
 
