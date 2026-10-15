@@ -61,7 +61,7 @@ mail or document and quotes the sentence it came from. Details: [ARCHITECTURE.md
 | Lifecycle | Candidate → Confirmed → In progress / Waiting for reply → Completed / Dismissed; completion evidence; explicit deadline changes applied with undo | implemented, tested |
 | Reminders | Overdue / 24 h / 3 days / 7 days (configurable), date-only deadlines count until the end of the day, DST-safe, deduplicated, stop after completion | implemented, tested |
 | Gmail | OAuth (installed-app flow with PKCE), `gmail.readonly` only, last 30 days, incremental history sync, request pacing, retries with backoff, attachments | implemented, tested with a fake Gmail; **verified with one real account**: initial and incremental sync, attachments, automatic recovery from Google's rate limit (request pacing was added afterwards and is tested with fakes only) |
-| Google Calendar | separate OAuth (`calendar.app.created`), preview → confirm → write into a dedicated "TaskRadar" calendar, idempotent event IDs, no invitations | implemented, tested with a fake Calendar; connecting a real account verified, **writing an event to a real calendar not verified yet** |
+| Google Calendar | separate OAuth (`calendar.app.created`), preview → confirm → write into a dedicated "TaskRadar" calendar, idempotent event IDs, no invitations | implemented, tested with a fake Calendar; **verified with one real account**: calendar created, all-day deadline written, updated in place after a date change (same event, no duplicate), unchanged re-write skipped; a disabled Calendar API is explained with Google's enable link. Removing events from TaskRadar is not implemented |
 | LLM extraction | OpenAI structured outputs or OpenAI-compatible endpoint, strict schema validation, bounded retries, rules fallback, data minimisation, consent required | implemented, tested with a mocked provider; **real API not verified** (needs your key) |
 | Dashboard | Dashboard, Review inbox with evidence panel, All tasks, Task detail with history/undo, Sources, Settings, Insights; dark/light; zh/en | implemented, unit-tested, verified in a browser |
 | Background | scheduled Gmail sync, folder scans, reminder checks, automatic retries, restart recovery, optional Windows autostart (only after confirmation) | implemented, tested |
@@ -208,9 +208,11 @@ TaskRadar.cmd       double-click launcher       Setup.cmd   one-time setup
   ("归还/续借"), parcel pick-ups ("abholen"), passive bookings ("must be booked") and some completion phrasings
   ("has been confirmed", "was submitted successfully"). Titles can be vague when the instruction uses a pronoun
   ("Diese hochladen"); the evidence quote still shows the full context.
-* Gmail sync has been exercised with one real account. Writing events to a real Google Calendar and the OpenAI
-  path are implemented against the official APIs and covered by tests with fakes and mocks, but have **not**
-  been exercised with a real calendar or API key yet.
+* Gmail sync and calendar writing have been exercised with one real account. The OpenAI path is implemented
+  against the official API and covered by tests with a mocked provider, but has **not** been exercised with a
+  real API key yet.
+* TaskRadar writes and updates its calendar events but cannot remove them yet; delete them in Google Calendar
+  (or remove the whole "TaskRadar" calendar).
 * Desktop toasts use Windows PowerShell/WinRT and depend on the Windows notification settings (there is a test
   button); autostart, Explorer integration and toasts are Windows-only.
 * OCR covers printed Chinese (simplified), German and English; handwriting and low-quality photos are not
