@@ -412,6 +412,7 @@ const en: Messages = {
   taskItem: {
     select: "Select “{{title}}”",
     suggestionsHint: "{{count}} pending suggestion(s)",
+    calendar: { synced: "In Google Calendar", out_of_sync: "Changed since; the calendar event needs updating", failed: "Writing to Google Calendar failed" },
   },
   issue: {
     date_conflict: { label: "Deadline conflict", hint: "The sources give different deadlines; decide which one is right." },
@@ -623,6 +624,8 @@ const en: Messages = {
     saveAndConfirm: "Save & confirm",
     clearDue: "Remove deadline",
     timeHint: "Leave empty for a date-only deadline; it is never filled in as 23:59.",
+    discardTitle: "Discard your changes?",
+    discardDescription: "If you close now, what you entered or changed is not saved.",
   },
   calendar: {
     title: "Google Calendar",

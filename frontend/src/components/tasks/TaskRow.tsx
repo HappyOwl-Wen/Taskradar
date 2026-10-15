@@ -1,4 +1,4 @@
-import { Lightbulb } from "lucide-react";
+import { CalendarCheck, CalendarClock, CalendarX, Lightbulb } from "lucide-react";
 import type { KeyboardEvent, ReactNode } from "react";
 import { Link } from "react-router";
 import { useTranslation } from "react-i18next";
@@ -19,6 +19,23 @@ function SuggestionHint({ count }: { count: number }) {
         <Lightbulb className="size-3.5" aria-hidden />
         <span className="tabular-nums">{count}</span>
         <span className="sr-only">{t("taskItem.suggestionsHint", { count })}</span>
+      </span>
+    </Tip>
+  );
+}
+
+/** Whether the task is in Google Calendar (only shown when it is, or when the event needs attention). */
+function CalendarHint({ status }: { status: string | null }) {
+  const { t } = useTranslation();
+  if (status !== "synced" && status !== "out_of_sync" && status !== "failed") return null;
+  const Icon = status === "synced" ? CalendarCheck : status === "out_of_sync" ? CalendarClock : CalendarX;
+  const tone = status === "synced" ? "text-muted-foreground" : status === "out_of_sync" ? "text-high" : "text-destructive";
+  const label = t(`taskItem.calendar.${status}`);
+  return (
+    <Tip content={label}>
+      <span className={cn("inline-flex", tone)}>
+        <Icon className="size-3.5" aria-hidden />
+        <span className="sr-only">{label}</span>
       </span>
     </Tip>
   );
@@ -115,6 +132,7 @@ export function TaskListItem({
       {badge}
       {!closed && !hideIssues ? <IssueSummary issues={issues} /> : null}
       <SuggestionHint count={closed ? 0 : task.pending_suggestions} />
+      {!closed ? <CalendarHint status={task.calendar_status} /> : null}
       <CategoryBadge category={task.category} />
       <SourceKinds kinds={task.source_kinds} count={task.source_count} />
     </>

@@ -1,8 +1,8 @@
 import { Sparkles } from "lucide-react";
-import { useRef, useState, type FormEvent, type KeyboardEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { ConfirmDialog, Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Checkbox, Field, Input, Label, Textarea } from "@/components/ui/form";
 import { SimpleSelect } from "@/components/ui/select";
 import { api } from "@/lib/api";
@@ -26,13 +26,40 @@ export function TaskEditDialog({
   offerConfirm?: boolean;
   onSaved?: (task: TaskDetail) => void;
 }) {
+  const { t } = useTranslation();
+  const [dirty, setDirty] = useState(false);
+  const [confirmDiscard, setConfirmDiscard] = useState(false);
+  // Escape, the close button, a click outside and "Cancel" all ask first when something was typed.
+  const requestClose = () => (dirty ? setConfirmDiscard(true) : onOpenChange(false));
   // The form is mounted only while the dialog is open, so it always starts from the current task.
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-xl">
-        <TaskEditForm task={task} offerConfirm={offerConfirm} onClose={() => onOpenChange(false)} onSaved={onSaved} />
-      </DialogContent>
-    </Dialog>
+    <>
+      <Dialog open={open} onOpenChange={(o) => (o ? onOpenChange(true) : requestClose())}>
+        <DialogContent className="sm:max-w-xl">
+          <TaskEditForm
+            task={task}
+            offerConfirm={offerConfirm}
+            onCancel={requestClose}
+            onClose={() => onOpenChange(false)}
+            onSaved={onSaved}
+            onDirtyChange={setDirty}
+          />
+        </DialogContent>
+      </Dialog>
+      <ConfirmDialog
+        open={confirmDiscard}
+        onOpenChange={setConfirmDiscard}
+        title={t("detail.discardTitle")}
+        description={t("detail.discardDescription")}
+        confirmLabel={t("settings.discard")}
+        cancelLabel={t("settings.keepEditing")}
+        destructive
+        onConfirm={() => {
+          setConfirmDiscard(false);
+          onOpenChange(false);
+        }}
+      />
+    </>
   );
 }
 
@@ -103,16 +130,29 @@ function QuickEntry({ onParsed }: { onParsed: (parsed: QuickParse) => void }) {
 function TaskEditForm({
   task,
   offerConfirm,
+  onCancel,
   onClose,
   onSaved,
+  onDirtyChange,
 }: {
   task?: TaskDetail;
   offerConfirm: boolean;
+  /** Close without saving (asks first when there are edits). */
+  onCancel: () => void;
+  /** Close after saving. */
   onClose: () => void;
   onSaved?: (task: TaskDetail) => void;
+  onDirtyChange: (dirty: boolean) => void;
 }) {
   const { t } = useTranslation();
   const [form, setForm] = useState<FormState>(() => initialState(task));
+  const dirty = task
+    ? Object.keys(diffPatch(task, form)).length > 0
+    : Boolean(form.title.trim() || form.description.trim() || form.action_required.trim() || form.due_date);
+  useEffect(() => {
+    onDirtyChange(dirty);
+    return () => onDirtyChange(false);
+  }, [dirty, onDirtyChange]);
   const [confirmAfter, setConfirmAfter] = useState(false);
   const [parsed, setParsed] = useState<QuickParse | null>(null);
   const applyQuick = (p: QuickParse) => {
@@ -232,7 +272,7 @@ function TaskEditForm({
         </Label>
       ) : null}
       <DialogFooter>
-        <Button type="button" variant="outline" onClick={onClose} disabled={save.isPending}>
+        <Button type="button" variant="outline" onClick={onCancel} disabled={save.isPending}>
           {t("common.cancel")}
         </Button>
         <Button type="submit" disabled={save.isPending || !form.title.trim()}>

@@ -73,3 +73,41 @@ describe("TaskEditDialog quick entry", () => {
     expect(create.mock.calls[0][0]).toMatchObject({ due_date: "2026-10-20", due_text: null });
   });
 });
+
+describe("TaskEditDialog unsaved edits", () => {
+  beforeAll(async () => {
+    await i18n.changeLanguage("zh-CN");
+  });
+
+  it("closes at once when nothing was entered", async () => {
+    const onOpenChange = vi.fn();
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <TaskEditDialog open onOpenChange={onOpenChange} />
+      </QueryClientProvider>,
+    );
+    await userEvent.click(screen.getByRole("button", { name: "取消" }));
+    expect(onOpenChange).toHaveBeenCalledWith(false);
+  });
+
+  it("asks before discarding what was typed", async () => {
+    const onOpenChange = vi.fn();
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <TaskEditDialog open onOpenChange={onOpenChange} />
+      </QueryClientProvider>,
+    );
+    await userEvent.type(screen.getByLabelText("标题"), "Steuererklärung");
+    await userEvent.click(screen.getByRole("button", { name: "取消" }));
+    expect(onOpenChange).not.toHaveBeenCalled();
+    expect(await screen.findByRole("alertdialog")).toHaveTextContent("放弃未保存的修改？");
+
+    await userEvent.click(screen.getByRole("button", { name: "继续编辑" }));
+    expect(onOpenChange).not.toHaveBeenCalled();
+    expect(screen.getByLabelText("标题")).toHaveValue("Steuererklärung");
+
+    await userEvent.keyboard("{Escape}");
+    await userEvent.click(await screen.findByRole("button", { name: "放弃更改" }));
+    expect(onOpenChange).toHaveBeenCalledWith(false);
+  });
+});

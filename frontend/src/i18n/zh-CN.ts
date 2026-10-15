@@ -407,6 +407,7 @@ const zhCN = {
   taskItem: {
     select: "选择「{{title}}」",
     suggestionsHint: "{{count}} 条待处理建议",
+    calendar: { synced: "已写入 Google 日历", out_of_sync: "任务已修改，日历事件需要更新", failed: "写入 Google 日历失败" },
   },
   issue: {
     date_conflict: { label: "截止日期冲突", hint: "来源中出现了不一致的截止日期，请确认以哪个为准。" },
@@ -611,6 +612,8 @@ const zhCN = {
     saveAndConfirm: "保存并确认",
     clearDue: "清除截止日期",
     timeHint: "留空表示只有日期，不会自动补成 23:59。",
+    discardTitle: "放弃未保存的修改？",
+    discardDescription: "关闭后，刚才填写或修改的内容不会保存。",
   },
   calendar: {
     title: "Google 日历",

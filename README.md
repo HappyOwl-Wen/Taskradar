@@ -158,7 +158,7 @@ cd backend
 .venv\Scripts\python.exe -m taskradar eval    # extraction / dedup evaluation on the labelled dataset
 
 cd ..\frontend
-npm run lint; npm run typecheck; npm test      # 62 tests
+npm run lint; npm run typecheck; npm test      # 64 tests
 ```
 
 The workflow in `.github/workflows/ci.yml` runs the same checks on Ubuntu, with Tesseract and the same pinned
