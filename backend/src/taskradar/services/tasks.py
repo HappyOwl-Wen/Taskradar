@@ -81,6 +81,13 @@ class NotRevertible(TaskError):
     status_code = 409
 
 
+class SampleMismatch(TaskError):
+    """Demo/test data and real tasks are kept apart: they are never merged."""
+
+    code = "sample_mismatch"
+    status_code = 409
+
+
 @dataclass
 class Origin:
     key: str
@@ -199,14 +206,19 @@ class TaskService:
             user_locked_fields=list(task.user_locked_fields or []),
         )
 
-    def load_snapshots(self, session: Session, since_days: int = 400) -> list[TaskSnapshot]:
+    def load_snapshots(
+        self, session: Session, since_days: int = 400, *, sample: bool | None = None
+    ) -> list[TaskSnapshot]:
+        """Tasks a new item may be matched with; ``sample`` keeps demo/test data and real data apart."""
         cutoff = self.clock() - dt.timedelta(days=since_days)
-        tasks = session.scalars(
+        stmt = (
             select(Task)
             .options(selectinload(Task.sources).selectinload(TaskSource.message))
             .where(Task.updated_at >= cutoff)
-        ).all()
-        return [self.snapshot(t) for t in tasks]
+        )
+        if sample is not None:
+            stmt = stmt.where(Task.sample.is_(sample))
+        return [self.snapshot(t) for t in session.scalars(stmt).all()]
 
     # ------------------------------------------------------------------------------------------
     # Events
@@ -265,9 +277,11 @@ class TaskService:
         actor: Actor = Actor.AGENT,
         status: TaskStatus = TaskStatus.CANDIDATE,
         summary: str | None = None,
+        sample: bool = False,
     ) -> Task:
         now = self.clock()
         task = Task(
+            sample=sample,
             title=cand.title[:200],
             description=cand.description,
             category=cand.category.value,
@@ -489,6 +503,10 @@ class TaskService:
             locked = set(task.user_locked_fields or [])
             locked.update("due" if k in _DUE_FIELDS else k for k in after if k in USER_EDITABLE_FIELDS)
             task.user_locked_fields = sorted(locked)
+        if actor == Actor.USER and _DUE_FIELDS & set(after) and "deadline_changed" in (task.review_reasons or []):
+            # The user set the date themselves: the automatic change no longer needs a look.
+            task.review_reasons = [r for r in task.review_reasons if r != "deadline_changed"]
+            task.needs_review = task.needs_review and bool(task.review_reasons)
         if {"title", "action_required"} & set(after):
             with contextlib.suppress(ValueError):  # unknown legacy action type: keep the old fingerprint
                 task.fingerprint = fingerprint(ActionType(task.action_type), list(task.entities or []), task.title)
@@ -531,6 +549,51 @@ class TaskService:
             return TimeSemantics(value).value
         return value or ""
 
+    def set_sample(self, session: Session, task: Task, sample: bool, *, actor: Actor = Actor.USER) -> TaskEvent | None:
+        """Mark a task as demo/test data (or back as a real task); undoable like a field change."""
+        if task.sample == sample:
+            return None
+        task.sample = sample
+        task.updated_at = self.clock()
+        return self.record(
+            session,
+            task,
+            EventType.FIELDS_UPDATED,
+            actor,
+            "标记为测试数据（不计入统计、不提醒、不写入日历）" if sample else "取消测试数据标记",
+            data={"before": {"sample": not sample}, "after": {"sample": sample}},
+            revertible=True,
+        )
+
+    @staticmethod
+    def flag_review(task: Task, reason: str, event: TaskEvent) -> None:
+        """Ask the user to look at an automatic change; undoing ``event`` removes the flag again."""
+        added = [] if reason in (task.review_reasons or []) else [reason]
+        event.data = {**(event.data or {}), "added_review_reasons": added, "needs_review_before": task.needs_review}
+        task.review_reasons = [*(task.review_reasons or []), *added]
+        task.needs_review = True
+
+    def resolve_review(
+        self, session: Session, task: Task, reasons: list[str], *, actor: Actor = Actor.USER
+    ) -> TaskEvent | None:
+        """The user has checked a flagged point (e.g. an automatically changed deadline) and keeps it as is."""
+        cleared = [r for r in reasons if r in (task.review_reasons or [])]
+        if not cleared:
+            return None
+        before = task.needs_review
+        task.review_reasons = [r for r in task.review_reasons if r not in cleared]
+        task.needs_review = task.needs_review and bool(task.review_reasons)
+        task.updated_at = self.clock()
+        return self.record(
+            session,
+            task,
+            EventType.REVIEW_RESOLVED,
+            actor,
+            "已核实：保留新的截止日期" if cleared == ["deadline_changed"] else "已核实",
+            data={"cleared_review_reasons": cleared, "needs_review_before": before},
+            revertible=True,
+        )
+
     # ------------------------------------------------------------------------------------------
     # Undo
     # ------------------------------------------------------------------------------------------
@@ -560,6 +623,14 @@ class TaskService:
                 setattr(task, key, _from_json(key, value))
             if _DUE_FIELDS & set(data["after"]):
                 task.due_version += 1
+            added = data.get("added_review_reasons") or []
+            if added:  # the flag that asked the user to check this change
+                task.review_reasons = [r for r in (task.review_reasons or []) if r not in added]
+                task.needs_review = bool(data.get("needs_review_before", False))
+        elif event.event_type == EventType.REVIEW_RESOLVED.value:
+            restored = [r for r in data.get("cleared_review_reasons", []) if r not in (task.review_reasons or [])]
+            task.review_reasons = [*(task.review_reasons or []), *restored]
+            task.needs_review = bool(data.get("needs_review_before", True))
         elif event.event_type == EventType.SOURCE_ATTACHED.value:
             new_task = self._detach_source(session, task, data)
             if new_task is not None:
@@ -637,6 +708,7 @@ class TaskService:
                 review_reasons=["split_from_merge"],
                 actor=Actor.USER,
                 summary=f"从「{task.title}」拆分为独立任务",
+                sample=task.sample,
             )
             candidate.decision = "split_by_user"
             return new_task
@@ -662,6 +734,8 @@ class TaskService:
         """
         if source.id == target.id:
             raise TaskError("A task cannot be merged into itself", code="invalid_merge")
+        if source.sample != target.sample:
+            raise SampleMismatch("Test data cannot be merged with real tasks")
         conflict = source.due_date is not None and (source.due_date, source.due_time) != (
             target.due_date,
             target.due_time,

@@ -19,12 +19,14 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
 
 from taskradar.db.base import utcnow
-from taskradar.db.models import Document, ExtractionRun, Message, Task, TaskCandidate, TaskSource
+from taskradar.db.models import Document, ExtractionRun, Message, Notification, Task, TaskCandidate, TaskSource
 from taskradar.db.session import transaction
 from taskradar.domain.enums import (
+    SAMPLE_SOURCE_KINDS,
     Actor,
     ItemStatus,
     MatchRelation,
+    NotificationLevel,
     SourceRelation,
     SuggestionKind,
     TaskStatus,
@@ -81,6 +83,7 @@ class PreparedExtraction:
     elapsed_ms: int
     message_id: int | None = None
     document_id: int | None = None
+    sample: bool = False  # demo / test data: only ever matched with other sample tasks
 
 
 class IngestService:
@@ -191,7 +194,9 @@ class IngestService:
             if msg.status in (ItemStatus.PROCESSED.value, ItemStatus.SKIPPED.value) and not force:
                 return IngestOutcome(skipped=True, skip_reason="already_processed")
             inp, origin = self.message_input(msg, tz)
+            sample = msg.source is not None and msg.source.kind in SAMPLE_SOURCE_KINDS
         prepared = self._extract(inp, origin, message_id=message_id)
+        prepared.sample = sample
         with INGEST_LOCK, transaction(self._factory) as session:
             outcome = self.apply(session, prepared)
             msg = session.get(Message, message_id)
@@ -210,9 +215,11 @@ class IngestService:
             if doc is None:
                 raise LookupError(f"document {document_id} not found")
             inp, origin = self.document_input(doc, tz)
+            sample = doc.source is not None and doc.source.kind in SAMPLE_SOURCE_KINDS
         if not inp.text.strip():
             return IngestOutcome(skipped=True, skip_reason="no_text")
         prepared = self._extract(inp, origin, document_id=document_id)
+        prepared.sample = sample
         with INGEST_LOCK, transaction(self._factory) as session:
             outcome = self.apply(session, prepared)
             doc = session.get(Document, document_id)
@@ -268,17 +275,25 @@ class IngestService:
 
         outcome = IngestOutcome(content_type=result.content_type.value, extractor=result.extractor, run_id=run.id)
         reconciler = self.agent.reconciler(session)
-        existing = self.tasks.load_snapshots(session)
+        existing = self.tasks.load_snapshots(session, sample=prepared.sample)
         origin = prepared.origin
 
         for cand in result.tasks:
             row = self._candidate_row(session, run, prepared, cand)
-            decision = reconciler.match_task(
-                cand, origin_key=origin.key, thread_id=origin.thread_id, source_date=origin.date, existing=existing
-            )
+            decision = reconciler.match_task(cand, origin_key=origin.key, thread_id=origin.thread_id, existing=existing)
             self._record_decision(row, decision)
             self._apply_task_decision(
-                session, cand, row, decision, origin, policy, settings.general.timezone, existing, outcome
+                session,
+                cand,
+                row,
+                decision,
+                origin,
+                policy,
+                settings.general.timezone,
+                existing,
+                outcome,
+                sample=prepared.sample,
+                language=settings.general.language,
             )
 
         for signal in result.completion_signals:
@@ -286,7 +301,7 @@ class IngestService:
             decision = reconciler.match_completion(signal, thread_id=origin.thread_id, existing=existing)
             self._record_decision(row, decision)
             self._apply_completion(session, signal, row, decision, origin, policy, outcome)
-            existing[:] = self.tasks.load_snapshots(session)
+            existing[:] = self.tasks.load_snapshots(session, sample=prepared.sample)
         return outcome
 
     # ------------------------------------------------------------------------------------------
@@ -366,6 +381,9 @@ class IngestService:
         timezone: str,
         existing: list[TaskSnapshot],
         outcome: IngestOutcome,
+        *,
+        sample: bool = False,
+        language: str = "zh-CN",
     ) -> None:
         relation = decision.relation
         if relation == MatchRelation.SAME_ORIGIN:
@@ -411,6 +429,7 @@ class IngestService:
                 )
                 new_date = cand.due.date.isoformat() if cand.due.date else None
                 new_time = cand.due.time.strftime("%H:%M") if cand.due.time else None
+                previous = _due_label(task.due_date, task.due_time)
                 if deadline_update_should_apply(cand, list(task.user_locked_fields or []), policy):
                     event = self.tasks.update_fields(
                         session,
@@ -426,6 +445,12 @@ class IngestService:
                     )
                     if event is not None:
                         outcome.tasks_updated += 1
+                        # Applied automatically, but never silently: the task is flagged until the user has
+                        # looked at it, and a notification says what changed (both undone with the change).
+                        self.tasks.flag_review(task, "deadline_changed", event)
+                        self._notify_deadline_change(
+                            session, task, event.id, previous, _due_label(task.due_date, task.due_time), language
+                        )
                 else:
                     created = self.tasks.suggest(
                         session,
@@ -459,6 +484,7 @@ class IngestService:
             candidate_row=row,
             timezone=timezone,
             review_reasons=review,
+            sample=sample,
         )
         outcome.tasks_created += 1
         outcome.created_task_ids.append(task.id)
@@ -483,6 +509,23 @@ class IngestService:
             other = self.tasks.get(session, decision.task_id)
             self.tasks.link_tasks(session, task, other)
         self._refresh(session, existing, task)
+
+    def _notify_deadline_change(
+        self, session: Session, task: Task, event_id: int, previous: str, current: str, language: str
+    ) -> None:
+        if task.sample:
+            return  # demo / test data never notifies
+        zh = language.startswith("zh")
+        session.add(
+            Notification(
+                task_id=task.id,
+                level=NotificationLevel.INFO.value,
+                title=(f"截止日期已更新：{task.title}" if zh else f"Deadline changed: {task.title}")[:300],
+                body=f"{previous} → {current}" + ("（可撤销）" if zh else " (can be undone)"),
+                dedupe_key=f"{task.id}:deadline_changed:{event_id}",
+                created_at=self.clock(),
+            )
+        )
 
     def _enrich_due(
         self, session: Session, task: Task, cand: CandidateTask, origin: Origin, *, reanalysis: bool = False
@@ -586,6 +629,12 @@ class IngestService:
         )
         if created is not None:
             outcome.suggestions_created += 1
+
+
+def _due_label(date: dt.date | None, time: str | None) -> str:
+    if date is None:
+        return "—"
+    return f"{date.isoformat()} {time}" if time else date.isoformat()
 
 
 def tasks_for_origin(session: Session, origin_key: str) -> list[Task]:

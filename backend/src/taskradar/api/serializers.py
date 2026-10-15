@@ -81,6 +81,7 @@ def task_summary(task: Task, *, now: dt.datetime, thresholds: Thresholds) -> dic
         "confirmed_at": _iso(task.confirmed_at),
         "completed_at": _iso(task.completed_at),
         "manual": task.manual,
+        "sample": task.sample,
     }
 
 

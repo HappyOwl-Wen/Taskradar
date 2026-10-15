@@ -182,6 +182,8 @@ class CalendarSyncService:
             )
             link = session.scalar(select(CalendarLink).where(CalendarLink.task_id == task_id))
             warnings: list[str] = []
+            if task.sample:
+                warnings.append("sample_task")
             if task.status not in ("confirmed", "in_progress", "waiting_for_reply"):
                 warnings.append("task_not_confirmed")
             if task.due_needs_confirmation:
@@ -200,6 +202,9 @@ class CalendarSyncService:
         settings = self.settings.get()
         with transaction(self._factory) as session:
             task = self.tasks.get(session, task_id)
+            if task.sample:
+                # A test task in the real calendar would cause real reminders on every device.
+                raise CalendarSyncError("sample_task", "Test data is never written to Google Calendar", 409)
             try:
                 self.guard.check(
                     SideEffect.CALENDAR_WRITE,

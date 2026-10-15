@@ -37,7 +37,9 @@ from taskradar.services.ingest import IngestService
 from taskradar.services.jobs import JobRunner
 from taskradar.services.metrics import MetricsService
 from taskradar.services.notifications import NotificationService
+from taskradar.services.recheck import RecheckService
 from taskradar.services.settings import SettingsService
+from taskradar.services.status_summary import StatusSummaryService
 from taskradar.services.tasks import TaskService
 
 DEMO_ACCOUNT = "demo@taskradar.example"
@@ -65,6 +67,8 @@ class Container:
     notifications: NotificationService
     data: DataService
     metrics: MetricsService
+    status: StatusSummaryService
+    recheck: RecheckService
     extras: dict[str, Any] = field(default_factory=dict)
 
     def dispose(self) -> None:
@@ -151,6 +155,25 @@ def build_container(
     notifications = NotificationService(
         factory, settings=settings, guard=guard, jobs=jobs, clock=clock, toast=toast or show_toast
     )
+
+    def llm_configured() -> tuple[bool, bool]:
+        provider = settings.get().llm.provider
+        if provider != "openai":
+            return False, False  # off, or a compatible endpoint that may not need a key
+        try:
+            return True, bool(guard.llm_api_key())
+        except Exception:
+            return True, False
+
+    status = StatusSummaryService(
+        factory,
+        gmail_connected=lambda: oauth.connected("gmail"),
+        gmail_auto_sync=lambda: (settings.get().gmail.auto_sync, settings.get().gmail.sync_interval_minutes),
+        ocr_available=ocr_engine.available,
+        ocr_backlog=lambda: len(documents.ocr_backlog()),
+        llm_configured=llm_configured,
+        clock=clock,
+    )
     return Container(
         config=config,
         engine=engine,
@@ -172,4 +195,6 @@ def build_container(
         notifications=notifications,
         data=DataService(factory, config=config, clock=clock),
         metrics=MetricsService(factory),
+        status=status,
+        recheck=RecheckService(factory, ingest=ingest, timezone=lambda: settings.get().general.timezone),
     )

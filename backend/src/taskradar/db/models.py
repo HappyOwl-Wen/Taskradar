@@ -228,6 +228,9 @@ class Task(Base):
     fingerprint: Mapped[str] = mapped_column(String(255), default="", index=True)
     user_locked_fields: Mapped[list[str]] = mapped_column(default=list)
     manual: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Demo or test data: shown with a marker, but never counted, reminded, put in the calendar or matched
+    # with real tasks.
+    sample: Mapped[bool] = mapped_column(Boolean, default=False, server_default=text("0"), index=True)
 
     source_published_at: Mapped[dt.datetime | None] = mapped_column(default=None)
     last_source_at: Mapped[dt.datetime | None] = mapped_column(default=None)

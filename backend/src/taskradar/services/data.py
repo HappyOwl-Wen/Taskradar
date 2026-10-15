@@ -12,7 +12,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
-from sqlalchemy import delete, select
+from sqlalchemy import delete, or_, select
 from sqlalchemy.orm import Session, sessionmaker
 
 from taskradar import __version__
@@ -116,6 +116,40 @@ class DataService:
             session.delete(msg)
         for path in stored:
             self._remove_owned_file(path)
+
+    def delete_sample_source(self, source_id: int) -> int:
+        """Remove a demo / test-data source with what it brought in: its mails and files, and the sample tasks
+        that have no evidence left afterwards. Real tasks are never touched. Returns the number of removed tasks."""
+        with transaction(self._factory) as session:
+            source = session.get(Source, source_id)
+            if source is None:
+                raise LookupError("Source not found")
+            stored = [
+                p for p in session.scalars(select(Document.stored_path).where(Document.source_id == source_id)) if p
+            ]
+            task_ids = set(
+                session.scalars(
+                    select(TaskSource.task_id).where(
+                        or_(
+                            TaskSource.message_id.in_(select(Message.id).where(Message.source_id == source_id)),
+                            TaskSource.document_id.in_(select(Document.id).where(Document.source_id == source_id)),
+                        )
+                    )
+                )
+            )
+            session.delete(source)  # mails and files cascade; task evidence keeps its text but loses the link
+            session.flush()
+            session.expire_all()
+            removed = 0
+            for task in session.scalars(select(Task).where(Task.id.in_(task_ids), Task.sample.is_(True))):
+                if all(ts.message_id is None and ts.document_id is None for ts in task.sources):
+                    session.delete(task)
+                    removed += 1
+            still_used = set(session.scalars(select(Document.stored_path).where(Document.stored_path.in_(stored))))
+        for path in stored:
+            if path not in still_used:
+                self._remove_owned_file(path)
+        return removed
 
     def delete_task(self, task_id: str) -> None:
         with transaction(self._factory) as session:

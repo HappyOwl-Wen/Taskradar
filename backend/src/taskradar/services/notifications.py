@@ -7,7 +7,7 @@ import logging
 from collections.abc import Callable
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import Select, or_, select
 from sqlalchemy.orm import Session, sessionmaker
 
 from taskradar.db.base import utcnow
@@ -57,7 +57,11 @@ class NotificationService:
         created: list[tuple[int, str, str]] = []
         with transaction(self._factory) as session:
             tasks = session.scalars(
-                select(Task).where(Task.status.in_([s.value for s in ACTIVE_STATUSES]), Task.due_date.isnot(None))
+                select(Task).where(
+                    Task.status.in_([s.value for s in ACTIVE_STATUSES]),
+                    Task.due_date.isnot(None),
+                    Task.sample.is_(False),  # demo / test data never reminds
+                )
             ).all()
             for task in tasks:
                 ctx.bump("items_seen")
@@ -124,14 +128,14 @@ class NotificationService:
 
     def list_notifications(self, *, unread_only: bool = False, limit: int = 50) -> list[dict[str, Any]]:
         with transaction(self._factory) as session:
-            stmt = select(Notification).order_by(Notification.created_at.desc()).limit(limit)
+            stmt = _real(select(Notification)).order_by(Notification.created_at.desc()).limit(limit)
             if unread_only:
                 stmt = stmt.where(Notification.read_at.is_(None))
             return [notification_to_dict(n) for n in session.scalars(stmt)]
 
     def unread_count(self) -> int:
         with transaction(self._factory) as session:
-            return len(session.scalars(select(Notification.id).where(Notification.read_at.is_(None))).all())
+            return len(session.scalars(_real(select(Notification.id)).where(Notification.read_at.is_(None))).all())
 
     def mark_read(self, notification_id: int | None = None) -> None:
         with transaction(self._factory) as session:
@@ -140,6 +144,13 @@ class NotificationService:
                 stmt = stmt.where(Notification.id == notification_id)
             for note in session.scalars(stmt):
                 note.read_at = self.clock()
+
+
+def _real(stmt: Select[Any]) -> Select[Any]:
+    """Leave out notifications about tasks that were later marked as test data."""
+    return stmt.outerjoin(Task, Task.id == Notification.task_id).where(
+        or_(Notification.task_id.is_(None), Task.sample.is_(False))
+    )
 
 
 def notification_to_dict(n: Notification) -> dict[str, Any]:

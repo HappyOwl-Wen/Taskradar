@@ -119,21 +119,29 @@ def dashboard(c: Container = Depends(get_container)) -> dict[str, Any]:
     today = local_today(now, tz)
     with transaction(c.factory) as session:
         tasks = session.scalars(select(Task).options(*_TASK_LOAD)).all()
-        items = [task_summary(t, now=now, thresholds=thresholds) for t in tasks]
+        # Demo and test data are listed elsewhere (marked as such) but never count here.
+        sample_open = sum(1 for t in tasks if t.sample and t.status not in ("completed", "dismissed"))
+        items = [task_summary(t, now=now, thresholds=thresholds) for t in tasks if not t.sample]
         jobs = [job_to_dict(j) for j in session.scalars(select(SyncJob).order_by(SyncJob.started_at.desc()).limit(8))]
-        pending = session.scalars(
-            select(TaskSuggestion).where(TaskSuggestion.status == "pending").order_by(TaskSuggestion.created_at.desc())
-        ).all()
-        suggestions = [{**suggestion_entry(s), "task_title": s.task.title} for s in pending[:10]]
-        # Tasks whose deadline is disputed by a newer source: they need a decision, not just a glance.
+        pending = [
+            s
+            for s in session.scalars(
+                select(TaskSuggestion)
+                .where(TaskSuggestion.status == "pending")
+                .order_by(TaskSuggestion.created_at.desc())
+            ).all()
+            if not s.task.sample
+        ]
+        pending.sort(key=lambda s: _SUGGESTION_ORDER.get(s.kind, 9))  # stable: newest first within a kind
+        views = [_suggestion_view(session, s) for s in pending]
+        suggestions = views[:10]
+        # Tasks whose deadline is disputed by another source: they need a decision, not just a glance.
         conflict_ids: set[str] = set()
-        for s in pending:
-            if s.kind == "update_due" or (
-                s.kind == "possible_duplicate" and "conflicting_deadline" in (s.reason or "")
-            ):
-                conflict_ids.add(s.task_id)
-                if s.related_task_id:
-                    conflict_ids.add(s.related_task_id)
+        for view in views:
+            if view["kind"] == "update_due" or view.get("deadlines_differ"):
+                conflict_ids.add(view["task_id"])
+                if view["related_task_id"]:
+                    conflict_ids.add(view["related_task_id"])
         suggestion_task_ids = {s.task_id for s in pending}
 
     committed = {"confirmed", "in_progress", "waiting_for_reply"}
@@ -180,32 +188,13 @@ def dashboard(c: Container = Depends(get_container)) -> dict[str, Any]:
         and i["completed_at"] >= (now - dt.timedelta(days=7)).isoformat()
     ]
 
-    # "Needs attention": confirmed work that is overdue or due within 7 days, unconfirmed candidates due within
-    # 7 days (or already overdue; clearly marked as such) and tasks with a disputed deadline.
-    def attention_reason(i: dict[str, Any]) -> str | None:
-        due = i["due_date"]
-        if i["status"] in committed:
-            if i["urgency"] == Urgency.OVERDUE.value:
-                return "overdue"
-            if i["id"] in conflict_ids:
-                return "conflict"
-            if due and due <= week_end:
-                return "due_soon"
-        elif i["status"] == "candidate":
-            if i["id"] in conflict_ids:
-                return "conflict"
-            if due and due <= week_end:
-                return "unconfirmed_due"
-        return None
-
-    reason_rank = {"overdue": 0, "conflict": 1, "due_soon": 2, "unconfirmed_due": 2}
-    attention = sorted(
-        ({**i, "attention": reason} for i in items if (reason := attention_reason(i))),
-        key=lambda i: (reason_rank[i["attention"]], i["effective_deadline"] or "9999"),
-    )
+    attention = _attention(active + candidates, today=today, conflict_ids=conflict_ids)
     candidate_ids = {i["id"] for i in candidates}
     soon_candidates = [i for i in candidates if i["due_date"] and today.isoformat() <= i["due_date"] <= week_end]
     overdue_candidates = [i for i in candidates if i["urgency"] == Urgency.OVERDUE.value]
+    attention_counts: dict[str, int] = {}
+    for i in attention:
+        attention_counts[i["attention"]] = attention_counts.get(i["attention"], 0) + 1
     return {
         "today": today.isoformat(),
         "counts": {
@@ -223,9 +212,12 @@ def dashboard(c: Container = Depends(get_container)) -> dict[str, Any]:
             "due_soon_candidates": len(soon_candidates),
             "overdue_candidates": len(overdue_candidates),
             "conflicts": len(conflict_ids),
+            "sample_open": sample_open,
         },
         "attention": attention[:12],
         "attention_total": len(attention),
+        "attention_counts": attention_counts,
+        "attention_unconfirmed": sum(1 for i in attention if i["status"] == "candidate"),
         "today_focus": today_focus[:10],
         "upcoming": upcoming[:20],
         "overdue": overdue[:20],
@@ -235,6 +227,89 @@ def dashboard(c: Container = Depends(get_container)) -> dict[str, Any]:
         "notifications_unread": c.notifications.unread_count(),
         "agent_mode": c.agent.mode(),
     }
+
+
+# Time decides the order of "needs attention"; a conflict or a changed date is a marker on top of that.
+_ATTENTION_RANK = {"overdue": 0, "due_today": 1, "due_tomorrow": 2, "due_soon": 3, "date_changed": 4, "conflict": 5}
+_SUGGESTION_ORDER = {
+    "possible_duplicate": 0,
+    "update_due": 1,
+    "mark_completed": 2,
+    "mark_dismissed": 3,
+    "mark_waiting": 4,
+}
+
+
+def _attention(items: list[dict[str, Any]], *, today: dt.date, conflict_ids: set[str]) -> list[dict[str, Any]]:
+    """Open tasks that need a look, most pressing first.
+
+    Overdue, then due today, tomorrow and within a week; tasks with a disputed or automatically changed
+    deadline follow when they are not due soon anyway. Within the same group confirmed tasks come before
+    unconfirmed ones, which stay marked as unconfirmed. A conflict never pushes a task due at the end of
+    the month above one that is due tomorrow.
+    """
+    tomorrow = today + dt.timedelta(days=1)
+    week_end = today + dt.timedelta(days=7)
+    result: list[dict[str, Any]] = []
+    for i in items:
+        due = dt.date.fromisoformat(i["due_date"]) if i["due_date"] else None
+        flags: list[str] = []
+        if i["status"] == "candidate":
+            flags.append("unconfirmed")
+        if i["id"] in conflict_ids:
+            flags.append("conflict")
+        if i["needs_review"] and "deadline_changed" in i["review_reasons"]:
+            flags.append("date_changed")
+        if i["urgency"] == Urgency.OVERDUE.value:
+            reason = "overdue"
+        elif due is not None and due <= today:
+            reason = "due_today"
+        elif due == tomorrow:
+            reason = "due_tomorrow"
+        elif due is not None and due <= week_end:
+            reason = "due_soon"
+        elif "date_changed" in flags:
+            reason = "date_changed"
+        elif "conflict" in flags:
+            reason = "conflict"
+        else:
+            continue
+        result.append({**i, "attention": reason, "attention_flags": flags})
+    result.sort(
+        key=lambda i: (
+            _ATTENTION_RANK[i["attention"]],
+            i["status"] == "candidate",
+            i["effective_deadline"] or "9999",
+            "conflict" not in i["attention_flags"],
+        )
+    )
+    return result
+
+
+def _suggestion_view(session: Session, s: TaskSuggestion) -> dict[str, Any]:
+    """A suggestion with what the user needs to judge it: both tasks' titles, states and deadlines."""
+    entry = suggestion_entry(s)
+    task = s.task
+    entry.update(
+        task_title=task.title,
+        task_status=task.status,
+        task_due_date=task.due_date.isoformat() if task.due_date else None,
+        task_due_time=task.due_time,
+        task_sample=task.sample,
+    )
+    related = session.get(Task, s.related_task_id) if s.related_task_id else None
+    entry.update(
+        related_task_title=related.title if related else None,
+        related_task_status=related.status if related else None,
+        related_due_date=related.due_date.isoformat() if related and related.due_date else None,
+        related_due_time=related.due_time if related else None,
+    )
+    if s.kind == "possible_duplicate" and related is not None:
+        entry["deadlines_differ"] = task.due_date is not None and (task.due_date, task.due_time) != (
+            related.due_date,
+            related.due_time,
+        )
+    return entry
 
 
 # ---------------------------------------------------------------------------------------------
@@ -250,6 +325,7 @@ def list_tasks(
     source_kind: list[str] = Query(default=[]),
     q: str | None = None,
     needs_review: bool | None = None,
+    sample: bool | None = None,
     sort: Literal["due", "urgency", "priority", "confidence", "created_at", "updated_at", "detected_at"] = "due",
     order: Literal["asc", "desc"] = "asc",
     limit: int = Query(default=200, ge=1, le=1000),
@@ -266,6 +342,8 @@ def list_tasks(
             stmt = stmt.where(Task.category.in_(category))
         if needs_review is not None:
             stmt = stmt.where(Task.needs_review.is_(needs_review))
+        if sample is not None:
+            stmt = stmt.where(Task.sample.is_(sample))
         if q:
             like = f"%{q.strip()}%"
             stmt = stmt.where(
@@ -297,6 +375,8 @@ class TaskCreate(BaseModel):
     action_type: ActionType = ActionType.OTHER
     # The user's own wording of the date (from quick entry), shown as "original wording".
     due_text: str | None = Field(default=None, max_length=200)
+    # Test data: never counted, reminded or written to the calendar.
+    sample: bool = False
 
 
 class QuickParseBody(BaseModel):
@@ -350,6 +430,7 @@ def create_task(body: TaskCreate, c: Container = Depends(get_container)) -> dict
             actor=Actor.USER,
             status=TaskStatus.CONFIRMED,
             summary="手动创建任务",
+            sample=body.sample,
         )
         task.manual = True
         task_id = task.id
@@ -404,6 +485,8 @@ def _maybe_auto_calendar(c: Container, task_id: str) -> None:
         return
     with transaction(c.factory) as session:
         task = c.tasks.get(session, task_id)
+        if task.sample:
+            return  # test data never reaches the real calendar
         if task.due_date is None or (cfg.auto_sync_categories and task.category not in cfg.auto_sync_categories):
             return
     try:
@@ -518,6 +601,43 @@ def merge(task_id: str, body: MergeBody, c: Container = Depends(get_container)) 
     return detail
 
 
+class SampleBody(BaseModel):
+    sample: bool
+
+
+@router.post("/tasks/{task_id}/sample")
+def set_sample(task_id: str, body: SampleBody, c: Container = Depends(get_container)) -> dict[str, Any]:
+    """Mark a task as test data (or back as a real task). Undoable."""
+    with transaction(c.factory) as session:
+        task = c.tasks.get(session, task_id)
+        event = c.tasks.set_sample(session, task, body.sample, actor=Actor.USER)
+        in_calendar = any(link.status != "removed" for link in task.calendar_links)
+        undo_event_id = event.id if event is not None else None
+    with transaction(c.factory) as session:
+        detail = _detail(c, session, task_id)
+    if body.sample and in_calendar:
+        detail["calendar_warning"] = "sample_in_calendar"  # an earlier event stays until the user removes it
+    detail["undo_event_id"] = undo_event_id
+    return detail
+
+
+class ResolveReviewBody(BaseModel):
+    reasons: list[Literal["deadline_changed"]] = Field(min_length=1)
+
+
+@router.post("/tasks/{task_id}/review/resolve")
+def resolve_review(task_id: str, body: ResolveReviewBody, c: Container = Depends(get_container)) -> dict[str, Any]:
+    """The user checked a flagged point (e.g. an automatically changed deadline) and keeps it."""
+    with transaction(c.factory) as session:
+        task = c.tasks.get(session, task_id)
+        event = c.tasks.resolve_review(session, task, list(body.reasons), actor=Actor.USER)
+        undo_event_id = event.id if event is not None else None
+    with transaction(c.factory) as session:
+        detail = _detail(c, session, task_id)
+    detail["undo_event_id"] = undo_event_id
+    return detail
+
+
 @router.delete("/tasks/{task_id}")
 def delete_task(task_id: str, c: Container = Depends(get_container)) -> dict[str, Any]:
     with transaction(c.factory) as session:
@@ -528,6 +648,15 @@ def delete_task(task_id: str, c: Container = Depends(get_container)) -> dict[str
     if not_removed:
         result["calendar_warning"] = "event_not_removed"  # the event has to be deleted in Google Calendar
     return result
+
+
+@router.get("/review/recheck")
+def recheck(c: Container = Depends(get_container)) -> dict[str, Any]:
+    """Open tasks the current rules would not create (or would flag) from the same sources. Read-only:
+    the user decides what to dismiss; nothing is deleted."""
+    now = c.clock()
+    thresholds = thresholds_for(c)
+    return c.recheck.run(serialize=lambda t: task_summary(t, now=now, thresholds=thresholds))
 
 
 @router.post("/events/{event_id}/undo")
@@ -553,15 +682,7 @@ def list_suggestions(status: str = "pending", c: Container = Depends(get_contain
         rows = session.scalars(
             select(TaskSuggestion).where(TaskSuggestion.status == status).order_by(TaskSuggestion.created_at.desc())
         ).all()
-        items = []
-        for s in rows:
-            entry = suggestion_entry(s)
-            entry["task_title"] = s.task.title
-            entry["task_status"] = s.task.status
-            if s.related_task_id:
-                related = session.get(Task, s.related_task_id)
-                entry["related_task_title"] = related.title if related else None
-            items.append(entry)
+        items = [_suggestion_view(session, s) for s in rows]
     return {"items": items}
 
 

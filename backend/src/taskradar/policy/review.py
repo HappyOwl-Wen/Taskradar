@@ -27,6 +27,7 @@ REVIEW_UNCERTAINTIES = {
     "marketing_context",
     "low_ocr_confidence",
     "title_incomplete",
+    "permission_only",
 }
 
 

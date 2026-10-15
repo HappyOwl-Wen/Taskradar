@@ -228,9 +228,7 @@ def run_evaluation(dataset: Path | None = None, extractor: Extractor | None = No
             group = hit["group"] if hit else f"fp:{case['id']}"
             if hit and group in groups_seen:
                 totals["exp_merges"] += 1
-            decision = reconciler.match_task(
-                pred, origin_key=f"case:{case['id']}", thread_id=None, source_date=inp.sent_at, existing=existing
-            )
+            decision = reconciler.match_task(pred, origin_key=f"case:{case['id']}", thread_id=None, existing=existing)
             if decision.relation in (MatchRelation.DUPLICATE, MatchRelation.DEADLINE_UPDATE) and decision.task_id:
                 if group_of.get(decision.task_id) == group:
                     totals["merges_ok"] += 1

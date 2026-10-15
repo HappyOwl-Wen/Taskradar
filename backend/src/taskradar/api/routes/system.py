@@ -89,6 +89,14 @@ def system_status(request: Request, c: Container = Depends(get_container)) -> di
     }
 
 
+@router.get("/system/summary")
+def system_summary(request: Request, c: Container = Depends(get_container)) -> dict[str, Any]:
+    """Runtime problems in plain terms (what, how many, since when, where to fix it) instead of logs."""
+    scheduler = getattr(request.app.state, "scheduler", None)
+    running = bool(scheduler and scheduler.status().get("running"))
+    return c.status.summary(scheduler_running=running)
+
+
 # ---------------------------------------------------------------------------------------------
 # Settings
 # ---------------------------------------------------------------------------------------------

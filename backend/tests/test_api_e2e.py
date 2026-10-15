@@ -146,9 +146,35 @@ def test_demo_mailbox_flow_and_undo(api: Any) -> None:
     assert any(t["needs_review"] for t in candidates)  # e.g. the ambiguous "nächsten Freitag"
 
 
+def eml(subject: str, body: str, key: str, *, date: str = "Wed, 14 Oct 2026 08:00:00 +0000") -> bytes:
+    return (
+        f"From: Office <office@uni.example>\r\nTo: me@example.com\r\nSubject: {subject}\r\n"
+        f"Message-ID: <{key}@uni.example>\r\nDate: {date}\r\n"
+        "Content-Type: text/plain; charset=utf-8\r\nContent-Transfer-Encoding: 8bit\r\n\r\n"
+        f"{body}\r\n"
+    ).encode()
+
+
+def upload_eml(api: Any, data: bytes, *, sample: bool = False) -> dict[str, Any]:
+    response = api.post(
+        "/api/documents/upload",
+        files=[("files", ("mail.eml", data, "message/rfc822"))],
+        data={"sample": "true"} if sample else None,
+    )
+    assert response.status_code == 200, response.text
+    return response.json()["results"][0]
+
+
+THREE_MAILS = [
+    ("Semesterbeitrag", "Bitte überweisen Sie den Semesterbeitrag bis zum 20.11.2026.", "fee"),
+    ("Visum", "Bitte laden Sie die Unterlagen für das Visum bis zum 25.11.2026 hoch.", "visa"),
+    ("Prüfung", "Bitte melden Sie sich bis zum 30.11.2026 zur Prüfung Lineare Algebra an.", "exam"),
+]
+
+
 def test_merged_duplicates_are_not_counted_as_rejected(api: Any) -> None:
-    source = api.post("/api/demo/mailbox").json()
-    assert api.post(f"/api/sources/{source['id']}/sync", params={"wait": True}).json()["job"]["status"] == "succeeded"
+    for subject, body, key in THREE_MAILS:
+        assert upload_eml(api, eml(subject, body, key))["tasks_created"] == 1
     first, second, third = api.get("/api/tasks", params={"sort": "created_at"}).json()["items"][:3]
     api.post(f"/api/tasks/{first['id']}/status", json={"status": "confirmed"})
     merged = api.post(f"/api/tasks/{second['id']}/merge", json={"into_task_id": first["id"], "due_choice": "existing"})
@@ -307,10 +333,10 @@ def test_dashboard_never_hides_unconfirmed_tasks_due_soon(api: Any) -> None:
     api.post("/api/tasks", json={"title": "Ohne Datum"})
 
     dashboard = api.get("/api/dashboard").json()
-    assert [(i["id"], i["attention"]) for i in dashboard["attention"]] == [
-        (late["id"], "overdue"),
-        (soon["id"], "unconfirmed_due"),
-        (confirmed["id"], "due_soon"),
+    assert [(i["id"], i["attention"], i["attention_flags"]) for i in dashboard["attention"]] == [
+        (late["id"], "overdue", []),
+        (soon["id"], "due_tomorrow", ["unconfirmed"]),  # marked as unconfirmed, never hidden
+        (confirmed["id"], "due_soon", []),
     ]
     counts = dashboard["counts"]
     assert (counts["overdue"], counts["due_soon"], counts["due_soon_candidates"]) == (1, 1, 1)
@@ -424,3 +450,128 @@ def test_undoing_an_accepted_status_suggestion(api: Any) -> None:
     assert [s["id"] for s in api.get("/api/suggestions").json()["items"]] == [suggestion_id]
     # A second undo of the same decision is refused instead of silently doing something else.
     assert api.post(f"/api/events/{done['undo_event_id']}/undo").status_code == 409
+
+
+def test_attention_puts_time_before_conflicts(api: Any) -> None:
+    # FIXED_NOW is Wednesday 14 October 2026. A candidate due at the end of the month with a disputed date
+    # used to be listed above tasks due today and tomorrow.
+    month_end = api.post("/api/tasks", json={"title": "Mitgliedsbeitrag überweisen", "due_date": "2026-10-31"}).json()
+    other = api.post("/api/tasks", json={"title": "Beitrag Verein", "due_date": "2026-10-28"}).json()
+    api.post(f"/api/tasks/{month_end['id']}/status", json={"status": "candidate"})
+    _duplicate_suggestion(api, month_end["id"], other)
+    today = api.post("/api/tasks", json={"title": "Folien wiederholen", "due_date": "2026-10-14"}).json()
+    tomorrow_candidate = api.post("/api/tasks", json={"title": "Antrag abgeben", "due_date": "2026-10-15"}).json()
+    api.post(f"/api/tasks/{tomorrow_candidate['id']}/status", json={"status": "candidate"})
+    tomorrow = api.post("/api/tasks", json={"title": "Tutor beantragen", "due_date": "2026-10-15"}).json()
+    late = api.post("/api/tasks", json={"title": "Gebühr zahlen", "due_date": "2026-10-12"}).json()
+    api.post(f"/api/tasks/{late['id']}/status", json={"status": "candidate"})
+
+    attention = api.get("/api/dashboard").json()["attention"]
+    order = [(i["title"], i["attention"]) for i in attention]
+    assert order[:4] == [
+        (late["title"], "overdue"),
+        (today["title"], "due_today"),
+        (tomorrow["title"], "due_tomorrow"),  # confirmed before unconfirmed on the same day
+        (tomorrow_candidate["title"], "due_tomorrow"),
+    ]
+    assert order.index((month_end["title"], "conflict")) > 3
+    flags = {i["id"]: i["attention_flags"] for i in attention}
+    assert flags[late["id"]] == ["unconfirmed"] and set(flags[month_end["id"]]) == {"unconfirmed", "conflict"}
+
+
+def test_suggestions_name_both_tasks_and_their_deadlines(api: Any) -> None:
+    existing = api.post("/api/tasks", json={"title": "Probe Workshop fee", "due_date": "2026-10-28"}).json()
+    new = api.post("/api/tasks", json={"title": "Pay the Probe Workshop fee", "due_date": "2026-10-30"}).json()
+    api.post(f"/api/tasks/{new['id']}/status", json={"status": "candidate"})
+    _duplicate_suggestion(api, new["id"], existing)
+    for entry in (api.get("/api/dashboard").json()["suggestions"][0], api.get("/api/suggestions").json()["items"][0]):
+        assert (entry["task_title"], entry["task_due_date"], entry["task_status"]) == (
+            new["title"],
+            "2026-10-30",
+            "candidate",
+        )
+        assert (entry["related_task_title"], entry["related_due_date"], entry["related_task_status"]) == (
+            existing["title"],
+            "2026-10-28",
+            "confirmed",
+        )
+        assert entry["deadlines_differ"] is True and entry["task_sample"] is False
+
+
+def test_test_data_never_counts_reminds_or_reaches_the_calendar(api: Any) -> None:
+    real = upload_eml(api, eml(*THREE_MAILS[0][:2], "real-fee"))
+    assert real["tasks_created"] == 1
+    before = api.get("/api/metrics").json()
+    # The same notice imported as test data: its own task, never matched with the real one.
+    test = upload_eml(api, eml(*THREE_MAILS[0][:2], "test-fee"), sample=True)
+    assert (test["tasks_created"], test["duplicates_merged"], test["suggestions_created"]) == (1, 0, 0)
+    overdue = upload_eml(
+        api, eml("Mahnung", "Bitte zahlen Sie die Mahngebühr bis zum 10.10.2026.", "test-late"), sample=True
+    )
+    assert overdue["tasks_created"] == 1
+    samples = api.get("/api/tasks", params={"sample": True}).json()["items"]
+    assert len(samples) == 2 and all(t["sample"] for t in samples)
+    assert len(api.get("/api/tasks", params={"sample": False}).json()["items"]) == 1
+
+    dashboard = api.get("/api/dashboard").json()
+    assert dashboard["counts"]["candidates"] == 1 and dashboard["counts"]["sample_open"] == 2
+    assert all(not i["sample"] for i in dashboard["attention"])
+    after = api.get("/api/metrics").json()
+    assert after["messages"]["total"] == before["messages"]["total"]
+    assert after["feedback"] == before["feedback"]
+
+    # No reminder, even though one of them is overdue and confirmed.
+    late = next(t for t in samples if t["due_date"] == "2026-10-10")
+    api.post(f"/api/tasks/{late['id']}/status", json={"status": "confirmed"})
+    api.post("/api/notifications/scan")
+    assert all(n["task_id"] != late["id"] for n in api.get("/api/notifications").json()["items"])
+    # Never written to Google Calendar.
+    refused = api.post(f"/api/tasks/{late['id']}/calendar", json={"confirm": True})
+    assert refused.status_code == 409 and refused.json()["error"]["code"] == "sample_task"
+    assert "sample_task" in api.get(f"/api/tasks/{late['id']}/calendar/preview").json()["warnings"]
+    # Never merged with real tasks.
+    real_task = api.get("/api/tasks", params={"sample": False}).json()["items"][0]
+    mixed = api.post(f"/api/tasks/{late['id']}/merge", json={"into_task_id": real_task["id"], "due_choice": "new"})
+    assert mixed.status_code == 409 and mixed.json()["error"]["code"] == "sample_mismatch"
+
+
+def test_marking_a_task_as_test_data_hides_its_reminders_and_can_be_undone(api: Any) -> None:
+    task = api.post("/api/tasks", json={"title": "测试：整理报销单", "due_date": "2026-10-14"}).json()
+    api.post("/api/notifications/scan")
+    assert any(n["task_id"] == task["id"] for n in api.get("/api/notifications").json()["items"])
+
+    marked = api.post(f"/api/tasks/{task['id']}/sample", json={"sample": True}).json()
+    assert marked["sample"] is True and marked["undo_event_id"]
+    assert all(n["task_id"] != task["id"] for n in api.get("/api/notifications").json()["items"])
+    assert api.get("/api/dashboard").json()["counts"]["active"] == 0
+
+    api.post(f"/api/events/{marked['undo_event_id']}/undo").raise_for_status()
+    assert api.get(f"/api/tasks/{task['id']}").json()["sample"] is False
+    assert api.get("/api/dashboard").json()["counts"]["active"] == 1
+
+
+def test_created_test_tasks_and_removing_the_test_data_source(api: Any) -> None:
+    manual = api.post("/api/tasks", json={"title": "测试：没有截止日期", "sample": True}).json()
+    assert manual["sample"] is True and api.get("/api/dashboard").json()["counts"]["active"] == 0
+    kept = upload_eml(api, eml(*THREE_MAILS[1][:2], "real-visa"))
+    upload_eml(api, eml(*THREE_MAILS[2][:2], "test-exam"), sample=True)
+    source = next(s for s in api.get("/api/sources").json()["items"] if s["kind"] == "sample_upload")
+    removed = api.delete(f"/api/sources/{source['id']}").json()
+    assert removed["removed_tasks"] == 1
+    titles = [t["title"] for t in api.get("/api/tasks").json()["items"]]
+    assert manual["title"] in titles  # created by hand: not part of the removed source
+    assert api.get(f"/api/messages/{kept['message_id']}").status_code == 200  # real data untouched
+    assert len(titles) == 2
+
+
+def test_demo_mailbox_tasks_are_samples(api: Any) -> None:
+    source = api.post("/api/demo/mailbox").json()
+    assert api.post(f"/api/sources/{source['id']}/sync", params={"wait": True}).json()["job"]["status"] == "succeeded"
+    items = api.get("/api/tasks").json()["items"]
+    assert items and all(t["sample"] for t in items)
+    dashboard = api.get("/api/dashboard").json()
+    assert dashboard["counts"]["candidates"] == 0 and dashboard["counts"]["sample_open"] == len(items)
+    assert api.get("/api/metrics").json()["feedback"]["agent_tasks"] == 0
+    removed = api.delete(f"/api/sources/{source['id']}").json()
+    assert removed["removed_tasks"] == len(items)
+    assert api.get("/api/tasks").json()["items"] == []

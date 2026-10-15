@@ -524,3 +524,128 @@ def test_a_title_cut_off_mid_phrase_is_flagged_for_review() -> None:
     assert task.title == "Register for only"
     assert "title_incomplete" in task.uncertainties  # shown as "content needs checking"; the sentence is kept
     assert task.action_required.startswith("Please register for only")
+
+
+# ---------------------------------------------------------------------------------------------
+# rules-1.6: offers, surveys, legal text and the sender's own duties (synthetic reproductions of
+# patterns seen in a real mailbox)
+# ---------------------------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        # Offers that depend on the reader's wish
+        "If you need to add more information, simply reply to this message.",
+        "Sofern Sie uns weitere Anmerkungen zukommen lassen möchten, schreiben Sie bitte an feedback@example.org.",
+        "如果您有物品遗失在车内，请点击以下链接提交报告。",
+        "We kindly ask that you register for these courses only if you are sure you can complete them.",
+        "Erst wenn Sie Ihre Mitgliedschaft bestätigen, können Sie Punkte sammeln.",
+        # Surveys and feedback requests
+        "Please take a few minutes to complete our survey, it helps us improve our service.",
+        "我们诚挚邀请您分享您的宝贵意见，问卷只需大约2分钟完成，希望您能拨冗填写。",
+        "Ab sofort können Sie an unserer großen Studierendenumfrage teilnehmen.",
+        # Statutory text of order confirmations
+        "You must send back the goods without undue delay and in any case no later than 14 days after you "
+        "cancel this contract.",
+        "Es handelt sich lediglich um eine gesetzliche Pflichtinformation, die wir Ihnen vor Ihrer Bestellung "
+        "zukommen lassen müssen.",
+        # What the sender has to do, what is merely possible, verbs that describe a noun
+        "Given the number of registrations, we will have to book a second room.",
+        "Ab heute können Sie Bücher in der neuen Bibliothek ausleihen.",
+        "请确保您上传的文件清晰完整。",
+        "Please remember to de-register if you will not take part in the retake.",
+    ],
+)
+def test_offers_surveys_and_legal_text_are_not_tasks(body: str) -> None:
+    assert RULES.extract(make_input(body, title="Info")).tasks == []
+
+
+@pytest.mark.parametrize(
+    ("body", "title", "due"),
+    [
+        ("If you want to take part, please register by 20.11.2026.", "Register: Summer school", "2026-11-20"),
+        (
+            "All participants must complete the safety questionnaire by 20.11.2026.",
+            "Complete safety questionnaire",
+            "2026-11-20",
+        ),
+        ("我们需要您在2026年11月20日前提供护照复印件。", "提供护照复印件", "2026-11-20"),
+        (
+            "Bitte geben Sie die ausgeliehenen Bücher bis zum 30.11.2026 zurück.",
+            "Ausgeliehenen Bücher zurückgeben",
+            "2026-11-30",
+        ),
+    ],
+)
+def test_real_requests_stay_tasks(body: str, title: str, due: str) -> None:
+    [task] = RULES.extract(make_input(body, title="Summer school")).tasks
+    assert (task.title, task.due.date.isoformat() if task.due.date else None) == (title, due)
+
+
+def test_a_permission_with_a_date_is_kept_but_flagged() -> None:
+    [task] = RULES.extract(
+        make_input("Until Friday, 13.11.2026, you may inspect your exam and submit a review in the portal.")
+    ).tasks
+    assert "permission_only" in task.uncertainties and task.confidence < 0.6
+
+
+def test_a_polite_question_is_a_request() -> None:
+    [task] = RULES.extract(make_input("Können Sie mir die Unterlagen bis Freitag, 13.11.2026 zusenden?")).tasks
+    assert task.due.date == dt.date(2026, 11, 13)
+
+
+def test_titles_lose_markdown_emphasis_and_start_at_the_request() -> None:
+    [setup] = RULES.extract(make_input("* Please prepare your setup _before_ the first tutorial.")).tasks
+    assert setup.title == "Complete setup before the first tutorial"
+    [mixed] = RULES.extract(
+        make_input("Reason: 逾期支付  Please contact us as soon as possible to reactivate it.")
+    ).tasks
+    # The status label's verb ("支付") is not the request: the title starts at "Please".
+    assert mixed.title == "Contact us as soon as possible to reactivate it"
+
+
+@pytest.mark.parametrize(
+    ("body", "title", "due"),
+    [
+        (
+            "If you do not pay the semester fee by 20.11.2026, you will be exmatriculated.",
+            "Pay semester fee",
+            "2026-11-20",
+        ),
+        (
+            "Wenn Sie den Semesterbeitrag nicht bis zum 20.11.2026 überweisen, werden Sie exmatrikuliert.",
+            "Semesterbeitrag überweisen",
+            "2026-11-20",
+        ),
+        ("如果您未在2026年11月3日前采取行动，发送给您的电子邮件将退回给发件人。", "处理: Postfach voll", "2026-11-03"),
+    ],
+)
+def test_a_condition_with_a_deadline_names_what_is_expected(body: str, title: str, due: str) -> None:
+    # Missed by rules-1.5: "if you do not pay by ..." was read as "do not pay".
+    [task] = RULES.extract(make_input(body, title="Postfach voll")).tasks
+    assert (task.title, str(task.due.date)) == (title, due)
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        "If you do not wish to participate, please ignore this message.",
+        "Please do not pay before 20.11.2026.",
+    ],
+)
+def test_prohibitions_and_opt_outs_stay_out(body: str) -> None:
+    assert RULES.extract(make_input(body)).tasks == []
+
+
+@pytest.mark.parametrize(
+    ("body", "title"),
+    [
+        # Hard-wrapped HTML mails leave a space or a line break inside a Chinese word.
+        ("如果您未在 2026年11月3日前采取行 动，发送给您的电子邮件将退回给发件人。", "处理: 存储空间已满"),
+        ("各位同学：\n请于2026年11月20日前通过TUMonline上\n传在读证明。", "上传在读证明"),
+    ],
+)
+def test_chinese_words_split_by_a_line_wrap_are_still_recognised(body: str, title: str) -> None:
+    [task] = RULES.extract(make_input(body, title="存储空间已满")).tasks
+    assert task.title == title and task.due.date is not None

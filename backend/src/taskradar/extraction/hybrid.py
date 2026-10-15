@@ -25,7 +25,7 @@ class ExtractionNotPermitted(Exception):
 
 def has_obligation_cues(text: str) -> bool:
     """Cheap check used for data minimisation: only content with possible obligations goes to a model."""
-    if lx.detect_action(text) is not None or lx.OBLIGATION_CUES.search(text):
+    if lx.detect_action(text) is not None or lx.OBLIGATION_CUES.search(text) or lx.POLITE_REQUEST_CUES.search(text):
         return True
     if any(p.search(text) for _, p in lx.COMPLETION_PATTERNS) or lx.REMINDER_CUES.search(text):
         return True

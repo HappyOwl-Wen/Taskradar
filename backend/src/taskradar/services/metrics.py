@@ -1,5 +1,7 @@
 """Observability metrics computed from real local data (never estimated or invented).
 
+Demo and test data (sample sources and sample tasks) are left out of every figure.
+
 * processing success rate (documents / messages)
 * agent runs: average latency, fallbacks, token usage and estimated cost
 * deduplication: merged duplicates, merges undone by the user (wrong-merge rate)
@@ -11,13 +13,14 @@ from __future__ import annotations
 
 from typing import Any
 
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session, sessionmaker
 
 from taskradar.db.models import (
     Document,
     ExtractionRun,
     Message,
+    Source,
     Task,
     TaskEvent,
     TaskLink,
@@ -25,6 +28,7 @@ from taskradar.db.models import (
     TaskSuggestion,
 )
 from taskradar.db.session import transaction
+from taskradar.domain.enums import SAMPLE_SOURCE_KINDS
 
 
 def _rate(part: int, total: int) -> float | None:
@@ -36,9 +40,21 @@ class MetricsService:
         self._factory = session_factory
 
     def summary(self) -> dict[str, Any]:
+        sample_sources = select(Source.id).where(Source.kind.in_(SAMPLE_SOURCE_KINDS))
+        real_docs = Document.source_id.not_in(sample_sources)
+        real_msgs = Message.source_id.not_in(sample_sources)
+        real_runs = or_(
+            ExtractionRun.message_id.in_(select(Message.id).where(real_msgs)),
+            ExtractionRun.document_id.in_(select(Document.id).where(real_docs)),
+        )
+        real_tasks = Task.sample.is_(False)
         with transaction(self._factory) as session:
-            doc_counts = dict(session.execute(select(Document.status, func.count()).group_by(Document.status)).all())
-            msg_counts = dict(session.execute(select(Message.status, func.count()).group_by(Message.status)).all())
+            doc_counts = dict(
+                session.execute(select(Document.status, func.count()).where(real_docs).group_by(Document.status)).all()
+            )
+            msg_counts = dict(
+                session.execute(select(Message.status, func.count()).where(real_msgs).group_by(Message.status)).all()
+            )
             doc_total = sum(doc_counts.values())
             msg_total = sum(msg_counts.values())
 
@@ -49,33 +65,40 @@ class MetricsService:
                     func.sum(ExtractionRun.input_tokens),
                     func.sum(ExtractionRun.output_tokens),
                     func.sum(ExtractionRun.cost_usd),
-                )
+                ).where(real_runs)
             ).one()
             by_extractor = [
                 {"extractor": name, "runs": count, "avg_latency_ms": round(avg or 0, 1)}
                 for name, count, avg in session.execute(
-                    select(ExtractionRun.extractor, func.count(), func.avg(ExtractionRun.latency_ms)).group_by(
-                        ExtractionRun.extractor
-                    )
+                    select(ExtractionRun.extractor, func.count(), func.avg(ExtractionRun.latency_ms))
+                    .where(real_runs)
+                    .group_by(ExtractionRun.extractor)
                 ).all()
             ]
-            fallbacks = session.scalar(select(func.count()).where(ExtractionRun.status == "fallback")) or 0
-            llm_runs = session.scalar(select(func.count()).where(ExtractionRun.provider.isnot(None))) or 0
+            fallbacks = session.scalar(select(func.count()).where(ExtractionRun.status == "fallback", real_runs)) or 0
+            llm_runs = session.scalar(select(func.count()).where(ExtractionRun.provider.isnot(None), real_runs)) or 0
             avg_doc_ms = session.scalar(
-                select(func.avg(Document.processing_ms)).where(Document.processing_ms.isnot(None))
+                select(func.avg(Document.processing_ms)).where(Document.processing_ms.isnot(None), real_docs)
             )
 
             duplicates = (
-                session.scalar(select(func.count()).select_from(TaskSource).where(TaskSource.relation == "duplicate"))
+                session.scalar(
+                    select(func.count())
+                    .select_from(TaskSource)
+                    .join(Task, Task.id == TaskSource.task_id)
+                    .where(TaskSource.relation == "duplicate", real_tasks)
+                )
                 or 0
             )
             reverted_merges = (
                 session.scalar(
                     select(func.count())
                     .select_from(TaskEvent)
+                    .join(Task, Task.id == TaskEvent.task_id)
                     .where(
                         TaskEvent.event_type == "source_attached",
                         TaskEvent.reverted_at.isnot(None),
+                        real_tasks,
                     )
                 )
                 or 0
@@ -83,15 +106,16 @@ class MetricsService:
             dup_suggestions = dict(
                 session.execute(
                     select(TaskSuggestion.status, func.count())
-                    .where(TaskSuggestion.kind == "possible_duplicate")
+                    .join(Task, Task.id == TaskSuggestion.task_id)
+                    .where(TaskSuggestion.kind == "possible_duplicate", real_tasks)
                     .group_by(TaskSuggestion.status)
                 ).all()
             )
 
-            agent_tasks = select(Task).where(Task.manual.is_(False))
+            agent_tasks = select(Task).where(Task.manual.is_(False), real_tasks)
             status_counts = dict(
                 session.execute(
-                    select(Task.status, func.count()).where(Task.manual.is_(False)).group_by(Task.status)
+                    select(Task.status, func.count()).where(Task.manual.is_(False), real_tasks).group_by(Task.status)
                 ).all()
             )
             total_tasks = session.scalar(select(func.count()).select_from(agent_tasks.subquery())) or 0
@@ -103,7 +127,9 @@ class MetricsService:
                 session.scalar(
                     select(func.count(func.distinct(Task.id)))
                     .join(TaskLink, TaskLink.task_id == Task.id)
-                    .where(Task.manual.is_(False), Task.status == "dismissed", TaskLink.kind == "merged_into")
+                    .where(
+                        Task.manual.is_(False), real_tasks, Task.status == "dismissed", TaskLink.kind == "merged_into"
+                    )
                 )
                 or 0
             )
@@ -112,7 +138,8 @@ class MetricsService:
                 session.scalar(
                     select(func.count())
                     .select_from(TaskEvent)
-                    .where(TaskEvent.event_type == "status_changed", TaskEvent.actor == "agent")
+                    .join(Task, Task.id == TaskEvent.task_id)
+                    .where(TaskEvent.event_type == "status_changed", TaskEvent.actor == "agent", real_tasks)
                 )
                 or 0
             )
@@ -120,10 +147,12 @@ class MetricsService:
                 session.scalar(
                     select(func.count())
                     .select_from(TaskEvent)
+                    .join(Task, Task.id == TaskEvent.task_id)
                     .where(
                         TaskEvent.event_type == "status_changed",
                         TaskEvent.actor == "agent",
                         TaskEvent.reverted_at.isnot(None),
+                        real_tasks,
                     )
                 )
                 or 0

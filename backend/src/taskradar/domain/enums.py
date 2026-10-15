@@ -158,6 +158,11 @@ class SourceKind(StrEnum):
     DEMO_MAIL = "demo_mail"
     UPLOAD = "upload"
     FOLDER = "folder"
+    SAMPLE_UPLOAD = "sample_upload"  # files and mails imported as test data
+
+
+SAMPLE_SOURCE_KINDS: frozenset[str] = frozenset({SourceKind.DEMO_MAIL.value, SourceKind.SAMPLE_UPLOAD.value})
+"""Sources whose items are demo or test data: their tasks are marked as samples."""
 
 
 class SourceStatus(StrEnum):
@@ -218,6 +223,7 @@ class EventType(StrEnum):
     CALENDAR_FAILED = "calendar_failed"
     CALENDAR_REMOVED = "calendar_removed"
     LINKED = "linked"
+    REVIEW_RESOLVED = "review_resolved"  # the user cleared a review flag ("the new deadline is right")
 
 
 class NotificationLevel(StrEnum):

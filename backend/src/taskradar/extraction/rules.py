@@ -35,7 +35,7 @@ from taskradar.extraction import lexicon as lx
 from taskradar.extraction.dates import DateMention, choose_deadline, find_dates, mention_to_due
 from taskradar.parsing.language import detect_language
 
-RULES_VERSION = "rules-1.5"
+RULES_VERSION = "rules-1.6"
 RULES_CONFIDENCE_CAP = 0.85
 
 _HARD_BREAK = re.compile(r"[^\n。！？!?；;]+[。！？!?；;]?")
@@ -286,11 +286,16 @@ def remove_date_phrase(text: str, spans: list[tuple[int, int]]) -> str:
 _LIST_MARKER = re.compile(r"^\s*(?:\d{1,2}[.、)）]|[-•*·▪●]|[（(]\d{1,2}[)）]|[一二三四五六七八九十]、)\s*")
 
 
+_EMPHASIS = re.compile(r"(?<![A-Za-z0-9])_+(?=\w)|(?<=\w)_+(?![A-Za-z0-9])")  # "_before _the" (Markdown)
+
+
 def _clip(text: str, limit: int) -> str:
-    text = text.replace(DATE_PLACEHOLDER, "")
+    text = _EMPHASIS.sub("", text.replace(DATE_PLACEHOLDER, ""))
     text = _LIST_MARKER.sub("", text)
     text = re.sub(r"\s+([.,;:!?。，；：！？])", r"\1", re.sub(r"\s+", " ", text))
     text = text.strip(" -–—:：,，.")
+    if text.endswith(")") and text.count(")") > text.count("("):
+        text = text[:-1].rstrip()  # the opening bracket was cut off with the rest of the sentence
     return text if len(text) <= limit else text[: limit - 1].rstrip() + "…"
 
 
@@ -318,6 +323,8 @@ def _title_en(seg: str, match: re.Match[str], action: ActionType) -> str | None:
     if "due" in verb:
         return None
     rest = seg[match.end() :].lstrip()
+    if re.match(r"(?:please|kindly)\b", rest, re.I):
+        return None  # the verb belongs to a label ("Reason: 逾期支付 Please contact us"), not to this request
     label = lx.ACTION_LABELS["en"][action]
     if action in (ActionType.REGISTER, ActionType.APPLY) and rest.lower().startswith("for "):
         rest = rest[4:]
@@ -343,6 +350,9 @@ def _title_en(seg: str, match: re.Match[str], action: ActionType) -> str | None:
     return _clip(f"{label} {obj}", 80)
 
 
+_DE_PARTICLES = {"ein", "ab", "vor", "hoch", "an", "aus", "mit", "zurück", "nach"}
+
+
 def _de_infinitive(verb_text: str) -> str:
     words = verb_text.lower().split()
     first = words[0]
@@ -351,7 +361,9 @@ def _de_infinitive(verb_text: str) -> str:
     if first == "zu" and len(words) > 1:
         return words[1]
     if first in _DE_SEPARABLE and "sie" in words:
-        return _DE_SEPARABLE[first]
+        particle = words[-1].strip(".,;:!?")
+        # "geben Sie ... zurück" -> "zurückgeben" ("geben Sie ... ab" -> "abgeben")
+        return f"{particle}{first}" if particle in _DE_PARTICLES else _DE_SEPARABLE[first]
     return first
 
 
@@ -375,8 +387,11 @@ def _title_de(seg: str, match: re.Match[str]) -> str | None:
         # Passive obligation "Die Rechnung ... ist bis ... zu begleichen" -> keep the subject phrase.
         before = re.sub(r"\s+(?:ist|sind|muss|müssen|wird|werden)\b.*$", "", before)
         before = _DE_MODAL.sub("", before)
+        # "Wenn Sie den Semesterbeitrag nicht bis … überweisen, …" -> the object without the condition.
+        before = re.sub(r"^\s*(?:wenn|falls|sofern|sollten)\s+Sie\s+", "", before, flags=re.I)
         obj = before
     obj = _strip_date_phrases(obj)
+    obj = re.sub(r"\s+(?:noch\s+)?nicht\s*$", "", obj.rstrip())
     full = re.sub(r"^\s*sich\b", "", obj).strip()
     cut = _DE_CUT.search(" " + full)
     obj = (" " + full)[: cut.start()].strip() if cut else full
@@ -403,6 +418,7 @@ def build_title(
         _, match = found
         if lang == "zh":
             title = _title_zh(masked_seg, match)
+            title = display_quote(title) if title else title  # "采取行 动" (a soft wrap) -> "采取行动"
         elif lang == "de":
             title = _title_de(masked_seg, match)
             if title:
@@ -424,10 +440,24 @@ def build_title(
             if label_lang == "de":
                 return f"{obj} {verb}"
             return f"{verb} {obj}"
-    if action in (ActionType.REPLY, ActionType.CONFIRM) and context_title:
-        verb = lx.ACTION_LABELS[label_lang][action]
-        subject = re.sub(r"^(?:re|aw|wg|fw|fwd|回复|转发)\s*[:：]\s*", "", context_title.strip(), flags=re.I)
+    subject = (
+        re.sub(r"^(?:re|aw|wg|fw|fwd|回复|转发)\s*[:：]\s*", "", context_title.strip(), flags=re.I)
+        if context_title
+        else ""
+    )
+    verb = lx.ACTION_LABELS[label_lang][action]
+    if action in (ActionType.REPLY, ActionType.CONFIRM) and subject:
         return _clip(f"{verb.capitalize()}: {subject}", 80)
+    cue = lx.find_obligation(masked_seg)
+    if cue is not None and cue.start() > 0:
+        # "If you want to take part, please register": the request starts at the cue, not at the condition.
+        tail = _strip_date_phrases(masked_seg[cue.end() :]).replace(DATE_PLACEHOLDER, "").strip(" ,，.。")
+        if len(tail.split()) <= 1 and subject:
+            return _clip(f"{verb.capitalize()}: {subject}", 80)
+        if len(tail) >= 3:
+            return _clip(tail[0].upper() + tail[1:], 60)
+    if action == ActionType.OTHER and subject:
+        return _clip(f"{verb.capitalize()}: {subject}", 80)  # "take action": what it is about is in the subject
     return _clip(re.sub(r"^(?:also|und|and|另外|此外)[,，]?\s*", "", _strip_date_phrases(masked_seg), flags=re.I), 60)
 
 
@@ -473,19 +503,25 @@ def _mentions_in(mentions: list[DateMention], seg: Segment) -> list[DateMention]
 # A negation right before the verb in the same clause: "Bitte nicht antworten", "Please do not reply",
 # "请勿直接回复". "Don't forget to pay" / "Vergessen Sie nicht, … zu überweisen" are instructions all the same.
 _NEGATION_BEFORE = re.compile(
-    r"(?:\b(?:do\s+not|don['’]?t|never|no\s+need\s+to|not\s+necessary\s+to|nicht|kein(?:e[nmrs]?)?)\b"
+    r"(?P<neg>\b(?:do\s+not|don['’]?t|(?:will|would|shall|could|are|is)\s+not|won['’]?t|cannot|can['’]?t|never|"
+    r"no\s+need\s+to|not\s+necessary\s+to|nicht|kein(?:e[nmrs]?)?)\b"
     r"|请勿|切勿|勿|不要|不用|不必|无需|无须|别)"
     r"[^.!?。！？;；,，:：\n]{0,25}$",
     re.I,
 )
 _NEGATION_AFTER = re.compile(r"^\s*(?:Sie|du|ihr)\s+(?:bitte\s+)?nicht\b(?!\s+nur)", re.I)  # "antworten Sie nicht"
 _NOT_A_NEGATION = re.compile(r"forget|vergessen|vergiss|忘", re.I)
+_CONDITION = re.compile(r"\b(?:if|unless|falls|wenn|sofern|sollten)\b|如果|若|倘若|假如", re.I)
 
 
-def _negated_instruction(seg_text: str, match: re.Match[str]) -> bool:
+def _negated_instruction(seg_text: str, match: re.Match[str], *, deadline: bool = False) -> bool:
     before = _NEGATION_BEFORE.search(seg_text[: match.start()])
     if before is not None and not _NOT_A_NEGATION.search(before.group(0)):
-        return True
+        # "If you do not pay the fee by 20.11., you will be exmatriculated": a condition with a deadline that
+        # names what is expected (the action right after the negation) - not a prohibition.
+        gap = before.group(0)[len(before.group("neg")) :].split()
+        threat = deadline and len(gap) <= 1 and _CONDITION.search(seg_text[: before.start()]) is not None
+        return not threat
     return bool(_NEGATION_AFTER.match(seg_text[match.end() : match.end() + 30]))
 
 
@@ -497,15 +533,23 @@ _DANGLING_END = re.compile(
 )
 
 
+# A second request inside the title ("Pay Please contact us") means it was put together from two clauses.
+_INNER_REQUEST = re.compile(r"\s(?:please|kindly|bitte)\b|.请", re.I)
+
+
 def _incomplete_title(title: str) -> bool:
     core = re.sub(r"[\s:：,，.。;；\-–—#*_=~]+$", "", title)
-    return not core or _DANGLING_END.search(core) is not None
+    if not core or _DANGLING_END.search(core) is not None:
+        return True
+    # A whole sentence cut off with "…": no short action phrase was found; the full sentence stays in
+    # "action required".
+    return core.endswith("…") or _INNER_REQUEST.search(core) is not None
 
 
 def _is_instruction(seg: Segment) -> bool:
     """An action verb together with an obligation cue ("please pay", "请缴纳"); a bare verb in a status
     line ("Payment status: 未支付") is not an instruction."""
-    return lx.detect_action(seg.text) is not None and bool(lx.OBLIGATION_CUES.search(seg.text))
+    return lx.detect_action(seg.text) is not None and lx.find_obligation(seg.text) is not None
 
 
 class RuleBasedExtractor:
@@ -545,23 +589,29 @@ class RuleBasedExtractor:
                     continue
 
             # ---- obligations ---------------------------------------------------------------
-            if lx.BOILERPLATE.search(seg_text):
-                continue  # "reply above this line", "this e-mail was sent automatically", …
+            if lx.BOILERPLATE.search(seg_text) or lx.LEGAL_BOILERPLATE.search(seg_text):
+                continue  # "reply above this line", "sent automatically", withdrawal policy, warranty text …
             found = lx.detect_instructed_action(seg_text)
             if found is None:
                 continue
             action, match = found
-            if _negated_instruction(seg_text, match):
-                continue  # "Bitte nicht antworten", "Please do not reply", "请勿回复"
-            if (
-                action in lx.GENERIC_ACTIONS
-                and seg_text.rstrip().endswith((":", "："))
-                and not _mentions_in(mentions, seg)
-            ):
-                continue  # list header such as "本周需要完成：" / "Please complete the following:"
-            obligation = bool(lx.OBLIGATION_CUES.search(seg_text))
             seg_mentions = _mentions_in(mentions, seg)
             cued = [m for m in seg_mentions if m.deadline_cue]
+            if _negated_instruction(seg_text, match, deadline=bool(cued)):
+                continue  # "Bitte nicht antworten", "Please do not reply", "请勿回复"
+            if action in lx.GENERIC_ACTIONS and seg_text.rstrip().endswith((":", "：")) and not seg_mentions:
+                continue  # list header such as "本周需要完成：" / "Please complete the following:"
+            offer = lx.OPTIONAL_OFFER_CUES.search(seg_text)
+            restricts = offer is not None and offer.group(0).lower().startswith("only")  # "... only if you feel ready"
+            if offer is not None and (offer.start() <= match.start() or restricts) and not cued:
+                continue  # "If you need to add anything, reply to this mail": an offer, not a task
+            if lx.SURVEY_CUES.search(seg_text) and not lx.MANDATORY_CUES.search(seg_text):
+                continue  # surveys and feedback requests are optional
+            if lx.SENDER_OBLIGATION_CUES.search(seg_text) and not lx.READER_DUTY_CUES.search(seg_text):
+                continue  # what the sender has to do ("we will have to reserve an extra room")
+            obligation = lx.find_obligation(seg_text) is not None
+            # "you may inspect your exam and submit a review until Friday": possible, not required.
+            permission = not obligation and lx.PERMISSION_CUES.search(seg_text[: match.end()]) is not None
             if not obligation and not cued and not negated_done:
                 continue
             if conditional_done:
@@ -618,6 +668,9 @@ class RuleBasedExtractor:
             if marketing >= 2:
                 confidence -= 0.25
                 uncertainties.append("marketing_context")
+            if permission:
+                confidence -= 0.2
+                uncertainties.append("permission_only")
             page_conf = self._page_ocr_confidence(inp, seg.page)
             if page_conf is not None and page_conf < 0.6:
                 confidence -= 0.1

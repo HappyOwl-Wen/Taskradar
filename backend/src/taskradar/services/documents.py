@@ -86,6 +86,12 @@ def get_or_create_source(session: Session, kind: SourceKind, name: str, account:
     return source
 
 
+def _upload_source(session: Session, sample: bool) -> Source:
+    if sample:
+        return get_or_create_source(session, SourceKind.SAMPLE_UPLOAD, "测试数据")
+    return get_or_create_source(session, SourceKind.UPLOAD, "手动导入")
+
+
 class DocumentService:
     def __init__(
         self,
@@ -110,7 +116,8 @@ class DocumentService:
     # Upload entry point
     # ------------------------------------------------------------------------------------------
 
-    def import_bytes(self, data: bytes, filename: str | None) -> ImportResult:
+    def import_bytes(self, data: bytes, filename: str | None, *, sample: bool = False) -> ImportResult:
+        """Import an uploaded file; ``sample`` imports it as test data (its tasks never count or remind)."""
         safe_name = sanitize_filename(filename, fallback="upload")
         max_bytes = self.settings.get().folders.max_file_mb * 1024 * 1024
         if len(data) == 0:
@@ -134,9 +141,9 @@ class DocumentService:
                 error_message="Only PDF, PNG, JPEG, WebP and .eml files are supported",
             )
         if sniffed.kind == "email":
-            return self.import_eml(data, safe_name)
+            return self.import_eml(data, safe_name, sample=sample)
         with transaction(self._factory) as session:
-            source = get_or_create_source(session, SourceKind.UPLOAD, "手动导入")
+            source = _upload_source(session, sample)
             doc, created = self._store_document(
                 session, data, sniffed, safe_name, source_id=source.id, dedupe_key=f"upload:{sha256_bytes(data)}"
             )
@@ -426,7 +433,7 @@ class DocumentService:
     # .eml import (mail without Gmail)
     # ------------------------------------------------------------------------------------------
 
-    def import_eml(self, data: bytes, safe_name: str) -> ImportResult:
+    def import_eml(self, data: bytes, safe_name: str, *, sample: bool = False) -> ImportResult:
         try:
             normalized = parse_eml_bytes(
                 data, max_attachment_bytes=self.settings.get().gmail.max_attachment_mb * 1024 * 1024
@@ -434,7 +441,7 @@ class DocumentService:
         except Exception as exc:  # malformed mail
             return ImportResult(safe_name, "failed", False, error_code="corrupted_file", error_message=str(exc)[:200])
         with transaction(self._factory) as session:
-            source = get_or_create_source(session, SourceKind.UPLOAD, "手动导入")
+            source = _upload_source(session, sample)
             message, created = self.store_message(session, normalized, source=source, web_link=None)
             message_id = message.id
         result = ImportResult(safe_name, "processed", created, message_id=message_id)

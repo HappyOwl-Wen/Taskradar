@@ -4,10 +4,11 @@ from __future__ import annotations
 
 import contextlib
 import logging
+from functools import partial
 from pathlib import Path
 from typing import Any
 
-from fastapi import APIRouter, Depends, File, Request, UploadFile
+from fastapi import APIRouter, Depends, File, Form, Request, UploadFile
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import func, select
@@ -18,7 +19,7 @@ from taskradar.api.serializers import document_brief, message_brief, run_to_dict
 from taskradar.container import Container
 from taskradar.db.models import Document, ExtractionRun, Message, Source, SyncCheckpoint, SyncJob, TaskSource
 from taskradar.db.session import transaction
-from taskradar.domain.enums import JobTrigger, SourceKind
+from taskradar.domain.enums import SAMPLE_SOURCE_KINDS, JobTrigger, SourceKind
 from taskradar.security.permissions import SideEffect
 from taskradar.services.documents import get_or_create_source
 from taskradar.services.jobs import JobAlreadyRunning, job_to_dict
@@ -150,14 +151,15 @@ def delete_source(source_id: int, c: Container = Depends(get_container)) -> dict
         if source is None:
             raise ApiError("source_not_found", "Source not found", 404)
         kind = source.kind
+    removed_tasks = 0
     if kind == SourceKind.FOLDER.value:
         c.folders.remove_folder(source_id)
-    elif kind == SourceKind.DEMO_MAIL.value:
-        with transaction(c.factory) as session:
-            session.delete(session.get(Source, source_id))
+    elif kind in SAMPLE_SOURCE_KINDS:
+        # Demo mailbox / test data: its mails, files and the sample tasks they produced go with it.
+        removed_tasks = c.data.delete_sample_source(source_id)
     else:
         raise ApiError("source_not_removable", "Disconnect Gmail in the settings instead", 409)
-    return {"deleted": source_id}
+    return {"deleted": source_id, "removed_tasks": removed_tasks}
 
 
 @router.get("/sync-jobs")
@@ -216,7 +218,11 @@ def set_failure_mode(body: FailureModeBody, c: Container = Depends(get_container
 
 
 @router.post("/documents/upload")
-async def upload(files: list[UploadFile] = File(...), c: Container = Depends(get_container)) -> dict[str, Any]:
+async def upload(
+    files: list[UploadFile] = File(...),
+    sample: bool = Form(False),  # test data: kept apart from real tasks, never counted or reminded
+    c: Container = Depends(get_container),
+) -> dict[str, Any]:
     if len(files) > MAX_UPLOAD_FILES:
         raise ApiError("too_many_files", f"Upload at most {MAX_UPLOAD_FILES} files at once", 413)
     limit = c.settings.get().folders.max_file_mb * 1024 * 1024
@@ -226,7 +232,7 @@ async def upload(files: list[UploadFile] = File(...), c: Container = Depends(get
         await upload_file.close()
         from starlette.concurrency import run_in_threadpool
 
-        result = await run_in_threadpool(c.documents.import_bytes, data, upload_file.filename)
+        result = await run_in_threadpool(partial(c.documents.import_bytes, data, upload_file.filename, sample=sample))
         results.append(result.__dict__)
     return {"results": results}
 
@@ -431,12 +437,17 @@ def delete_message(message_id: int, c: Container = Depends(get_container)) -> di
 
 @router.get("/failures")
 def failures(c: Container = Depends(get_container)) -> dict[str, Any]:
+    real = select(Source.id).where(Source.kind.not_in(SAMPLE_SOURCE_KINDS))  # test data is not a failure to report
     with transaction(c.factory) as session:
         docs = session.scalars(
-            select(Document).where(Document.status == "failed").order_by(Document.imported_at.desc())
+            select(Document)
+            .where(Document.status == "failed", Document.source_id.in_(real))
+            .order_by(Document.imported_at.desc())
         ).all()
         msgs = session.scalars(
-            select(Message).where(Message.status == "failed").order_by(Message.created_at.desc())
+            select(Message)
+            .where(Message.status == "failed", Message.source_id.in_(real))
+            .order_by(Message.created_at.desc())
         ).all()
         jobs = session.scalars(
             select(SyncJob)

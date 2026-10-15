@@ -10,7 +10,6 @@ the user resolves in the inbox.
 
 from __future__ import annotations
 
-import datetime as dt
 from dataclasses import dataclass
 from typing import Literal, Protocol
 
@@ -82,7 +81,6 @@ class Reconciler:
         *,
         origin_key: str,
         thread_id: str | None,
-        source_date: dt.datetime | None,
         existing: list[TaskSnapshot],
     ) -> MatchDecision:
         best: tuple[float, TaskSnapshot, list[str], DecisionLayer] | None = None
@@ -117,7 +115,7 @@ class Reconciler:
         score, task, reasons, layer = best
 
         if score >= self.config.same_threshold:
-            return self._same_task_relation(cand, task, source_date, score, layer, reasons)
+            return self._same_task_relation(cand, task, score, layer, reasons)
 
         if score >= self.config.gray_threshold:
             if self.judge is not None:
@@ -125,7 +123,7 @@ class Reconciler:
                 if verdict is not None:
                     reasons = [*reasons, f"judge={verdict.relation}:{verdict.confidence:.2f}", verdict.reason[:200]]
                     if verdict.relation == "same_task" and verdict.confidence >= 0.7:
-                        return self._same_task_relation(cand, task, source_date, score, "semantic", reasons)
+                        return self._same_task_relation(cand, task, score, "semantic", reasons)
                     if verdict.relation == "related" and verdict.confidence >= 0.6:
                         return MatchDecision(
                             relation=MatchRelation.RELATED,
@@ -157,7 +155,6 @@ class Reconciler:
         self,
         cand: CandidateTask,
         task: TaskSnapshot,
-        source_date: dt.datetime | None,
         score: float,
         layer: DecisionLayer,
         reasons: list[str],
@@ -171,26 +168,35 @@ class Reconciler:
                 reasons=[*reasons, *extra],
             )
 
-        if cand.due.date is None or task.due_date is None or cand.due.date == task.due_date:
+        same_day = cand.due.date is None or task.due_date is None or cand.due.date == task.due_date
+        # 12:00 in one mail and 23:59 in the other is a different deadline as well.
+        time_conflict = (
+            cand.due.date is not None
+            and cand.due.date == task.due_date
+            and cand.due.time is not None
+            and task.due_time is not None
+            and cand.due.time != task.due_time
+        )
+        if same_day and not time_conflict:
             return decision(MatchRelation.DUPLICATE)
-        gap = abs((cand.due.date - task.due_date).days)
         explicit_change = cand.relation_hint == RelationHint.DEADLINE_CHANGE
-        if gap > self.config.recurring_gap_days and not explicit_change:
-            return MatchDecision(
-                relation=MatchRelation.RELATED,
-                task_id=task.id,
-                score=score,
-                layer=layer,
-                reasons=[*reasons, f"deadline_gap_{gap}_days_recurring"],
-            )
-        newer = source_date is None or task.last_source_at is None or source_date >= task.last_source_at
+        if not time_conflict and cand.due.date is not None and task.due_date is not None:
+            gap = abs((cand.due.date - task.due_date).days)
+            if gap > self.config.recurring_gap_days and not explicit_change:
+                return MatchDecision(
+                    relation=MatchRelation.RELATED,
+                    task_id=task.id,
+                    score=score,
+                    layer=layer,
+                    reasons=[*reasons, f"deadline_gap_{gap}_days_recurring"],
+                )
         if explicit_change:
+            # The new source says that the deadline was changed ("verlängert bis", "延长至"): an update of
+            # the same obligation. The policy decides whether it is applied (always flagged for review) or
+            # only suggested.
             return decision(MatchRelation.DEADLINE_UPDATE, "explicit_deadline_change")
-        # A different date is only treated as an update of the same obligation when the new source
-        # itself refers back to it (reminder / same thread) or the match is very strong.
-        strong = cand.relation_hint == RelationHint.REMINDER or "same_mail_thread" in reasons or score >= 0.85
-        if newer and strong:
-            return decision(MatchRelation.DEADLINE_UPDATE, "newer_source")
+        # Same obligation, different deadline, and nothing says which one is right: never merged silently.
+        # Both stay as tasks and the user compares them and picks the date.
         return decision(MatchRelation.POSSIBLE_DUPLICATE, "conflicting_deadline_needs_review")
 
     # -----------------------------------------------------------------------------------------

@@ -66,6 +66,11 @@ class FakeGmailClient:
         self.history_id = str(int(self.history_id) + 1)
         self._history.append((int(self.history_id), message["id"]))
 
+    def add_deleted_message(self, message_id: str) -> None:
+        """A message that shows up in the history but was deleted before it could be fetched."""
+        self.history_id = str(int(self.history_id) + 1)
+        self._history.append((int(self.history_id), message_id))
+
     # -- GmailClient protocol ----------------------------------------------------------------
 
     def get_profile(self) -> dict[str, Any]:

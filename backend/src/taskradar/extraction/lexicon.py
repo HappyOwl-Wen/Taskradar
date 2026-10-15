@@ -32,7 +32,7 @@ ACTION_PATTERNS: list[tuple[ActionType, re.Pattern[str]]] = [
         ActionType.REGISTER,
         _rx(
             r"报名|注册|登记|选课|申报|报到",
-            r"\bregister\w*|\benrol+\w*|\bsign up\b|\bre-?register\w*",
+            r"(?<![\w-])register\w*|\b(?:re|pre)-?register\w*|\benrol+\w*|\bsign up\b",
             r"anmelden|anzumelden|melden\s+Sie\s+sich\b.{0,200}?\ban\b|registrieren|einschreiben|zurückmelden|"
             r"zurückzumelden|immatrikulieren",
         ),
@@ -45,7 +45,8 @@ ACTION_PATTERNS: list[tuple[ActionType, re.Pattern[str]]] = [
             r"(?:eingereicht|vorgelegt|abgegeben|eingegangen|zugegangen)\s+(?:werden|sein)\b|einreichen|einzureichen|reichen\s+Sie\b.{0,200}?\bein\b|abgeben|abzugeben|geben\s+Sie\b.{0,200}?\bab\b|"
             r"vorlegen|vorzulegen|legen\s+Sie\b.{0,200}?\bvor\b|nachreichen|nachzureichen|zusenden|zuzusenden|"
             r"zukommen (?:zu )?lassen|übermitteln|einsenden|einzusenden|senden\s+Sie|schicken\s+Sie|"
-            r"zurückschicken|zurückzuschicken|zurücksenden|zurückzusenden|zuschicken|zuzuschicken",
+            r"zurückschicken|zurückzuschicken|zurücksenden|zurückzusenden|zuschicken|zuzuschicken|"
+            r"zurückgeben|zurückzugeben|geben\s+Sie\b.{0,200}?\bzurück\b",
         ),
     ),
     (
@@ -84,16 +85,109 @@ ACTION_PATTERNS: list[tuple[ActionType, re.Pattern[str]]] = [
             r"ausfüllen|auszufüllen|füllen\s+Sie\b.{0,200}?\baus\b|erledigen|zu erledigen|vorbereiten|aktualisieren",
         ),
     ),
+    # "If you do not take action before 3 November, ..." - something has to be done; the mail says what.
+    (ActionType.OTHER, _rx(r"采取行动|采取措施", r"\btake action\b", r"tätig werden|aktiv werden")),
 ]
+
+
+def _tolerate_wraps(pattern: re.Pattern[str]) -> re.Pattern[str]:
+    """Let Chinese words match across a soft line wrap ("采取行 动", left by hard-wrapped HTML mails)."""
+    out: list[str] = []
+    in_class = escaped = prev_cjk = False
+    for ch in pattern.pattern:
+        cjk = not escaped and not in_class and "一" <= ch <= "鿿"
+        if cjk and prev_cjk:
+            out.append(" ?")
+        out.append(ch)
+        if escaped:
+            escaped = False
+        elif ch == "\\":
+            escaped = True
+        elif ch == "[":
+            in_class = True
+        elif ch == "]":
+            in_class = False
+        prev_cjk = cjk
+    return re.compile("".join(out), pattern.flags)
+
+
+ACTION_PATTERNS = [(action, _tolerate_wraps(pattern)) for action, pattern in ACTION_PATTERNS]
 
 # Words that make a sentence an obligation addressed to the reader.
 OBLIGATION_CUES = _rx(
-    r"(?<![申邀])请(?!假)|务必|需要|需|须|必须|应当|要求|记得|别忘了|敬请|烦请|麻烦您|麻烦你|能否|可否",
+    r"(?<![申邀])请(?!假)|务必|需要|需|须|必须|应当|要求|记得|别忘了|敬请|烦请|麻烦您|麻烦你",
     r"\bplease\b|\bkindly\b|\bmust\b|\brequired\b|\bneed(?:s)? to\b|\bha(?:ve|s) to\b|\bare asked to\b|"
-    r"\byou should\b|\bremember to\b|\bdon'?t forget\b|\bdo not forget\b|action required|mandatory|"
-    r"\b(?:could|can|would) you\b",
+    r"\byou should\b|\bremember to\b|\bdon'?t forget\b|\bdo not forget\b|action required|mandatory",
     r"\bbitte\b|\bmüssen\b|\bmuss\b|verpflichtet|erforderlich|benötigen|denken Sie daran|vergessen Sie nicht|"
-    r"notwendig|wir bitten Sie|sind gebeten|\b(?:könnten|können|würden) Sie\b",
+    r"notwendig|wir bitten Sie|sind gebeten",
+)
+
+# "Could you send …?" asks the reader for something; "Ab heute können Sie teilnehmen." only says what is
+# possible. These count as a request only in a question.
+POLITE_REQUEST_CUES = _rx(r"能否|可否", r"\b(?:could|can|would) you\b", r"\b(?:könnten|können|würden) Sie\b")
+
+
+def find_obligation(text: str) -> re.Match[str] | None:
+    """The first cue that makes ``text`` an obligation or request addressed to the reader."""
+    strong = OBLIGATION_CUES.search(text)
+    polite = POLITE_REQUEST_CUES.search(text)
+    if polite is not None and not re.search(r"[?？]", text[polite.start() :]):
+        polite = None
+    found = [m for m in (strong, polite) if m is not None]
+    return min(found, key=lambda m: m.start()) if found else None
+
+
+# Offers that depend on the reader's wish or situation ("If you need to add more information, reply ...",
+# "Sofern Sie uns Feedback zukommen lassen möchten, ...", "如果您有物品遗失在车内，请点击…"): information about
+# an option, not an obligation - unless a deadline comes with it.
+OPTIONAL_OFFER_CUES = _rx(
+    r"(?:如果|如|若|假如|倘若)(?:您|你)(?:还)?(?:需要|想|希望|愿意|有(?:任何|什么)?(?:问题|疑问|疑虑|需要|意见|建议)|"
+    r"有[^，。；,]{0,12}(?:遗失|丢失|落在))|如有(?:任何)?(?:疑问|问题|需要|意见|建议)|若有(?:任何)?(?:疑问|问题|需要)",
+    r"\b(?:if|should|in case|whenever)\s+you\s+(?:still\s+)?(?:need|want|wish|would\s+like|'d\s+like|"
+    r"have\s+(?:a\s+moment|any|further|more|additional|questions|feedback|problems|concerns|lost)|are\s+interested|"
+    r"feel|prefer|require)\b|\bonly\s+if\s+you\b|\bif\s+(?:needed|necessary|desired|you\s+like)\b",
+    r"\b(?:falls|wenn|sofern|soweit|sollten)\s+Sie\b[^.!?]{0,80}?\b(?:möchten|wünschen|benötigen|brauchen|Fragen|"
+    r"Interesse|Lust|Anmerkungen|Probleme)\b|\berst\s+wenn\s+Sie\b|\bbei\s+(?:Fragen|Rückfragen|Problemen|Interesse)\b",
+)
+
+# Surveys and feedback requests: optional unless they are explicitly mandatory.
+SURVEY_CUES = _rx(
+    r"问卷|调查|调研|满意度|宝贵(?:的)?意见|评价我们|分享您的(?:意见|看法|体验|感受)",
+    r"\bsurvey\b|\bquestionnaire\b|\bhow we did\b|\brate (?:us|your (?:experience|stay|visit|purchase|order))\b|"
+    r"\bleave (?:us )?a review\b|\bshare your (?:feedback|thoughts|opinion|experience)\b|"
+    r"\b(?:give|send|provide) us (?:with )?(?:your |some |any |additional |further )?feedback\b",
+    r"Umfrage|Befragung|Fragebogen|bewerten Sie (?:uns|Ihre)",
+)
+MANDATORY_CUES = _rx(r"必须|务必|强制", r"\bmust\b|\bmandatory\b|\bobligatory\b", r"\bmüssen\b|\bmuss\b|verpflichtend")
+
+# Statutory text in order confirmations (withdrawal policy, warranty): never a task, whatever verb it contains.
+LEGAL_BOILERPLATE = _rx(
+    r"退货政策|无理由退货|法律声明|免责声明",
+    r"\bwithout undue delay\b|\bright (?:of|to) (?:withdrawal|withdraw|cancel\w*)\b|\bwithdrawal (?:form|period|policy)\b|"
+    r"\bcancellation polic(?:y|ies)\b|\bdeterioration (?:of|in) (?:the )?value\b|\bstatutory (?:warranty|rights?)\b|"
+    r"\blegal (?:warranty|guarantee)\b|\bcancel(?:s|led|lation of)? (?:this|the) (?:service |purchase |sales )?contract\b",
+    r"Widerruf|Wertersatz|Wertverlust|gesetzliche[ns]? (?:Pflichtinformation|Gewährleistung|Mängelhaftung)|"
+    r"Gewährleistungsrecht",
+)
+
+# Duties of the sender ("we will have to reserve an extra room", "die wir Ihnen ... zukommen lassen müssen").
+SENDER_OBLIGATION_CUES = _rx(
+    r"我们(?:将|会|需要|必须|得)",
+    r"\bwe\s+(?:will\s+|would\s+|shall\s+)?(?:have\s+to|must|need\s+to|are\s+(?:required|obliged)\s+to)\b",
+    r"\bwir\b[^.!?]{0,60}?\b(?:müssen|werden|sind\s+verpflichtet)\b|\b(?:die|das|den)\s+wir\s+Ihnen\b",
+)
+# What is addressed to the reader all the same ("we need you to", "please", "Sie müssen").
+READER_DUTY_CUES = _rx(
+    r"(?<![申邀])请(?!假)|您需要|你需要|您必须|你必须|需要您|需要你",
+    r"\bplease\b|\bkindly\b|\byou\s+(?:must|need\s+to|have\s+to|are\s+(?:required|asked)\s+to|should)\b|\bneed\s+you\s+to\b",
+    r"\bbitte\b|\bSie\s+(?:müssen|sind\s+verpflichtet)\b|\bmüssen\s+Sie\b",
+)
+
+# What the reader may do ("you may inspect your exam", "Sie können ... einsehen"): possible, not required.
+PERMISSION_CUES = _rx(
+    r"您可以|你可以|可以在|欢迎您",
+    r"\byou\s+(?:may|can|are\s+(?:welcome|invited|able)\s+to)\b",
+    r"\bSie\s+(?:können|dürfen)\b|\b(?:können|dürfen)\s+Sie\b",
 )
 
 ADDRESSEE_CUES = _rx(r"您|你", r"\byou\b|\byour\b", r"\bSie\b|\bIhre?[nmrs]?\b", flags=0)
@@ -378,12 +472,26 @@ def entity_weight(name: str) -> float:
 GENERIC_ACTIONS = {ActionType.PREPARE, ActionType.OTHER}
 
 
+# A Chinese verb followed by 的 describes a noun ("您上传的文件", "发送给您的邮件"); it is not an instruction.
+_ATTRIBUTIVE = re.compile(r"(?:您|你|我们|他们|过|了)?的")
+
+
+def _search_action(pattern: re.Pattern[str], text: str, start: int) -> re.Match[str] | None:
+    m = pattern.search(text, start)
+    while m is not None and _CJK_VERB.match(m.group(0)) and _ATTRIBUTIVE.match(text, m.end()):
+        m = pattern.search(text, m.end())
+    return m
+
+
+_CJK_VERB = re.compile(r"[\u4e00-\u9fff]")
+
+
 def detect_action(text: str, start: int = 0) -> tuple[ActionType, re.Match[str]] | None:
     """Return the leftmost action verb at or after ``start``; a generic verb ("完成", "complete")
     yields to a specific one that follows closely ("完成选课" -> register)."""
     found: list[tuple[ActionType, re.Match[str]]] = []
     for action, pattern in ACTION_PATTERNS:
-        m = pattern.search(text, start)
+        m = _search_action(pattern, text, start)
         if m:
             found.append((action, m))
     if not found:
@@ -400,7 +508,7 @@ def detect_action(text: str, start: int = 0) -> tuple[ActionType, re.Match[str]]
 def detect_instructed_action(text: str) -> tuple[ActionType, re.Match[str]] | None:
     """Prefer the action that follows an obligation cue ("请…上传", "please submit", "Bitte reichen …")
     over verbs in a preceding purpose clause ("为完成学籍注册，请于…上传…")."""
-    cue = OBLIGATION_CUES.search(text)
+    cue = find_obligation(text)
     if cue is not None:
         found = detect_action(text, cue.start())
         if found is not None:

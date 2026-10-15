@@ -157,6 +157,8 @@ class GmailSyncService:
                 except ConnectorError as exc:
                     log.warning("Skipping Gmail message after error: %s", exc.code)
                     ctx.bump("items_failed")
+                    codes = ctx.details.setdefault("failed_codes", {})
+                    codes[exc.code] = codes.get(exc.code, 0) + 1  # the status summary explains these
                     failures += 1
                     continue
                 if not handled:
@@ -221,7 +223,14 @@ class GmailSyncService:
             existing_id = existing.id if existing is not None else None
 
         if existing_id is None:
-            raw = self._retry(lambda: client.get_message(gmail_id))
+            try:
+                raw = self._retry(lambda: client.get_message(gmail_id))
+            except NotFoundError:
+                # Listed by the history, but deleted in Gmail before it could be read. There is nothing to
+                # process; counting it as a failure would hold the checkpoint back and repeat it forever.
+                ctx.bump("items_skipped")
+                ctx.details["gone"] = int(ctx.details.get("gone", 0)) + 1
+                return True
             labels = set(raw.get("labelIds") or [])
             normalized = parse_gmail_message(raw)
             with transaction(self._factory) as session:
@@ -248,7 +257,11 @@ class GmailSyncService:
                             ctx.details.setdefault("skipped_attachments", 0)
                             ctx.details["skipped_attachments"] += 1
                             continue
-                        data = self._retry(partial(client.get_attachment, gmail_id, att.attachment_id))
+                        try:
+                            data = self._retry(partial(client.get_attachment, gmail_id, att.attachment_id))
+                        except NotFoundError:
+                            ctx.details["attachments_gone"] = int(ctx.details.get("attachments_gone", 0)) + 1
+                            continue  # the mail itself is still processed
                         self.documents.store_attachment(session, data, att.filename, message=message)
         else:
             message_id = existing_id

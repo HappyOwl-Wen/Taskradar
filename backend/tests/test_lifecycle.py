@@ -17,6 +17,7 @@ from taskradar.domain.schemas import NormalizedMessage
 from taskradar.services.documents import get_or_create_source
 from taskradar.services.ingest import IngestOutcome
 from taskradar.services.jobs import JobAlreadyRunning, JobContext
+from taskradar.services.tasks import DueChoiceRequired
 
 from .conftest import FIXED_NOW
 
@@ -171,15 +172,62 @@ def test_explicit_deadline_change_is_applied_and_revertible(container: Container
     [task] = tasks(container)
     assert task.due_date == dt.date(2026, 11, 27)
     assert task.due_version == 1
+    # Applied, but not silently: the task asks for a look and a notification says what changed.
+    assert task.needs_review and "deadline_changed" in task.review_reasons
     with transaction(container.factory) as session:
+        [note] = session.scalars(select(Notification)).all()
+        assert note.task_id == task.id and note.level == "info" and "2026-11-20 → 2026-11-27" in note.body
         event = session.scalars(select(TaskEvent).where(TaskEvent.event_type == "fields_updated")).one()
         assert event.actor == "agent" and event.revertible
         container.tasks.revert_event(session, event.id)
     [task] = tasks(container)
     assert task.due_date == dt.date(2026, 11, 20)
+    assert "deadline_changed" not in task.review_reasons and not task.needs_review  # the flag goes with it
 
 
-def test_conflicting_deadline_without_explicit_change_becomes_suggestion(container: Container) -> None:
+def test_user_keeps_an_automatically_changed_deadline(container: Container) -> None:
+    ingest_mail(container, *NOTICE)
+    [task] = tasks(container)
+    set_status(container, task.id, TaskStatus.CONFIRMED)
+    ingest_mail(
+        container,
+        "截止日期延期",
+        "通知：学生证明的提交截止日期延长至11月27日。",
+        sent_at=FIXED_NOW + dt.timedelta(days=2),
+    )
+    [task] = tasks(container)
+    assert task.status == "confirmed" and task.needs_review  # a confirmed task is flagged as well
+    with transaction(container.factory) as session:
+        event = container.tasks.resolve_review(session, container.tasks.get(session, task.id), ["deadline_changed"])
+        assert event is not None and event.revertible
+        event_id = event.id
+    [task] = tasks(container)
+    assert task.due_date == dt.date(2026, 11, 27) and not task.needs_review
+    assert "deadline_changed" not in task.review_reasons
+    with transaction(container.factory) as session:
+        container.tasks.revert_event(session, event_id)
+    [task] = tasks(container)
+    assert task.needs_review and "deadline_changed" in task.review_reasons
+
+
+def test_editing_the_date_clears_the_deadline_changed_flag(container: Container) -> None:
+    ingest_mail(container, *NOTICE)
+    ingest_mail(
+        container,
+        "截止日期延期",
+        "通知：学生证明的提交截止日期延长至11月27日。",
+        sent_at=FIXED_NOW + dt.timedelta(days=2),
+    )
+    [task] = tasks(container)
+    with transaction(container.factory) as session:
+        container.tasks.update_fields(
+            session, container.tasks.get(session, task.id), {"due_date": "2026-11-26"}, actor=Actor.USER, lock=True
+        )
+    [task] = tasks(container)
+    assert "deadline_changed" not in task.review_reasons
+
+
+def test_different_deadline_without_explicit_change_is_never_merged_automatically(container: Container) -> None:
     ingest_mail(container, *NOTICE)
     outcome, _ = ingest_mail(
         container,
@@ -187,14 +235,59 @@ def test_conflicting_deadline_without_explicit_change_becomes_suggestion(contain
         "Bitte laden Sie Ihre Immatrikulationsbescheinigung bis zum 25.11.2026 in TUMonline hoch.",
         sent_at=FIXED_NOW + dt.timedelta(days=1),
     )
+    # Same obligation, other date, nothing says which one is right: both stay, the user decides.
+    assert (outcome.tasks_created, outcome.duplicates_merged, outcome.tasks_updated) == (1, 0, 0)
     assert outcome.suggestions_created == 1
-    [task] = tasks(container)
-    assert task.due_date == dt.date(2026, 11, 20)  # unchanged until the user decides
+    original, second = tasks(container)
+    assert (original.due_date, second.due_date) == (dt.date(2026, 11, 20), dt.date(2026, 11, 25))
+    assert "possible_duplicate" in second.review_reasons
     with transaction(container.factory) as session:
         suggestion = session.scalars(select(TaskSuggestion)).one()
-        assert suggestion.kind == "update_due" and suggestion.payload["due_date"] == "2026-11-25"
-        container.tasks.accept_suggestion(session, suggestion.id)
-    assert tasks(container)[0].due_date == dt.date(2026, 11, 25)
+        assert suggestion.kind == "possible_duplicate" and suggestion.related_task_id == original.id
+        assert "conflicting_deadline_needs_review" in suggestion.reason
+        with pytest.raises(DueChoiceRequired):
+            container.tasks.accept_suggestion(session, suggestion.id)
+    with transaction(container.factory) as session:
+        container.tasks.accept_suggestion(session, suggestion.id, due_choice="new")
+    kept, merged = tasks(container)
+    assert kept.due_date == dt.date(2026, 11, 25) and merged.status == "dismissed"
+
+
+def test_reminder_in_the_same_thread_with_another_date_is_not_merged_silently(container: Container) -> None:
+    ingest_mail(container, *NOTICE, thread="t-cert")
+    outcome, _ = ingest_mail(
+        container,
+        "Re: 学生证明提交通知",
+        "提醒您：请在11月22日前上传在读证明（Immatrikulationsbescheinigung）。",
+        sent_at=FIXED_NOW + dt.timedelta(days=3),
+        thread="t-cert",
+    )
+    assert (outcome.tasks_created, outcome.duplicates_merged, outcome.tasks_updated) == (1, 0, 0)
+    assert outcome.suggestions_created == 1
+    assert tasks(container)[0].due_date == dt.date(2026, 11, 20)
+
+
+def test_same_day_with_another_time_is_a_conflict_too(container: Container) -> None:
+    ingest_mail(container, "Abgabe", "Bitte reichen Sie den Projektbericht bis zum 20.11.2026, 12:00 Uhr ein.")
+    outcome, _ = ingest_mail(
+        container,
+        "Abgabe Projektbericht",
+        "Bitte reichen Sie den Projektbericht bis zum 20.11.2026, 23:59 Uhr ein.",
+        sent_at=FIXED_NOW + dt.timedelta(days=1),
+    )
+    assert (outcome.tasks_created, outcome.duplicates_merged, outcome.suggestions_created) == (1, 0, 1)
+    assert [t.due_time for t in tasks(container)] == ["12:00", "23:59"]
+
+
+def test_same_deadline_is_still_merged(container: Container) -> None:
+    ingest_mail(container, "Abgabe", "Bitte reichen Sie den Projektbericht bis zum 20.11.2026, 12:00 Uhr ein.")
+    outcome, _ = ingest_mail(
+        container,
+        "Erinnerung: Projektbericht",
+        "Erinnerung: Bitte reichen Sie den Projektbericht bis zum 20.11.2026 um 12:00 Uhr ein.",
+        sent_at=FIXED_NOW + dt.timedelta(days=1),
+    )
+    assert (outcome.tasks_created, outcome.duplicates_merged) == (0, 1)
 
 
 def test_user_edited_deadline_is_never_overwritten(container: Container) -> None:

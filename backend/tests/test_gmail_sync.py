@@ -99,6 +99,29 @@ def test_incremental_sync_uses_history(container: Container, gmail: FakeGmailReg
         assert fee is not None and fee.status == "completed"  # explicit payment confirmation
 
 
+def test_message_deleted_before_it_could_be_read_does_not_block_the_sync(
+    container: Container, gmail: FakeGmailRegistry
+) -> None:
+    # Seen with a real account: the history lists mails that were deleted a moment later. They used to count
+    # as failures, so every sync ended "partial" and the checkpoint never moved on.
+    source_id = gmail_source(container)
+    container.gmail.sync(source_id)
+    with transaction(container.factory) as session:
+        before = session.scalar(select(SyncCheckpoint.value).where(SyncCheckpoint.key == "history_id"))
+    gmail.client.add_deleted_message("gone-1")
+    gmail.client.add_message(demo_completion_message(container.clock()))
+    job = container.gmail.sync(source_id)
+    assert job["status"] == "succeeded", job
+    assert (job["items_seen"], job["items_failed"]) == (2, 0)
+    assert job["details"]["gone"] == 1
+    with transaction(container.factory) as session:
+        after = session.scalar(select(SyncCheckpoint.value).where(SyncCheckpoint.key == "history_id"))
+    assert after is not None and after != before
+    # The next run starts after both mails: nothing is read again.
+    again = container.gmail.sync(source_id)
+    assert (again["status"], again["items_seen"]) == ("succeeded", 0)
+
+
 def test_rate_limit_is_retried_transparently(container: Container, gmail: FakeGmailRegistry) -> None:
     source_id = gmail_source(container)
     gmail.client.failure_mode = "rate_limit"
