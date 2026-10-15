@@ -7,6 +7,7 @@ import { AiSection, GeneralSection } from "@/components/settings/GeneralAndAi";
 import { CalendarSection, GmailSection } from "@/components/settings/Google";
 import { DataSection, PolicySection, RemindersSection, SystemSection } from "@/components/settings/Other";
 import { ConfirmDialog } from "@/components/ui/dialog";
+import { SimpleSelect } from "@/components/ui/select";
 import { ErrorState, LoadingRows } from "@/components/ui/states";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { translateKey } from "@/i18n";
@@ -115,13 +116,21 @@ export default function SettingsPage() {
   };
 
   return (
-    <div className="grid gap-5">
+    <div className="grid grid-cols-1 gap-5">
       <header className="grid gap-0.5">
         <h1 className="text-xl font-semibold tracking-tight">{t("settings.title")}</h1>
         <p className="text-[13px] text-muted-foreground">{t("settings.description")}</p>
       </header>
 
-      <Tabs value={section} onValueChange={(v) => select(v as SectionKey)} className="lg:hidden">
+      {/* Phones: a select (eight categories do not fit in one row); tablets: tabs; desktop: side navigation. */}
+      <SimpleSelect
+        className="sm:hidden"
+        value={section}
+        onValueChange={(v) => select(v)}
+        ariaLabel={t("settings.title")}
+        options={SECTIONS.map((s) => ({ value: s, label: t(`settings.sections.${s}`) }))}
+      />
+      <Tabs value={section} onValueChange={(v) => select(v as SectionKey)} className="hidden min-w-0 sm:block lg:hidden">
         <TabsList variant="underline" className="border-b">
           {SECTIONS.map((s) => (
             <TabsTrigger key={s} value={s} variant="underline">

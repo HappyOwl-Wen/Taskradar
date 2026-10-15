@@ -112,7 +112,7 @@ export default function TasksPage() {
   const counts: Partial<Record<View, number>> = { active: dashboard?.counts.active, candidate: dashboard?.counts.candidates };
 
   return (
-    <div className="grid gap-4">
+    <div className="grid grid-cols-1 gap-4">
       <header className="flex flex-wrap items-center justify-between gap-3">
         <div className="grid gap-0.5">
           <h1 className="text-xl font-semibold tracking-tight">{t("tasks.title")}</h1>
@@ -123,7 +123,7 @@ export default function TasksPage() {
         </Button>
       </header>
 
-      <Tabs value={view} onValueChange={(v) => update({ view: v === "active" ? null : v })}>
+      <Tabs value={view} onValueChange={(v) => update({ view: v === "active" ? null : v })} className="min-w-0">
         <TabsList variant="underline" className="border-b">
           {(Object.keys(VIEWS) as View[]).map((v) => (
             <TabsTrigger key={v} variant="underline" value={v}>

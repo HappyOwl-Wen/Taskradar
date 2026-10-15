@@ -58,10 +58,11 @@ export function StatusMenu({
         size={showLabel ? "xs" : "icon-xs"}
         disabled={change.isPending}
         aria-label={t("tasks.changeStatus", { status: label })}
-        className={cn(STATUS_TEXT[status], showLabel && "w-[5.5rem] justify-start px-1.5")}
+        // Wide enough for the longest label in every language ("Waiting for reply"); icon only on phones.
+        className={cn(STATUS_TEXT[status], showLabel && "justify-start px-1.5 sm:w-[7.75rem]")}
       >
         <Icon />
-        {showLabel ? <span className="truncate text-xs font-medium">{label}</span> : null}
+        {showLabel ? <span className="hidden truncate text-xs font-medium sm:inline">{label}</span> : null}
       </Button>
     ) : (
       <Button variant="outline" size={size} disabled={change.isPending} aria-label={t("tasks.changeStatus", { status: label })}>

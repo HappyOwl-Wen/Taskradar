@@ -130,6 +130,8 @@ active task (object overlap, same-date bonus) and must beat the runner-up by a m
 | Hedged completion ("may have", "if you have already …") | Never completes; at most a suggestion |
 | Calendar write, autostart, LLM request, delete-all | Only after an explicit user action (and, for LLM, consent) |
 | Calendar event of a task the user dismisses, merges away or deletes | Removed (opt-in setting, on by default; only the event TaskRadar created for that task) |
+| Merging two tasks whose deadlines differ | Only with an explicit choice of the date that stays (`due_choice`: `existing` / `new`); without it the API answers 409 `due_choice_required` |
+| The user's decision on a suggestion (merge, keep separate, accept, reject) | Recorded as a revertible event: undo reverts what was applied (status, deadline or merge) and reopens the suggestion; "keep separate" also clears the possible-duplicate flag |
 
 ### Deadlines and reminders
 
@@ -183,18 +185,32 @@ All routes live under `/api` (OpenAPI docs at `/api/docs`). Main groups: dashboa
 `/sync-jobs`, `/failures`, `/agent-runs`, `/demo/*`), integrations (`/integrations/google/*`,
 `/oauth/google/callback`) and system (`/session`, `/system/status`, `/settings`, `/settings/llm-key`,
 `/notifications`, `/metrics`, `/data/export`, `/data/delete-all`, `/system/autostart`). Errors use one envelope:
-`{"error": {"code", "message", "recoverable", "details"}}`; the UI translates codes.
+`{"error": {"code", "message", "recoverable", "details"}}`; the UI translates codes. Responses to a change
+(status, batch, merge, suggestion decision) carry `undo_event_id` / `undo_event_ids`, which the UI offers as
+"Undo"; `/dashboard` returns an `attention` list (overdue, deadline conflict, due soon, unconfirmed and due
+soon) and non-overlapping counts (`needs_action`, `due_soon`, `due_soon_candidates`, `overdue_candidates`).
 
 ## Frontend
 
 React 19 + TypeScript, Vite, Tailwind CSS v4, Radix UI primitives, TanStack Query, react-router and i18next
 (zh-CN default, English). `src/lib/api.ts` adds the CSRF token (fetched from `/api/session`, refreshed once if
 the server restarted) and maps the error envelope; `src/lib/queries.ts` wraps every mutation so errors always
-surface as toasts and visible data is refreshed. Sources poll quickly while a sync runs, and a watcher refreshes
-the screen whenever a sync job starts or finishes. Pages: Dashboard, Review (candidates with an evidence panel,
-suggestions), All tasks, Task detail (deadline card with original wording, sources and quotes, calendar
-preview, undoable history), Sources, Settings, Insights. `npm run build` writes the bundle into
-`backend/src/taskradar/static`, which the backend serves (no external CDN; strict CSP).
+surface as toasts (with "Undo" when the response names an undo event) and visible data is refreshed. Sources
+poll quickly while a sync runs, and a watcher refreshes the screen whenever a sync job starts or finishes.
+
+Layout: a fixed frame (sidebar, top bar) with one scroll container for the page; the Review inbox is a
+full-height route whose list and detail scroll separately, and below 1024 px they take turns. Shared pieces:
+`lib/review.ts` turns internal review codes into a few plain-language issues and computes the inbox order
+(overdue, due within three days, conflicts and open suggestions, due within a week, other doubts, later, no
+deadline - never by the extractor's score); `TaskListItem` (status, title, issues, category, sources and
+deadline always in the same place), `DeadlineIndicator`, `TaskDetailView` (deadline and main actions, open
+questions, quotes per source, then calendar, history and collapsed technical details), `DuplicateCompare` and
+`DueChoicePicker` (side-by-side review of a possible duplicate with the required date choice), `StatusMenu`,
+`TechnicalDetails` (scores, rule signals and IDs, labelled as uncalibrated debugging aids) and
+`lib/records.ts` (mails and files as one processing list, attachments under their mail, every outcome with a
+reason). Settings show one category at a time (`?section=`) and warn before unsaved edits are dropped.
+Pages: Dashboard, Review, All tasks, Task detail, Sources, Insights, Settings. `npm run build` writes the
+bundle into `backend/src/taskradar/static`, which the backend serves (no external CDN; strict CSP).
 
 ## Decisions and trade-offs
 
@@ -218,4 +234,6 @@ preview, undoable history), Sources, Settings, Insights. `npm run build` writes 
 * `python -m taskradar eval` measures extraction and deduplication on labelled synthetic cases
   ([docs/EVALUATION.md](docs/EVALUATION.md)).
 * Frontend: Vitest + Testing Library for formatting/DST, the API client (CSRF retry, error envelope), edit diffs,
-  translation completeness and components.
+  translation completeness and components, including the review flows: issue mapping and inbox order,
+  keyboard navigation and moving on after a decision, undo toasts, the duplicate comparison (date choice
+  required, correct API call) and the processing records (grouping, reasons, failures first).

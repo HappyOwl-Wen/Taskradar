@@ -6,7 +6,14 @@ have confirmed the task. Everything runs on your own computer at `http://127.0.0
 
 > 中文简介见下方 [中文快速上手](#中文快速上手)。The UI is Chinese by default and switchable to English.
 
-![TaskRadar dashboard (dark mode, English, synthetic demo data)](docs/screenshots/dashboard-dark-en.jpg)
+![TaskRadar review inbox: candidate list, the selected task with its open question (synthetic demo data)](docs/screenshots/inbox-light-zh.png)
+
+| Possible duplicate: compare, choose the date, merge or keep both | Dashboard (dark, English) | Phone |
+| --- | --- | --- |
+| ![Comparison dialog](docs/screenshots/compare-light-zh.png) | ![Dashboard](docs/screenshots/dashboard-dark-en.png) | ![Review on a phone](docs/screenshots/inbox-mobile-zh.png) |
+
+All screenshots show synthetic data (demo mailbox, bundled samples, invented tasks); more in
+[docs/screenshots](docs/screenshots).
 
 ---
 
@@ -58,13 +65,13 @@ mail or document and quotes the sentence it came from. Details: [ARCHITECTURE.md
 | Parsing | text-first PDF extraction, OCR fallback per page (Tesseract, `chi_sim+eng`, `deu+eng`), MIME/HTML mail, quoted-reply stripping; files imported before OCR was installed can be read again from the Sources page | implemented, tested (real OCR in tests) |
 | Extraction | tasks with title, action, category, priority, deadline (date-only stays date-only), confidence, evidence; marketing/newsletters ignored; prompt-injection text treated as data | implemented, tested, evaluated |
 | Dates | absolute, relative and ambiguous dates in zh/de/en; relative dates resolved from the *source* date; unresolvable dates are flagged, never invented | implemented, tested |
-| Deduplication | same source / same thread, normalised similarity across languages, optional LLM judge; grey zone becomes a suggestion; merges are undoable | implemented, tested, evaluated |
+| Deduplication | same source / same thread, normalised similarity across languages, optional LLM judge; grey zone becomes a suggestion that you review side by side ("merge / keep separate / not now"); when the deadlines differ you choose the date that stays; every decision is undoable | implemented, tested, evaluated |
 | Lifecycle | Candidate → Confirmed → In progress / Waiting for reply → Completed / Dismissed; completion evidence; explicit deadline changes applied with undo | implemented, tested |
 | Reminders | Overdue / 24 h / 3 days / 7 days (configurable), date-only deadlines count until the end of the day, DST-safe, deduplicated, stop after completion | implemented, tested |
 | Gmail | OAuth (installed-app flow with PKCE), `gmail.readonly` only, last 30 days, incremental history sync, request pacing, retries with backoff, attachments | implemented, tested with a fake Gmail; **verified with one real account**: initial and incremental sync, attachments, automatic recovery from Google's rate limit (request pacing was added afterwards and is tested with fakes only) |
 | Google Calendar | separate OAuth (`calendar.app.created`), preview → confirm → write into a dedicated "TaskRadar" calendar, idempotent event IDs, no invitations | implemented, tested with a fake Calendar; **verified with one real account**: calendar created, all-day deadline written, updated in place after a date change (same event, no duplicate), unchanged re-write skipped; a disabled Calendar API is explained with Google's enable link. Events can be removed again (button, or automatically when a task is dismissed, merged or deleted - a setting, on by default); only TaskRadar's own events are ever deleted. Removal with the button verified with the real account; the automatic removal is tested with a fake Calendar |
 | LLM extraction | OpenAI structured outputs or OpenAI-compatible endpoint, strict schema validation, bounded retries, rules fallback, data minimisation, consent required | implemented, tested with a mocked provider; **real API not verified** (needs your key) |
-| Dashboard | Dashboard, Review inbox with evidence panel, All tasks, Task detail with history/undo, Sources, Settings, Insights; dark/light; zh/en | implemented, unit-tested, verified in a browser |
+| User interface | Dashboard (what needs attention, unconfirmed tasks always marked), Review inbox (list + detail, sorted by what needs handling first, problems in plain language, keyboard navigation), All tasks, Task detail (deadline, open questions, quotes per source, calendar, history), Sources (connected sources + processing records with reasons), Insights (system status, processing figures with their basis), Settings (one category at a time); undo after every decision; one scroll area, layouts from 390 px phones to desktops; dark/light; zh/en | implemented, unit-tested, verified in a browser at 1440 / 1024 / 768 / 390 px, light and dark, Chinese and English |
 | Background | scheduled Gmail sync, folder scans, reminder checks, automatic retries, restart recovery, optional Windows autostart (only after confirmation) | implemented, tested |
 | Data control | export as JSON, delete single items, delete everything (typed confirmation) | implemented, tested |
 
@@ -144,14 +151,14 @@ See [SECURITY.md](SECURITY.md) for the threat model.
 
 ```powershell
 cd backend
-.venv\Scripts\python.exe -m pytest            # 214 tests, about 25 s, includes real OCR
+.venv\Scripts\python.exe -m pytest            # 233 tests, about 30 s, includes real OCR
 .venv\Scripts\python.exe -m ruff check .
 .venv\Scripts\python.exe -m ruff format --check .
 .venv\Scripts\python.exe -m mypy
 .venv\Scripts\python.exe -m taskradar eval    # extraction / dedup evaluation on the labelled dataset
 
 cd ..\frontend
-npm run lint; npm run typecheck; npm test      # 38 tests
+npm run lint; npm run typecheck; npm test      # 62 tests
 ```
 
 The workflow in `.github/workflows/ci.yml` runs the same checks on Ubuntu, with Tesseract and the same pinned
@@ -199,7 +206,7 @@ backend/            FastAPI app, agent pipeline, SQLite + Alembic, tests  (Pytho
                     connectors (Gmail, Calendar, OAuth) · scheduler · security · demo · migrations
 frontend/           React + TypeScript + Tailwind dashboard (built into backend/src/taskradar/static)
 scripts/            setup.ps1 · start.ps1 · install-tesseract.ps1
-docs/               EVALUATION.md
+docs/               EVALUATION.md · screenshots/
 TaskRadar.cmd       double-click launcher       Setup.cmd   one-time setup
 ```
 

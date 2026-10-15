@@ -45,6 +45,8 @@ interface TaskListItemProps {
   onKeyDown?: (event: KeyboardEvent<HTMLElement>) => void;
   /** DOM id of the row's link/button (lets a list move the keyboard focus between rows). */
   controlId?: string;
+  /** Leave out the issue badge (when `badge` already names the problem). */
+  hideIssues?: boolean;
   className?: string;
 }
 
@@ -66,6 +68,7 @@ export function TaskListItem({
   actions,
   onKeyDown,
   controlId,
+  hideIssues = false,
   className,
 }: TaskListItemProps) {
   const { t } = useTranslation();
@@ -110,7 +113,7 @@ export function TaskListItem({
   const meta = (
     <>
       {badge}
-      {!closed ? <IssueSummary issues={issues} /> : null}
+      {!closed && !hideIssues ? <IssueSummary issues={issues} /> : null}
       <SuggestionHint count={closed ? 0 : task.pending_suggestions} />
       <CategoryBadge category={task.category} />
       <SourceKinds kinds={task.source_kinds} count={task.source_count} />

@@ -43,17 +43,27 @@ function MetricTile({ label, value, sub, icon: Icon, tone, to }: { label: string
   );
 }
 
-function AttentionBadge({ reason }: { reason: AttentionTask["attention"] }) {
+/** Why a task is in the attention list. Unconfirmed tasks are always marked as such, whatever the reason. */
+function AttentionBadge({ task }: { task: AttentionTask }) {
   const { t } = useTranslation();
-  if (reason === "overdue") return <Badge tone="overdue">{t("dashboard.reason.overdue")}</Badge>;
-  if (reason === "conflict")
+  const unconfirmed = task.status === "candidate" ? <Badge tone="violet">{t("dashboard.reason.unconfirmed")}</Badge> : null;
+  if (task.attention === "overdue")
     return (
-      <Badge tone="high">
-        <CalendarX2 /> {t("dashboard.reason.conflict")}
-      </Badge>
+      <>
+        {unconfirmed}
+        <Badge tone="overdue">{t("dashboard.reason.overdue")}</Badge>
+      </>
     );
-  if (reason === "unconfirmed_due") return <Badge tone="violet">{t("dashboard.reason.unconfirmed")}</Badge>;
-  return null; // due soon: the deadline itself says how soon
+  if (task.attention === "conflict")
+    return (
+      <>
+        {unconfirmed}
+        <Badge tone="high">
+          <CalendarX2 /> {t("dashboard.reason.conflict")}
+        </Badge>
+      </>
+    );
+  return unconfirmed; // due soon: the deadline itself says how soon
 }
 
 function Onboarding() {
@@ -240,7 +250,13 @@ export default function DashboardPage() {
             <ul className="grid gap-0.5 rounded-lg border bg-card p-1">
               {attention.map((task) => (
                 <li key={task.id}>
-                  <TaskListItem task={task} to={task.status === "candidate" ? `/inbox?task=${task.id}` : `/tasks/${task.id}`} badge={<AttentionBadge reason={task.attention} />} />
+                  <TaskListItem
+                    task={task}
+                    to={task.status === "candidate" ? `/inbox?task=${task.id}` : `/tasks/${task.id}`}
+                    badge={<AttentionBadge task={task} />}
+                    // A conflict badge already names the problem; repeating it as an issue adds noise.
+                    hideIssues={task.attention === "conflict"}
+                  />
                 </li>
               ))}
             </ul>
