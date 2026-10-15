@@ -119,6 +119,19 @@ MARKETING_STRONG = _rx(
     r"free trial|black friday|cyber monday|exclusive offer|deal of the day|view (?:this email )?in (?:your )?browser",
     r"abbestellen|vom Newsletter abmelden|Rabatt|Gutschein|Sonderangebot|jetzt kaufen|jetzt shoppen|"
     r"im Browser anzeigen|Angebot gilt",
+    # Price offers ("for only €49", "save 30%", "für nur 9 €", "仅需 99 元").
+    r"仅需\s*[¥￥]?\s*\d|只需\s*[¥￥]?\s*\d|立省",
+    r"\bfor only\s*(?:[$€£]\s?\d|\d+(?:[.,]\d+)?\s?(?:€|\$|£|eur\b|usd\b))|\bsave (?:up to )?\d+\s?%",
+    r"\bfür nur\s*(?:€\s?\d|\d+(?:[.,]\d+)?\s?(?:€|eur\b))|\bspar(?:en|e) (?:Sie )?(?:bis zu )?\d+\s?%",
+)
+
+# Template lines of ticket systems and automatic mails: never a task, whatever verb they contain.
+BOILERPLATE = _rx(
+    r"请在此线(?:以)?上(?:方)?回复|此(?:邮件|信息|消息)(?:由系统)?自动(?:发送|生成)|系统自动发送",
+    r"(?:reply|respond|response)\s+above\s+this\s+line|#{2,}\s*-|-\s*#{2,}|"
+    r"this (?:e-?mail|message|mailbox) (?:was (?:sent |generated )?automatically|is (?:not monitored|unattended|automated))|"
+    r"automatically generated (?:e-?mail|message)",
+    r"oberhalb dieser Zeile|automatisch (?:erstellt|generiert|versendet|verschickt)e?\b",
 )
 
 NEWSLETTER_CUES = _rx(

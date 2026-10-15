@@ -476,3 +476,51 @@ def test_mock_provider_is_never_cloud() -> None:
     assert MockLLMProvider().is_cloud is False
     assert json.dumps(OUTPUT_SCHEMA)  # schema is serialisable for the API call
     assert FIXED_NOW.tzinfo is not None
+
+
+# ---------------------------------------------------------------------------------------------
+# rules-1.5: template noise seen in a real mailbox (synthetic reproductions)
+# ---------------------------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        "##- Please type your reply above this line -##\n\nYour request (4711) has been updated.",
+        "Vielen Dank für Ihre Bestellung.\n\nDiese E-Mail wurde automatisch erstellt. Bitte nicht antworten.",
+        "Hinweis: Bitte nicht auf diese E-Mail antworten.",
+        "Bitte antworten Sie nicht auf diese Nachricht.",
+        "Thanks for your payment.\n\nPlease do not reply to this email. This mailbox is not monitored.",
+        "您的订单已发货。\n\n此邮件由系统自动发送，请勿直接回复。",
+    ],
+)
+def test_mail_templates_and_negated_instructions_are_not_tasks(body: str) -> None:
+    assert RULES.extract(make_input(body, title="Info")).tasks == []
+
+
+@pytest.mark.parametrize(
+    ("body", "title"),
+    [
+        ("Don't forget to submit your thesis registration by October 30, 2026.", "Submit thesis registration"),
+        ("Vergessen Sie nicht, die Miete bis zum 01.11.2026 zu überweisen.", "Miete überweisen"),
+        ("Please register for only one tutorial group by 20.10.2026.", "Register for only one tutorial group"),
+    ],
+)
+def test_reminders_phrased_with_a_negation_stay_tasks(body: str, title: str) -> None:
+    [task] = RULES.extract(make_input(body)).tasks
+    assert task.title == title
+    assert task.due.date is not None
+
+
+def test_price_offers_are_flagged_as_marketing() -> None:
+    [task] = RULES.extract(
+        make_input("Register for only €49 until Friday and save 30%! Join 2,000 students at our summer school.")
+    ).tasks
+    assert "marketing_context" in task.uncertainties and task.confidence < 0.6
+
+
+def test_a_title_cut_off_mid_phrase_is_flagged_for_review() -> None:
+    [task] = RULES.extract(make_input("Please register for only\n€49 per person until Friday.")).tasks
+    assert task.title == "Register for only"
+    assert "title_incomplete" in task.uncertainties  # shown as "content needs checking"; the sentence is kept
+    assert task.action_required.startswith("Please register for only")

@@ -123,6 +123,16 @@ def dashboard(c: Container = Depends(get_container)) -> dict[str, Any]:
             select(TaskSuggestion).where(TaskSuggestion.status == "pending").order_by(TaskSuggestion.created_at.desc())
         ).all()
         suggestions = [{**suggestion_entry(s), "task_title": s.task.title} for s in pending[:10]]
+        # Tasks whose deadline is disputed by a newer source: they need a decision, not just a glance.
+        conflict_ids: set[str] = set()
+        for s in pending:
+            if s.kind == "update_due" or (
+                s.kind == "possible_duplicate" and "conflicting_deadline" in (s.reason or "")
+            ):
+                conflict_ids.add(s.task_id)
+                if s.related_task_id:
+                    conflict_ids.add(s.related_task_id)
+        suggestion_task_ids = {s.task_id for s in pending}
 
     committed = {"confirmed", "in_progress", "waiting_for_reply"}
     active = [i for i in items if i["status"] in committed]
@@ -167,6 +177,33 @@ def dashboard(c: Container = Depends(get_container)) -> dict[str, Any]:
         and i["completed_at"]
         and i["completed_at"] >= (now - dt.timedelta(days=7)).isoformat()
     ]
+
+    # "Needs attention": confirmed work that is overdue or due within 7 days, unconfirmed candidates due within
+    # 7 days (or already overdue; clearly marked as such) and tasks with a disputed deadline.
+    def attention_reason(i: dict[str, Any]) -> str | None:
+        due = i["due_date"]
+        if i["status"] in committed:
+            if i["urgency"] == Urgency.OVERDUE.value:
+                return "overdue"
+            if i["id"] in conflict_ids:
+                return "conflict"
+            if due and due <= week_end:
+                return "due_soon"
+        elif i["status"] == "candidate":
+            if i["id"] in conflict_ids:
+                return "conflict"
+            if due and due <= week_end:
+                return "unconfirmed_due"
+        return None
+
+    reason_rank = {"overdue": 0, "conflict": 1, "due_soon": 2, "unconfirmed_due": 2}
+    attention = sorted(
+        ({**i, "attention": reason} for i in items if (reason := attention_reason(i))),
+        key=lambda i: (reason_rank[i["attention"]], i["effective_deadline"] or "9999"),
+    )
+    candidate_ids = {i["id"] for i in candidates}
+    soon_candidates = [i for i in candidates if i["due_date"] and today.isoformat() <= i["due_date"] <= week_end]
+    overdue_candidates = [i for i in candidates if i["urgency"] == Urgency.OVERDUE.value]
     return {
         "today": today.isoformat(),
         "counts": {
@@ -178,7 +215,15 @@ def dashboard(c: Container = Depends(get_container)) -> dict[str, Any]:
             "active": len(active),
             "completed_7d": len(completed_recent),
             "pending_suggestions": len(pending),
+            # Distinct tasks that wait for a decision (a candidate to confirm and/or a pending suggestion).
+            "needs_action": len(candidate_ids | suggestion_task_ids),
+            "due_soon": len(upcoming),
+            "due_soon_candidates": len(soon_candidates),
+            "overdue_candidates": len(overdue_candidates),
+            "conflicts": len(conflict_ids),
         },
+        "attention": attention[:12],
+        "attention_total": len(attention),
         "today_focus": today_focus[:10],
         "upcoming": upcoming[:20],
         "overdue": overdue[:20],
@@ -442,6 +487,8 @@ def batch(body: BatchBody, c: Container = Depends(get_container)) -> dict[str, A
 
 class MergeBody(BaseModel):
     into_task_id: str
+    # Required when the two tasks have different deadlines: keep the "existing" one or take the "new" one.
+    due_choice: Literal["existing", "new"] | None = None
 
 
 @router.post("/tasks/{task_id}/merge")
@@ -449,7 +496,8 @@ def merge(task_id: str, body: MergeBody, c: Container = Depends(get_container)) 
     with transaction(c.factory) as session:
         source = c.tasks.get(session, task_id)
         target = c.tasks.get(session, body.into_task_id)
-        c.tasks.merge_tasks(session, source, target, actor=Actor.USER)
+        c.tasks.merge_tasks(session, source, target, actor=Actor.USER, due_choice=body.due_choice)
+        c.calendar.mark_out_of_sync(session, target)  # the kept task may have taken over the other deadline
     _remove_calendar_events(c, [task_id])  # the merged-away task is dismissed
     with transaction(c.factory) as session:
         return _detail(c, session, body.into_task_id)
@@ -502,10 +550,20 @@ def list_suggestions(status: str = "pending", c: Container = Depends(get_contain
     return {"items": items}
 
 
+class AcceptBody(BaseModel):
+    due_choice: Literal["existing", "new"] | None = None
+
+
 @router.post("/suggestions/{suggestion_id}/accept")
-def accept_suggestion(suggestion_id: int, c: Container = Depends(get_container)) -> dict[str, Any]:
+def accept_suggestion(
+    suggestion_id: int, body: AcceptBody | None = None, c: Container = Depends(get_container)
+) -> dict[str, Any]:
     with transaction(c.factory) as session:
-        suggestion = c.tasks.accept_suggestion(session, suggestion_id, actor=Actor.USER)
+        suggestion = c.tasks.accept_suggestion(
+            session, suggestion_id, actor=Actor.USER, due_choice=body.due_choice if body else None
+        )
+        if suggestion.related_task_id and suggestion.kind == "possible_duplicate":
+            c.calendar.mark_out_of_sync(session, c.tasks.get(session, suggestion.related_task_id))
         task_id = suggestion.task_id
         kind = suggestion.kind
         target_id = suggestion.related_task_id if kind == "possible_duplicate" else task_id

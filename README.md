@@ -158,7 +158,7 @@ The workflow in `.github/workflows/ci.yml` runs the same checks on Ubuntu, with 
 language models. It has not run on GitHub yet (the repository has not been pushed); the backend checks were run
 locally on Windows 11 and on Ubuntu 24.04 (WSL), where the four OCR tests were skipped for lack of Tesseract.
 
-### Evaluation (rule engine, `rules-1.4`)
+### Evaluation (rule engine, `rules-1.5`)
 
 Measured with `python -m taskradar eval` on synthetic, hand-labelled cases. The development set was used while
 building the rules; the held-out set was written separately and run without tuning on it (one bug it exposed,

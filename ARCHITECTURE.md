@@ -72,7 +72,7 @@ syncs of the same source; a file lock prevents two servers on the same data fold
 
 ### Extraction
 
-`RuleBasedExtractor` (version `rules-1.4`) works without network access:
+`RuleBasedExtractor` (version `rules-1.5`) works without network access:
 
 * the text is split into segments (soft line wraps joined without changing offsets, so evidence offsets stay
   valid), the content type is classified (marketing/newsletter scoring, bulk headers, conditional

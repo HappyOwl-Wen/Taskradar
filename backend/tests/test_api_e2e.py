@@ -151,7 +151,7 @@ def test_merged_duplicates_are_not_counted_as_rejected(api: Any) -> None:
     assert api.post(f"/api/sources/{source['id']}/sync", params={"wait": True}).json()["job"]["status"] == "succeeded"
     first, second, third = api.get("/api/tasks", params={"sort": "created_at"}).json()["items"][:3]
     api.post(f"/api/tasks/{first['id']}/status", json={"status": "confirmed"})
-    merged = api.post(f"/api/tasks/{second['id']}/merge", json={"into_task_id": first["id"]})
+    merged = api.post(f"/api/tasks/{second['id']}/merge", json={"into_task_id": first["id"], "due_choice": "existing"})
     assert merged.status_code == 200, merged.text
     api.post(f"/api/tasks/{third['id']}/status", json={"status": "dismissed"})
 
@@ -229,3 +229,89 @@ def test_settings_roundtrip(api: Any) -> None:
     assert updated["llm"]["consent_at"]
     assert api.put("/api/settings", json={"general": {"timezone": "Mars/Base"}}).status_code == 422
     assert api.put("/api/settings", json={"nonsense": {}}).status_code == 422
+
+
+def test_merging_different_deadlines_needs_an_explicit_choice(api: Any) -> None:
+    kept = api.post("/api/tasks", json={"title": "Miete November", "due_date": "2026-11-01"}).json()
+    dup = api.post(
+        "/api/tasks", json={"title": "Miete November überweisen", "due_date": "2026-11-03", "due_time": "12:00"}
+    ).json()
+
+    refused = api.post(f"/api/tasks/{dup['id']}/merge", json={"into_task_id": kept["id"]})
+    assert refused.status_code == 409 and refused.json()["error"]["code"] == "due_choice_required"
+    assert api.get(f"/api/tasks/{dup['id']}").json()["status"] == "confirmed"  # nothing happened
+
+    merged = api.post(f"/api/tasks/{dup['id']}/merge", json={"into_task_id": kept["id"], "due_choice": "new"}).json()
+    assert (merged["id"], merged["due_date"], merged["due_time"]) == (kept["id"], "2026-11-03", "12:00")
+    assert "due" in merged["user_locked_fields"]
+    assert api.get(f"/api/tasks/{dup['id']}").json()["status"] == "dismissed"
+
+    # Undoing the merge restores both tasks, including the kept task's own deadline.
+    event = next(e for e in merged["events"] if e["type"] == "merged")
+    restored = api.post(f"/api/events/{event['id']}/undo").json()
+    assert (restored["due_date"], restored["due_time"]) == ("2026-11-01", None)
+    assert api.get(f"/api/tasks/{dup['id']}").json()["status"] == "confirmed"
+
+    # Keeping the existing date is just as explicit.
+    kept_date = api.post(f"/api/tasks/{dup['id']}/merge", json={"into_task_id": kept["id"], "due_choice": "existing"})
+    assert kept_date.json()["due_date"] == "2026-11-01"
+
+
+def test_same_deadline_merges_without_a_question(api: Any) -> None:
+    kept = api.post("/api/tasks", json={"title": "Exam registration", "due_date": "2026-11-20"}).json()
+    dup = api.post("/api/tasks", json={"title": "Register for the exam", "due_date": "2026-11-20"}).json()
+    undated = api.post("/api/tasks", json={"title": "Exam registration (no date)"}).json()
+    assert api.post(f"/api/tasks/{dup['id']}/merge", json={"into_task_id": kept["id"]}).status_code == 200
+    assert api.post(f"/api/tasks/{undated['id']}/merge", json={"into_task_id": kept["id"]}).status_code == 200
+
+
+def test_accepting_a_duplicate_suggestion_with_another_deadline_needs_a_choice(api: Any) -> None:
+    from taskradar.db.session import transaction
+    from taskradar.domain.enums import SuggestionKind
+
+    existing = api.post("/api/tasks", json={"title": "Rückmeldung bezahlen", "due_date": "2026-11-15"}).json()
+    new = api.post("/api/tasks", json={"title": "Semesterbeitrag zahlen", "due_date": "2026-11-20"}).json()
+    c = api.container
+    with transaction(c.factory) as session:
+        suggestion = c.tasks.suggest(
+            session,
+            c.tasks.get(session, new["id"]),
+            kind=SuggestionKind.POSSIBLE_DUPLICATE,
+            payload={"other_task_id": existing["id"], "other_title": existing["title"], "score": 0.7},
+            evidence=[],
+            confidence=0.7,
+            reason="conflicting_deadline_needs_review",
+            dedupe_key=f"{new['id']}:possible_duplicate:{existing['id']}",
+            related_task_id=existing["id"],
+            summary="test",
+        )
+        assert suggestion is not None
+        suggestion_id = suggestion.id
+
+    refused = api.post(f"/api/suggestions/{suggestion_id}/accept")
+    assert refused.status_code == 409 and refused.json()["error"]["code"] == "due_choice_required"
+    assert [s["id"] for s in api.get("/api/suggestions").json()["items"]] == [suggestion_id]  # still pending
+
+    merged = api.post(f"/api/suggestions/{suggestion_id}/accept", json={"due_choice": "new"}).json()
+    assert (merged["id"], merged["due_date"]) == (existing["id"], "2026-11-20")
+    assert api.get("/api/suggestions").json()["items"] == []
+
+
+def test_dashboard_never_hides_unconfirmed_tasks_due_soon(api: Any) -> None:
+    # FIXED_NOW is Wednesday 14 October 2026.
+    soon = api.post("/api/tasks", json={"title": "Antrag einreichen", "due_date": "2026-10-15"}).json()
+    api.post(f"/api/tasks/{soon['id']}/status", json={"status": "candidate"})  # not confirmed yet
+    confirmed = api.post("/api/tasks", json={"title": "Miete überweisen", "due_date": "2026-10-16"}).json()
+    late = api.post("/api/tasks", json={"title": "Bücher zurückgeben", "due_date": "2026-10-10"}).json()
+    api.post("/api/tasks", json={"title": "Später", "due_date": "2026-12-01"})
+    api.post("/api/tasks", json={"title": "Ohne Datum"})
+
+    dashboard = api.get("/api/dashboard").json()
+    assert [(i["id"], i["attention"]) for i in dashboard["attention"]] == [
+        (late["id"], "overdue"),
+        (soon["id"], "unconfirmed_due"),
+        (confirmed["id"], "due_soon"),
+    ]
+    counts = dashboard["counts"]
+    assert (counts["overdue"], counts["due_soon"], counts["due_soon_candidates"]) == (1, 1, 1)
+    assert counts["needs_action"] == 1 and counts["candidates"] == 1  # the candidate, counted once

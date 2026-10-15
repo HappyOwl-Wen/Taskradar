@@ -35,7 +35,7 @@ from taskradar.extraction import lexicon as lx
 from taskradar.extraction.dates import DateMention, choose_deadline, find_dates, mention_to_due
 from taskradar.parsing.language import detect_language
 
-RULES_VERSION = "rules-1.4"
+RULES_VERSION = "rules-1.5"
 RULES_CONFIDENCE_CAP = 0.85
 
 _HARD_BREAK = re.compile(r"[^\n。！？!?；;]+[。！？!?；;]?")
@@ -405,6 +405,8 @@ def build_title(
             title = _title_zh(masked_seg, match)
         elif lang == "de":
             title = _title_de(masked_seg, match)
+            if title:
+                title = re.sub(r"\s+zu\s+(\w+)$", r" \1", title)  # "Miete zu überweisen" -> "Miete überweisen"
         else:
             stripped = _strip_date_phrases(masked_seg)
             found_en = lx.detect_instructed_action(stripped)
@@ -468,6 +470,38 @@ def _mentions_in(mentions: list[DateMention], seg: Segment) -> list[DateMention]
     return [m for m in mentions if seg.start <= m.start < seg.end]
 
 
+# A negation right before the verb in the same clause: "Bitte nicht antworten", "Please do not reply",
+# "请勿直接回复". "Don't forget to pay" / "Vergessen Sie nicht, … zu überweisen" are instructions all the same.
+_NEGATION_BEFORE = re.compile(
+    r"(?:\b(?:do\s+not|don['’]?t|never|no\s+need\s+to|not\s+necessary\s+to|nicht|kein(?:e[nmrs]?)?)\b"
+    r"|请勿|切勿|勿|不要|不用|不必|无需|无须|别)"
+    r"[^.!?。！？;；,，:：\n]{0,25}$",
+    re.I,
+)
+_NEGATION_AFTER = re.compile(r"^\s*(?:Sie|du|ihr)\s+(?:bitte\s+)?nicht\b(?!\s+nur)", re.I)  # "antworten Sie nicht"
+_NOT_A_NEGATION = re.compile(r"forget|vergessen|vergiss|忘", re.I)
+
+
+def _negated_instruction(seg_text: str, match: re.Match[str]) -> bool:
+    before = _NEGATION_BEFORE.search(seg_text[: match.start()])
+    if before is not None and not _NOT_A_NEGATION.search(before.group(0)):
+        return True
+    return bool(_NEGATION_AFTER.match(seg_text[match.end() : match.end() + 30]))
+
+
+# Titles that stop in the middle of a phrase ("Register for only") or are only template residue.
+_DANGLING_END = re.compile(
+    r"(?:\b(?:for|only|to|the|a|an|of|with|and|or|this|that|your|our|on|at|in|by|from|as|into|"
+    r"für|nur|zu|der|die|das|den|dem|und|oder|mit|von|auf|an|bei|im|zur|zum|ein|eine)|[的和或及对给在与把被让向从为])$",
+    re.I,
+)
+
+
+def _incomplete_title(title: str) -> bool:
+    core = re.sub(r"[\s:：,，.。;；\-–—#*_=~]+$", "", title)
+    return not core or _DANGLING_END.search(core) is not None
+
+
 def _is_instruction(seg: Segment) -> bool:
     """An action verb together with an obligation cue ("please pay", "请缴纳"); a bare verb in a status
     line ("Payment status: 未支付") is not an instruction."""
@@ -511,10 +545,14 @@ class RuleBasedExtractor:
                     continue
 
             # ---- obligations ---------------------------------------------------------------
+            if lx.BOILERPLATE.search(seg_text):
+                continue  # "reply above this line", "this e-mail was sent automatically", …
             found = lx.detect_instructed_action(seg_text)
             if found is None:
                 continue
             action, match = found
+            if _negated_instruction(seg_text, match):
+                continue  # "Bitte nicht antworten", "Please do not reply", "请勿回复"
             if (
                 action in lx.GENERIC_ACTIONS
                 and seg_text.rstrip().endswith((":", "："))
@@ -596,15 +634,19 @@ class RuleBasedExtractor:
 
             context = display_quote(" ".join(s.text for s in segments[max(0, idx - 1) : idx + 2]))
             title_line = f"{inp.title}\n" if inp.title else ""
+            title = build_title(
+                mask_dates(seg_text, [(m.start - seg.start, m.end - seg.start) for m in seg_mentions]),
+                action,
+                lang,
+                entities,
+                inp.title,
+            )
+            title = re.sub(r"\s*[#*_=~]{2,}\s*", " ", title).strip() or title  # template residue such as "-##"
+            if _incomplete_title(title):
+                uncertainties.append("title_incomplete")  # the full sentence stays in action_required
             tasks.append(
                 CandidateTask(
-                    title=build_title(
-                        mask_dates(seg_text, [(m.start - seg.start, m.end - seg.start) for m in seg_mentions]),
-                        action,
-                        lang,
-                        entities,
-                        inp.title,
-                    ),
+                    title=title,
                     description=_clip(f"{title_line}{context}", 600),
                     category=category,
                     action_type=action,

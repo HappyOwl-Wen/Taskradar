@@ -37,7 +37,7 @@ Definitions:
 | Completion cases | 6 | 5 |
 | Use | written and used while developing the rules | written separately; not used for tuning |
 
-## Results (`rules-1.4`)
+## Results (`rules-1.5`)
 
 ```powershell
 cd backend
@@ -54,7 +54,7 @@ cd backend
 | Marketing/info cases with false tasks | 0/7 | 0/7 |
 | Merges correct / wrong / missed / flagged | 5/5 / 0 / 0 / 0 | 1/1 / 0 / 0 / 0 |
 | Completion detected / explicit-vs-hedged correct / right task | 6/6 / 6/6 / 4/4 | 3/5 / 3/5 / 0/2 |
-| Extractor time per case (Windows 11, Ryzen 9 7940H, three runs) | 0.7 – 0.8 ms | 0.7 ms |
+| Extractor time per case (Windows 11, Ryzen 9 7940H, three runs) | 1.1 – 1.2 ms | 1.1 ms |
 
 The development numbers show that the rules handle the phrasings they were built for; they are not evidence of
 generalisation. The held-out numbers are the honest estimate. One held-out case (h-en-01) became correct
@@ -107,6 +107,15 @@ has **not** been measured yet (no API key was available while building this proj
   unchanged. On the held-out set, h-en-01 ("your rent … is due on November 1st. Please make sure the
   transfer arrives on time.") now gets the right date from the preceding sentence. That case's failure
   had been analysed before, so this gain is not an independent measurement (see above).
+* **rules-1.4 → rules-1.5 (2026-10-15, real mailbox).** Candidate titles such as "Reply above this line",
+  "Nicht antworten" and "Register for only" came from ticket-system footers, "do not reply" notices and an
+  advert. Template lines (ticket separators, "this e-mail was sent automatically" and the German and Chinese
+  equivalents) and instructions negated in the same clause ("Bitte nicht antworten", "Please do not reply",
+  "请勿回复"; but not "don't forget to …" / "Vergessen Sie nicht, … zu …") no longer become tasks; price
+  offers ("for only €49", "save 30%") count as marketing; titles that stop mid-phrase are flagged for review
+  ("content needs checking") while the full sentence is kept. Regression tests:
+  `test_mail_templates_and_negated_instructions_are_not_tasks` and the three tests after it. Both evaluation
+  sets give identical results; the extractor time per case rose from about 0.7 to 1.1 ms.
 
 ## End-to-end performance
 

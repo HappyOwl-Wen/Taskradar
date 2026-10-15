@@ -46,6 +46,26 @@ class TaskError(Exception):
             self.code = code
 
 
+class DueChoiceRequired(TaskError):
+    """Two tasks with different deadlines are merged: the user has to say which date is right."""
+
+    code = "due_choice_required"
+    status_code = 409
+
+
+# Everything that describes a task's deadline; a merge may take these over from the merged task.
+_MERGE_DUE_FIELDS = (
+    "due_date",
+    "due_time",
+    "due_text",
+    "due_precision",
+    "due_needs_confirmation",
+    "due_anchor",
+    "due_is_relative",
+    "time_semantics",
+)
+
+
 class TaskNotFound(TaskError):
     code = "task_not_found"
     status_code = 404
@@ -603,9 +623,35 @@ class TaskService:
     # Merge
     # ------------------------------------------------------------------------------------------
 
-    def merge_tasks(self, session: Session, source: Task, target: Task, *, actor: Actor = Actor.USER) -> TaskEvent:
+    def merge_tasks(
+        self,
+        session: Session,
+        source: Task,
+        target: Task,
+        *,
+        actor: Actor = Actor.USER,
+        due_choice: str | None = None,
+    ) -> TaskEvent:
+        """Merge ``source`` into ``target``; ``target`` stays, ``source`` is dismissed and its sources move over.
+
+        If ``source`` has a different deadline, ``due_choice`` must say which one is right ("existing" keeps the
+        target's date, "new" takes the source's). A deadline is never overwritten or dropped silently.
+        """
         if source.id == target.id:
             raise TaskError("A task cannot be merged into itself", code="invalid_merge")
+        conflict = source.due_date is not None and (source.due_date, source.due_time) != (
+            target.due_date,
+            target.due_time,
+        )
+        if conflict and due_choice not in ("existing", "new"):
+            raise DueChoiceRequired("The tasks have different deadlines; choose which one to keep")
+        target_due_before: dict[str, Any] | None = None
+        if conflict and due_choice == "new":
+            target_due_before = {k: _jsonable(getattr(target, k)) for k in _MERGE_DUE_FIELDS}
+            for key in _MERGE_DUE_FIELDS:
+                setattr(target, key, getattr(source, key))
+            target.due_version += 1
+            target.user_locked_fields = sorted(set(target.user_locked_fields or []) | {"due"})  # chosen by the user
         existing_keys = {(s.origin_key, s.relation) for s in target.sources}
         moved: list[int] = []
         for ts in list(source.sources):
@@ -643,8 +689,14 @@ class TaskService:
             target,
             EventType.MERGED,
             actor,
-            f"合并了任务「{source.title}」",
-            data={"merged_task_id": source.id, "moved_source_ids": moved, "source_before": before_status},
+            f"合并了任务「{source.title}」" + ("，并采用了它的截止日期" if target_due_before else ""),
+            data={
+                "merged_task_id": source.id,
+                "moved_source_ids": moved,
+                "source_before": before_status,
+                "due_choice": due_choice if conflict else None,
+                "target_due_before": target_due_before,
+            },
             revertible=True,
         )
 
@@ -665,6 +717,10 @@ class TaskService:
         )
         if link is not None:
             session.delete(link)
+        if data.get("target_due_before"):
+            for key, value in data["target_due_before"].items():
+                setattr(target, key, _from_json(key, value))
+            target.due_version += 1
         source.updated_at = self.clock()
 
     def link_tasks(self, session: Session, task: Task, other: Task, kind: str = "related") -> None:
@@ -726,7 +782,9 @@ class TaskService:
         task.updated_at = self.clock()
         return suggestion
 
-    def accept_suggestion(self, session: Session, suggestion_id: int, *, actor: Actor = Actor.USER) -> TaskSuggestion:
+    def accept_suggestion(
+        self, session: Session, suggestion_id: int, *, actor: Actor = Actor.USER, due_choice: str | None = None
+    ) -> TaskSuggestion:
         suggestion = self._pending_suggestion(session, suggestion_id)
         task = suggestion.task
         kind = SuggestionKind(suggestion.kind)
@@ -750,7 +808,7 @@ class TaskService:
             other = session.get(Task, suggestion.related_task_id) if suggestion.related_task_id else None
             if other is None:
                 raise TaskError("The related task no longer exists", code="related_task_missing")
-            self.merge_tasks(session, task, other, actor=actor)
+            self.merge_tasks(session, task, other, actor=actor, due_choice=due_choice)
         suggestion.status = SuggestionStatus.ACCEPTED.value
         suggestion.resolved_at = self.clock()
         self.record(

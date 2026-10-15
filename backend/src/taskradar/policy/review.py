@@ -26,6 +26,7 @@ REVIEW_UNCERTAINTIES = {
     "relative_date_without_source_date",
     "marketing_context",
     "low_ocr_confidence",
+    "title_incomplete",
 }
 
 
