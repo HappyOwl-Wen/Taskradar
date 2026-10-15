@@ -116,6 +116,13 @@ has **not** been measured yet (no API key was available while building this proj
   ("content needs checking") while the full sentence is kept. Regression tests:
   `test_mail_templates_and_negated_instructions_are_not_tasks` and the three tests after it. Both evaluation
   sets give identical results; the extractor time per case rose from about 0.7 to 1.1 ms.
+* **2026-10-15, reconciliation.** While loading synthetic test mails into the UI, two unrelated payment
+  requests ("Mahngebühr der Bibliothek …" and "Mitgliedsbeitrag für den Testverein …") were treated as the
+  same task, and an "upload … by 20 November" request looked like a duplicate of "upload … by 25 November":
+  the object check counted the action verb ("überweisen", "upload") and the written-out month as a
+  shared object. Action verbs, generic payment words and month/weekday names no longer count as object
+  evidence. Both evaluation sets give identical results; regression test
+  `test_shared_payment_verb_does_not_make_different_payments_duplicates`.
 
 ## End-to-end performance
 

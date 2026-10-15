@@ -151,7 +151,7 @@ See [SECURITY.md](SECURITY.md) for the threat model.
 
 ```powershell
 cd backend
-.venv\Scripts\python.exe -m pytest            # 233 tests, about 30 s, includes real OCR
+.venv\Scripts\python.exe -m pytest            # 234 tests, about 30 s, includes real OCR
 .venv\Scripts\python.exe -m ruff check .
 .venv\Scripts\python.exe -m ruff format --check .
 .venv\Scripts\python.exe -m mypy

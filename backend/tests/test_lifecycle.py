@@ -133,6 +133,32 @@ def test_shared_platform_name_does_not_make_tasks_duplicates(container: Containe
     assert len(tasks(container)) == 2
 
 
+def test_shared_payment_verb_does_not_make_different_payments_duplicates(container: Container) -> None:
+    # Two payment requests for different things: the shared verb is not a shared object.
+    ingest_mail(container, "Mahngebühr", "Bitte überweisen Sie die Mahngebühr der Stadtbibliothek bis zum 12.11.2026.")
+    outcome, _ = ingest_mail(
+        container,
+        "Mitgliedsbeitrag",
+        "Bitte überweisen Sie den Mitgliedsbeitrag für den Ruderclub bis zum 30.11.2026.",
+        sent_at=FIXED_NOW + dt.timedelta(days=1),
+    )
+    assert outcome.tasks_created == 1
+    assert (outcome.duplicates_merged, outcome.suggestions_created, outcome.tasks_updated) == (0, 0, 0)
+    assert len(tasks(container)) == 2
+    outcome, _ = ingest_mail(
+        container,
+        "Photo for the student card",
+        "Please upload your photo for the student card by 20 November 2026.",
+    )
+    other, _ = ingest_mail(
+        container,
+        "Consent form",
+        "Please upload the signed consent form for the lab course by 25 November 2026.",
+        sent_at=FIXED_NOW + dt.timedelta(days=1),
+    )
+    assert (other.tasks_created, other.duplicates_merged, other.suggestions_created) == (1, 0, 0)
+
+
 def test_explicit_deadline_change_is_applied_and_revertible(container: Container) -> None:
     ingest_mail(container, *NOTICE)
     outcome, _ = ingest_mail(
