@@ -1,10 +1,9 @@
 import { useQuery } from "@tanstack/react-query";
-import { CalendarCheck, CalendarMinus, CalendarPlus, CalendarX, ExternalLink, RefreshCw, TriangleAlert } from "lucide-react";
+import { CalendarCheck, CalendarClock, CalendarMinus, CalendarPlus, CalendarX, ExternalLink, RefreshCw, TriangleAlert } from "lucide-react";
 import { useState } from "react";
 import { Link } from "react-router";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ConfirmDialog, Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ErrorState, Skeleton } from "@/components/ui/states";
 import { translateKey } from "@/i18n";
@@ -209,11 +208,11 @@ export function CalendarCard({ task }: { task: TaskDetail }) {
   }
 
   return (
-    <Card>
-      <CardHeader className="pb-2">
-        <CardTitle>{t("calendar.title")}</CardTitle>
-      </CardHeader>
-      <CardContent>{body}</CardContent>
-    </Card>
+    <section className="grid gap-2.5 border-t pt-3">
+      <h3 className="flex items-center gap-1.5 text-[13px] font-semibold text-muted-foreground">
+        <CalendarClock className="size-4" /> {t("calendar.title")}
+      </h3>
+      {body}
+    </section>
   );
 }

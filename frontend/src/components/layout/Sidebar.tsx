@@ -32,7 +32,8 @@ export function Brand() {
 export function SidebarNav({ onNavigate }: { onNavigate?: () => void }) {
   const { t } = useTranslation();
   const { data } = useDashboard();
-  const inboxCount = data ? data.counts.candidates + data.counts.pending_suggestions : 0;
+  // Distinct tasks waiting for a decision (a candidate with an open suggestion counts once).
+  const inboxCount = data ? (data.counts.needs_action ?? data.counts.candidates + data.counts.pending_suggestions) : 0;
   const overdue = data?.counts.overdue ?? 0;
   return (
     <nav aria-label={t("nav.mainNav")} className="grid gap-0.5">
@@ -83,7 +84,7 @@ export function AgentModeChip() {
 
 export function Sidebar() {
   return (
-    <aside className="sticky top-0 hidden h-dvh w-60 shrink-0 flex-col gap-6 border-r bg-sidebar px-3 py-4 lg:flex">
+    <aside className="hidden h-full w-56 shrink-0 flex-col gap-6 overflow-y-auto border-r bg-sidebar px-3 py-4 lg:flex">
       <Brand />
       <SidebarNav />
       <div className="mt-auto">

@@ -124,4 +124,8 @@
   .scrollbar-thin {
     scrollbar-width: thin;
   }
+  /* Reserve the scrollbar's width so content does not jump when a list grows past the viewport. */
+  .scroll-stable {
+    scrollbar-gutter: stable;
+  }
 }

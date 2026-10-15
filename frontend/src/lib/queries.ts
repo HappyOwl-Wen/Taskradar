@@ -79,9 +79,26 @@ function calendarWarning(data: unknown): string | null {
   return i18n.t(d.deleted ? "calendar.notRemovedDeleted" : "calendar.notRemoved");
 }
 
+/** Revert recorded changes (newest first) and refresh; failures are shown, never swallowed. */
+export async function undoEvents(queryClient: QueryClient, eventIds: number[]): Promise<void> {
+  try {
+    for (const id of [...eventIds].reverse()) await api.undo(id);
+    toast.success(i18n.t("common.undone"));
+  } catch (error) {
+    toast.error(errorMessage(error));
+  } finally {
+    void refreshAll(queryClient);
+  }
+}
+
 interface ActionOptions<TData> {
   /** Toast shown on success; a function receives the response. */
   success?: string | ((data: TData) => string | null);
+  /**
+   * Events that undo the change; when given, the success toast offers "Undo". Most responses carry
+   * `undo_event_id` (single change) or `undo_event_ids` (batch).
+   */
+  undo?: (data: TData) => (number | null | undefined)[] | number | null | undefined;
   onSuccess?: (data: TData) => void;
   /** Refetch everything that is on screen afterwards (default true). */
   invalidate?: boolean;
@@ -97,7 +114,15 @@ export function useAction<TVars, TData>(fn: (vars: TVars) => Promise<TData>, opt
     mutationFn: fn,
     onSuccess: (data) => {
       const message = typeof options.success === "function" ? options.success(data) : options.success;
-      if (message) toast.success(message);
+      const undoIds = options.undo ? [options.undo(data)].flat().filter((id): id is number => typeof id === "number") : [];
+      if (message && undoIds.length) {
+        toast.success(message, {
+          duration: 10_000,
+          action: { label: i18n.t("common.undo"), onClick: () => void undoEvents(queryClient, undoIds) },
+        });
+      } else if (message) {
+        toast.success(message);
+      }
       const warning = calendarWarning(data);
       if (warning) toast.warning(warning, { duration: 10_000 });
       options.onSuccess?.(data);

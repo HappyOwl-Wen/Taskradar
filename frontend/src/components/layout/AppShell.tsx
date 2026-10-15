@@ -1,8 +1,9 @@
 import { FileUp } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { Outlet } from "react-router";
+import { Outlet, useLocation, useMatches } from "react-router";
 import { useTranslation } from "react-i18next";
 import { useUpload } from "@/lib/upload";
+import { cn } from "@/lib/utils";
 import { Sidebar } from "./Sidebar";
 import { SyncWatcher } from "./SyncWatcher";
 import { TopBar } from "./TopBar";
@@ -65,14 +66,44 @@ function DropOverlay() {
   );
 }
 
+/** Route `handle` flag for pages that manage their own scrolling (list + detail side by side). */
+export interface RouteHandle {
+  fullHeight?: boolean;
+}
+
+/**
+ * App frame: the sidebar and top bar stay in place and the page area is the only scroll container,
+ * so there is never a page scrollbar next to an inner one. Full-height pages (the review inbox) get
+ * the whole area and scroll their panes themselves.
+ */
 export function AppShell() {
+  const matches = useMatches();
+  const { pathname } = useLocation();
+  const main = useRef<HTMLElement>(null);
+  const fullHeight = matches.some((m) => (m.handle as RouteHandle | undefined)?.fullHeight);
+
+  useEffect(() => {
+    main.current?.scrollTo({ top: 0 });
+  }, [pathname]);
+
   return (
-    <div className="flex min-h-dvh">
+    <div className="flex h-dvh overflow-hidden">
       <Sidebar />
       <div className="flex min-w-0 flex-1 flex-col">
         <TopBar />
-        <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-6 sm:px-6 lg:px-8">
-          <Outlet />
+        <main
+          ref={main}
+          id="main"
+          tabIndex={-1}
+          className={cn("min-h-0 flex-1 outline-none", fullHeight ? "overflow-hidden" : "scroll-stable overflow-y-auto")}
+        >
+          {fullHeight ? (
+            <Outlet />
+          ) : (
+            <div className="mx-auto w-full max-w-7xl px-4 py-5 sm:px-6 lg:px-8">
+              <Outlet />
+            </div>
+          )}
         </main>
       </div>
       <DropOverlay />

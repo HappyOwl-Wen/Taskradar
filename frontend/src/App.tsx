@@ -5,7 +5,7 @@ import { createBrowserRouter } from "react-router";
 import { RouterProvider } from "react-router/dom";
 import { useTranslation } from "react-i18next";
 import { Toaster } from "sonner";
-import { AppShell } from "@/components/layout/AppShell";
+import { AppShell, type RouteHandle } from "@/components/layout/AppShell";
 import { Button } from "@/components/ui/button";
 import { TooltipProvider } from "@/components/ui/menu";
 import { LoadingRows } from "@/components/ui/states";
@@ -34,7 +34,7 @@ const queryClient = new QueryClient({
 });
 
 function page(element: React.ReactNode) {
-  return <Suspense fallback={<LoadingRows rows={5} />}>{element}</Suspense>;
+  return <Suspense fallback={<LoadingRows rows={5} className="p-4" />}>{element}</Suspense>;
 }
 
 const router = createBrowserRouter([
@@ -44,7 +44,7 @@ const router = createBrowserRouter([
     errorElement: <RouteError />,
     children: [
       { index: true, element: page(<DashboardPage />) },
-      { path: "inbox", element: page(<InboxPage />) },
+      { path: "inbox", element: page(<InboxPage />), handle: { fullHeight: true } satisfies RouteHandle },
       { path: "tasks", element: page(<TasksPage />) },
       { path: "tasks/:id", element: page(<TaskDetailPage />) },
       { path: "sources", element: page(<SourcesPage />) },

@@ -1,24 +1,34 @@
 import {
   Ban,
+  CalendarX2,
   Circle,
   CircleCheck,
   CircleDashed,
   CircleDot,
+  CircleHelp,
+  Copy,
+  FileQuestion,
   FlaskConical,
   Folder,
   GraduationCap,
   Hourglass,
   Landmark,
   Mail,
+  Megaphone,
   PenLine,
   Plane,
+  ScanText,
+  ShieldAlert,
+  Split,
   Tag,
+  TriangleAlert,
   Upload,
   User,
   Wallet,
   type LucideIcon,
 } from "lucide-react";
 import type { BadgeTone } from "@/components/ui/variants";
+import type { IssueKind } from "@/lib/review";
 import type { Category, TaskStatus, Urgency } from "@/lib/types";
 
 export const STATUS_ICON: Record<TaskStatus, LucideIcon> = {
@@ -65,4 +75,37 @@ export const SOURCE_ICON: Record<string, LucideIcon> = {
   upload: Upload,
   folder: Folder,
   manual: PenLine,
+};
+
+/** One colour per lifecycle status, used everywhere a status is shown. */
+export const STATUS_TONE: Record<TaskStatus, BadgeTone> = {
+  candidate: "violet",
+  confirmed: "primary",
+  in_progress: "upcoming",
+  waiting_for_reply: "high",
+  completed: "success",
+  dismissed: "normal",
+};
+
+export const ISSUE_ICON: Record<IssueKind, LucideIcon> = {
+  date_conflict: CalendarX2,
+  duplicate: Copy,
+  date_unclear: CircleHelp,
+  content_unclear: FileQuestion,
+  suspicious: ShieldAlert,
+  not_in_source: ScanText,
+  marketing: Megaphone,
+  ocr_quality: ScanText,
+  low_certainty: TriangleAlert,
+  split: Split,
+};
+
+/** Text colour per status (status icons in lists and menus). */
+export const STATUS_TEXT: Record<TaskStatus, string> = {
+  candidate: "text-violet",
+  confirmed: "text-primary",
+  in_progress: "text-upcoming",
+  waiting_for_reply: "text-high",
+  completed: "text-success",
+  dismissed: "text-muted-foreground",
 };

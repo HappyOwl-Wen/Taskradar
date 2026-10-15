@@ -1,21 +1,13 @@
-import { Tag, TriangleAlert } from "lucide-react";
+import { Tag } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Badge } from "@/components/ui/badge";
 import type { BadgeTone } from "@/components/ui/variants";
 import { Tip } from "@/components/ui/menu";
 import { translateKey } from "@/i18n";
+import type { Issue } from "@/lib/review";
 import type { Category, Priority, TaskStatus, Urgency } from "@/lib/types";
 import { cn } from "@/lib/utils";
-import { CATEGORY_ICON, SOURCE_ICON, STATUS_ICON, URGENCY_TONE } from "./meta";
-
-const STATUS_TONE: Record<TaskStatus, BadgeTone> = {
-  candidate: "violet",
-  confirmed: "primary",
-  in_progress: "upcoming",
-  waiting_for_reply: "high",
-  completed: "success",
-  dismissed: "normal",
-};
+import { CATEGORY_ICON, ISSUE_ICON, SOURCE_ICON, STATUS_ICON, STATUS_TONE, URGENCY_TONE } from "./meta";
 
 export function StatusBadge({ status, className }: { status: TaskStatus; className?: string }) {
   const { t } = useTranslation();
@@ -37,14 +29,15 @@ export function UrgencyBadge({ urgency, className }: { urgency: Urgency; classNa
   );
 }
 
+/** Category as quiet text with its icon: it describes the task, it is not a warning. */
 export function CategoryBadge({ category, className }: { category: Category; className?: string }) {
   const { t } = useTranslation();
   const Icon = CATEGORY_ICON[category] ?? Tag;
   return (
-    <Badge tone="outline" className={className}>
-      <Icon />
+    <span className={cn("inline-flex items-center gap-1 text-xs whitespace-nowrap text-muted-foreground", className)}>
+      <Icon className="size-3.5" aria-hidden />
       {t(`category.${category}`)}
-    </Badge>
+    </span>
   );
 }
 
@@ -71,47 +64,35 @@ export function SourceKinds({ kinds, count }: { kinds: string[]; count: number }
   );
 }
 
-export function ConfidenceMeter({ value, className }: { value: number; className?: string }) {
-  const { t } = useTranslation();
-  const pct = Math.round(value * 100);
-  const tone = value >= 0.8 ? "bg-success" : value >= 0.6 ? "bg-high" : "bg-overdue";
-  return (
-    <Tip content={`${t("common.confidence")} ${pct}%`}>
-      <span className={cn("inline-flex items-center gap-1.5 text-xs text-muted-foreground tabular-nums", className)}>
-        <span className="relative h-1.5 w-10 overflow-hidden rounded-full bg-muted" aria-hidden>
-          <span className={cn("absolute inset-y-0 left-0 rounded-full", tone)} style={{ width: `${pct}%` }} />
-        </span>
-        {pct}%
-      </span>
-    </Tip>
-  );
-}
+const SEVERITY_TONE: Record<Issue["severity"], BadgeTone> = { high: "high", medium: "high", low: "normal" };
 
-export function ReviewFlag({ reasons }: { reasons: string[] }) {
+/** A problem in plain language ("疑似重复", "内容待核实"); the hint explains it on hover. */
+export function IssueBadge({ issue, className }: { issue: Issue; className?: string }) {
   const { t } = useTranslation();
-  if (reasons.length === 0) return null;
-  const text = reasons.map((r) => translateKey(`reviewReason.${r}`, r)).join("、");
+  const Icon = ISSUE_ICON[issue.kind];
   return (
-    <Tip content={text}>
-      <Badge tone="high">
-        <TriangleAlert />
-        {reasons.length === 1 ? translateKey(`reviewReason.${reasons[0]}`, reasons[0]) : t("inbox.needsReviewOnly")}
+    <Tip content={t(`issue.${issue.kind}.hint`)}>
+      <Badge tone={issue.kind === "date_conflict" ? "overdue" : SEVERITY_TONE[issue.severity]} className={className}>
+        <Icon />
+        {t(`issue.${issue.kind}.label`)}
       </Badge>
     </Tip>
   );
 }
 
-export function ReviewReasonList({ reasons }: { reasons: string[] }) {
+/** At most one issue in a list row (the most important), plus how many more there are. */
+export function IssueSummary({ issues }: { issues: Issue[] }) {
+  const { t } = useTranslation();
+  if (issues.length === 0) return null;
+  const rest = issues.slice(1).map((i) => t(`issue.${i.kind}.label`));
   return (
-    <ul className="flex flex-wrap gap-1.5">
-      {reasons.map((r) => (
-        <li key={r}>
-          <Badge tone="high">
-            <TriangleAlert />
-            {translateKey(`reviewReason.${r}`, r)}
-          </Badge>
-        </li>
-      ))}
-    </ul>
+    <span className="inline-flex items-center gap-1">
+      <IssueBadge issue={issues[0]} />
+      {rest.length ? (
+        <Tip content={rest.join("、")}>
+          <span className="text-xs text-muted-foreground tabular-nums">+{rest.length}</span>
+        </Tip>
+      ) : null}
+    </span>
   );
 }

@@ -5,7 +5,7 @@ import { beforeAll, describe, expect, it } from "vitest";
 import { TooltipProvider } from "@/components/ui/menu";
 import i18n from "@/i18n";
 import type { TaskSummary } from "@/lib/types";
-import { TaskRow } from "./TaskRow";
+import { TaskListItem } from "./TaskRow";
 
 const task: TaskSummary = {
   id: "t1",
@@ -43,28 +43,29 @@ const task: TaskSummary = {
   manual: false,
 };
 
-function renderRow(props: Partial<Parameters<typeof TaskRow>[0]> = {}) {
+function renderRow(props: Partial<Parameters<typeof TaskListItem>[0]> = {}) {
   return render(
     <QueryClientProvider client={new QueryClient()}>
       <TooltipProvider>
         <MemoryRouter>
-          <TaskRow task={task} {...props} />
+          <TaskListItem task={task} {...props} />
         </MemoryRouter>
       </TooltipProvider>
     </QueryClientProvider>,
   );
 }
 
-describe("TaskRow", () => {
+describe("TaskListItem", () => {
   beforeAll(async () => {
     await i18n.changeLanguage("zh-CN");
   });
 
-  it("links to the task and shows its review flag and confidence", () => {
+  it("links to the task and names its problem in plain language, without a confidence percentage", () => {
     renderRow();
     expect(screen.getByRole("link", { name: "提交在读证明" })).toHaveAttribute("href", "/tasks/t1");
     expect(screen.getByText("日期需确认")).toBeInTheDocument();
-    expect(screen.getByText("72%")).toBeInTheDocument();
+    expect(screen.queryByText("72%")).not.toBeInTheDocument();
+    expect(screen.queryByText(/置信度/)).not.toBeInTheDocument();
     expect(screen.getByLabelText("日期需要确认")).toBeInTheDocument();
   });
 
@@ -76,6 +77,38 @@ describe("TaskRow", () => {
 
   it("offers a selection checkbox when selectable", () => {
     renderRow({ selected: false, onSelectedChange: () => undefined });
-    expect(screen.getByRole("checkbox", { name: "提交在读证明" })).toBeInTheDocument();
+    expect(screen.getByRole("checkbox", { name: "选择「提交在读证明」" })).toBeInTheDocument();
+  });
+
+  it("shows an internal review code only as a human label", () => {
+    renderRow({ task: { ...task, review_reasons: ["title_incomplete"], due_needs_confirmation: false } });
+    expect(screen.getByText("内容待核实")).toBeInTheDocument();
+    expect(screen.queryByText("title_incomplete")).not.toBeInTheDocument();
+  });
+
+  it("keeps a missing deadline quiet and does not flag reviewed tasks", () => {
+    renderRow({
+      task: {
+        ...task,
+        status: "confirmed",
+        needs_review: false,
+        due_date: null,
+        due_at: null,
+        effective_deadline: null,
+        due_needs_confirmation: false,
+        urgency: "no_deadline",
+      },
+    });
+    expect(screen.getByText("无截止日期")).toBeInTheDocument();
+    expect(screen.queryByText("日期需确认")).not.toBeInTheDocument();
+  });
+
+  it("can select the task in place instead of navigating", () => {
+    let opened = 0;
+    renderRow({ onSelect: () => (opened += 1), active: true });
+    const button = screen.getByRole("button", { name: "提交在读证明" });
+    expect(button).toHaveAttribute("aria-current", "true");
+    button.click();
+    expect(opened).toBe(1);
   });
 });

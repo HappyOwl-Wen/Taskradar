@@ -1,4 +1,4 @@
-import { Bot, Cog, Undo2, User, type LucideIcon } from "lucide-react";
+import { Bot, Cog, Info, Undo2, User, type LucideIcon } from "lucide-react";
 import { useNavigate } from "react-router";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
@@ -93,10 +93,15 @@ export function Timeline({ events, timezone }: { events: TaskEvent[]; timezone: 
                   <span>{formatRelativeTime(ev.created_at, i18n.language)}</span>
                 </Tip>
                 {ev.reverted ? <Badge tone="normal">{t("detail.undone")}</Badge> : null}
+                {ev.actor === "agent" && ev.reason ? (
+                  // The agent's internal reason codes are for checking, not for reading: keep them out of the way.
+                  <Tip content={<span className="font-mono break-all">{ev.reason}</span>}>
+                    <button type="button" className="inline-flex rounded text-muted-foreground/70 outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50" aria-label={t("tech.title")}>
+                      <Info className="size-3.5" />
+                    </button>
+                  </Tip>
+                ) : null}
               </div>
-              {ev.actor === "agent" && ev.reason ? (
-                <p className="font-mono text-[11px] leading-relaxed break-all text-muted-foreground">{ev.reason}</p>
-              ) : null}
             </div>
             {ev.revertible ? (
               <Tip content={t("common.undo")}>

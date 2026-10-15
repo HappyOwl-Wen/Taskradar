@@ -191,6 +191,8 @@ export interface TaskDetail extends TaskSummary {
   calendar: CalendarLink | null;
   links: TaskLinkEntry[];
   split_task_id?: string | null;
+  /** Set on responses to a change (status, merge, suggestion decision): undoing this event reverts it. */
+  undo_event_id?: number | null;
 }
 
 export interface SyncJob {
@@ -215,6 +217,12 @@ export interface SyncJob {
   details: Record<string, unknown>;
 }
 
+export type AttentionReason = "overdue" | "conflict" | "due_soon" | "unconfirmed_due";
+
+export interface AttentionTask extends TaskSummary {
+  attention: AttentionReason;
+}
+
 export interface Dashboard {
   today: string;
   counts: {
@@ -226,7 +234,20 @@ export interface Dashboard {
     active: number;
     completed_7d: number;
     pending_suggestions: number;
+    // The fields below are newer; a server that has not been restarted after an update omits them.
+    /** Distinct tasks waiting for the user: candidates plus tasks with an open suggestion. */
+    needs_action?: number;
+    /** Confirmed tasks due within 7 days (not overdue). */
+    due_soon?: number;
+    /** Unconfirmed candidates due within 7 days (not overdue). */
+    due_soon_candidates?: number;
+    overdue_candidates?: number;
+    /** Tasks with an open deadline conflict (changed date or duplicate with another date). */
+    conflicts?: number;
   };
+  /** What needs attention now, most pressing first. */
+  attention?: AttentionTask[];
+  attention_total?: number;
   today_focus: TaskSummary[];
   upcoming: TaskSummary[];
   overdue: TaskSummary[];

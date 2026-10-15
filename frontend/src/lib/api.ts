@@ -135,6 +135,9 @@ export interface TaskQuery extends Query {
   limit?: number;
 }
 
+/** Which deadline survives a merge: the kept task's ("existing") or the merged-in task's ("new"). */
+export type DueChoice = "existing" | "new";
+
 export interface TaskPatch {
   title?: string;
   description?: string;
@@ -155,12 +158,16 @@ export const api = {
   quickParse: (text: string) => post<QuickParse>("/api/tasks/quick-parse", { text }),
   updateTask: (id: string, body: TaskPatch) => patch<TaskDetail>(`/api/tasks/${id}`, body),
   setStatus: (id: string, status: string, note?: string) => post<TaskDetail>(`/api/tasks/${id}/status`, { status, note }),
-  batch: (ids: string[], action: string) => post<{ changed: string[]; count: number }>("/api/tasks/batch", { ids, action }),
-  mergeTask: (id: string, intoTaskId: string) => post<TaskDetail>(`/api/tasks/${id}/merge`, { into_task_id: intoTaskId }),
+  batch: (ids: string[], action: string) =>
+    post<{ changed: string[]; count: number; undo_event_ids?: number[] }>("/api/tasks/batch", { ids, action }),
+  /** `dueChoice` is required when the two deadlines differ (the server answers 409 due_choice_required). */
+  mergeTask: (id: string, intoTaskId: string, dueChoice?: DueChoice) =>
+    post<TaskDetail>(`/api/tasks/${id}/merge`, { into_task_id: intoTaskId, due_choice: dueChoice ?? null }),
   deleteTask: (id: string) => del<{ deleted: string }>(`/api/tasks/${id}`),
   undo: (eventId: number) => post<TaskDetail>(`/api/events/${eventId}/undo`),
   suggestions: () => get<{ items: Suggestion[] }>("/api/suggestions"),
-  acceptSuggestion: (id: number) => post<TaskDetail>(`/api/suggestions/${id}/accept`),
+  acceptSuggestion: (id: number, dueChoice?: DueChoice) =>
+    post<TaskDetail>(`/api/suggestions/${id}/accept`, { due_choice: dueChoice ?? null }),
   rejectSuggestion: (id: number) => post<TaskDetail>(`/api/suggestions/${id}/reject`),
   calendarPreview: (id: string) => get<CalendarPreview>(`/api/tasks/${id}/calendar/preview`),
   calendarSync: (id: string) => post<CalendarLink & { unchanged?: boolean }>(`/api/tasks/${id}/calendar`, { confirm: true }),

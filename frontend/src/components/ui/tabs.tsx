@@ -4,20 +4,29 @@ import { cn } from "@/lib/utils";
 
 export const Tabs = TabsPrimitive.Root;
 
-export function TabsList({ className, ...props }: ComponentProps<typeof TabsPrimitive.List>) {
-  return (
-    <TabsPrimitive.List
-      className={cn("inline-flex h-9 w-fit items-center rounded-lg bg-muted p-[3px] text-muted-foreground", className)}
-      {...props}
-    />
-  );
+type Variant = "pill" | "underline";
+
+const LIST: Record<Variant, string> = {
+  pill: "inline-flex h-9 w-fit items-center rounded-lg bg-muted p-[3px] text-muted-foreground",
+  underline: "flex w-full items-end gap-1 overflow-x-auto text-muted-foreground",
+};
+
+const TRIGGER: Record<Variant, string> = {
+  pill: "h-full rounded-md px-3 data-[state=active]:bg-card data-[state=active]:text-foreground data-[state=active]:shadow-sm",
+  underline:
+    "-mb-px border-b-2 border-transparent px-2.5 pt-1 pb-2 hover:text-foreground data-[state=active]:border-primary data-[state=active]:text-foreground",
+};
+
+export function TabsList({ className, variant = "pill", ...props }: ComponentProps<typeof TabsPrimitive.List> & { variant?: Variant }) {
+  return <TabsPrimitive.List data-variant={variant} className={cn(LIST[variant], className)} {...props} />;
 }
 
-export function TabsTrigger({ className, ...props }: ComponentProps<typeof TabsPrimitive.Trigger>) {
+export function TabsTrigger({ className, variant = "pill", ...props }: ComponentProps<typeof TabsPrimitive.Trigger> & { variant?: Variant }) {
   return (
     <TabsPrimitive.Trigger
       className={cn(
-        "inline-flex h-full items-center justify-center gap-1.5 rounded-md px-3 text-sm font-medium whitespace-nowrap transition-colors outline-none focus-visible:ring-[3px] focus-visible:ring-ring/40 disabled:pointer-events-none disabled:opacity-50 data-[state=active]:bg-card data-[state=active]:text-foreground data-[state=active]:shadow-sm",
+        "inline-flex items-center justify-center gap-1.5 text-sm font-medium whitespace-nowrap transition-colors outline-none focus-visible:ring-[3px] focus-visible:ring-ring/40 disabled:pointer-events-none disabled:opacity-50",
+        TRIGGER[variant],
         className,
       )}
       {...props}
@@ -27,4 +36,9 @@ export function TabsTrigger({ className, ...props }: ComponentProps<typeof TabsP
 
 export function TabsContent({ className, ...props }: ComponentProps<typeof TabsPrimitive.Content>) {
   return <TabsPrimitive.Content className={cn("outline-none", className)} {...props} />;
+}
+
+/** Small count next to a tab label. */
+export function TabCount({ value, active }: { value: number | undefined; active?: boolean }) {
+  return <span className={cn("rounded-full px-1.5 text-xs tabular-nums", active ? "bg-primary/10 text-primary" : "bg-muted")}>{value ?? 0}</span>;
 }
