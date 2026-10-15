@@ -184,7 +184,7 @@ export const api = {
   advanceDemo: () => post<{ stage: number }>("/api/demo/advance"),
   setFailureMode: (mode: string) => put<{ mode: string }>("/api/demo/failure-mode", { mode }),
 
-  documents: () => get<{ items: DocumentBrief[] }>("/api/documents"),
+  documents: () => get<{ items: DocumentBrief[] }>("/api/documents", { limit: 1000 }),
   document: (id: number) => get<DocumentDetail>(`/api/documents/${id}`),
   upload: (files: File[]) => {
     const form = new FormData();
@@ -196,7 +196,7 @@ export const api = {
   reprocessOcrBacklog: () => post<{ accepted: boolean; count: number; job: SyncJob | null }>("/api/documents/reprocess-ocr"),
   deleteDocument: (id: number) => del<{ deleted: number }>(`/api/documents/${id}`),
   documentFileUrl: (id: number) => `/api/documents/${id}/file`,
-  messages: () => get<{ items: MessageListItem[] }>("/api/messages"),
+  messages: () => get<{ items: MessageListItem[] }>("/api/messages", { limit: 1000 }),
   message: (id: number) => get<MessageDetail>(`/api/messages/${id}`),
   deleteMessage: (id: number) => del<{ deleted: number }>(`/api/messages/${id}`),
   reprocessMessage: (id: number) => post<Record<string, unknown>>(`/api/messages/${id}/reprocess`),

@@ -102,7 +102,7 @@ function PreviewDialog({ task, open, onOpenChange, connected }: { task: TaskDeta
               <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-high/40 bg-high/10 px-3 py-2 text-sm">
                 <span>{t("calendar.notConnected")}</span>
                 <Button variant="outline" size="xs" asChild>
-                  <Link to="/settings#calendar">{t("calendar.goToSettings")}</Link>
+                  <Link to="/settings?section=calendar">{t("calendar.goToSettings")}</Link>
                 </Button>
               </div>
             ) : null}
@@ -151,7 +151,7 @@ export function CalendarCard({ task }: { task: TaskDetail }) {
             </p>
             <p className="text-xs leading-relaxed text-muted-foreground">{t("calendar.notConnectedHint")}</p>
             <Button variant="outline" size="xs" className="w-fit" asChild>
-              <Link to="/settings#calendar">{t("calendar.goToSettings")}</Link>
+              <Link to="/settings?section=calendar">{t("calendar.goToSettings")}</Link>
             </Button>
           </div>
         ) : null}

@@ -185,6 +185,7 @@ export function CalendarSection({ settings }: { settings: Settings }) {
   const { data: google } = useGoogle();
   const section = useSection(settings, "calendar");
   const connect = useConnect("calendar");
+  const [confirmAuto, setConfirmAuto] = useState(false);
   const v = section.value;
   const connected = Boolean(google?.calendar.connected);
   return (
@@ -239,7 +240,20 @@ export function CalendarSection({ settings }: { settings: Settings }) {
           label={t("settings.calendar.autoSync")}
           hint={t("settings.calendar.autoSyncHint")}
           checked={v.auto_sync_enabled}
-          onCheckedChange={(c) => section.set("auto_sync_enabled", c)}
+          // Writing to the user's calendar without a per-task confirmation is opt-in, and asked twice.
+          onCheckedChange={(c) => (c ? setConfirmAuto(true) : section.set("auto_sync_enabled", false))}
+        />
+        <ConfirmDialog
+          open={confirmAuto}
+          onOpenChange={setConfirmAuto}
+          title={t("settings.calendar.autoSyncConfirmTitle")}
+          description={t("settings.calendar.autoSyncConfirm")}
+          confirmLabel={t("settings.calendar.autoSyncConfirmAction")}
+          cancelLabel={t("common.cancel")}
+          onConfirm={() => {
+            section.set("auto_sync_enabled", true);
+            setConfirmAuto(false);
+          }}
         />
         {v.auto_sync_enabled ? (
           <fieldset className="grid gap-2">

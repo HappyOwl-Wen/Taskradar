@@ -49,7 +49,7 @@ export function OcrBacklogNotice() {
         </Button>
       ) : (
         <Button size="sm" variant="outline" asChild>
-          <Link to="/settings#system">{t("sources.ocrBacklog.howTo")}</Link>
+          <Link to="/settings?section=system">{t("sources.ocrBacklog.howTo")}</Link>
         </Button>
       )}
     </div>

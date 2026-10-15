@@ -44,7 +44,7 @@ describe("OcrBacklogNotice", () => {
     mockStatus({ available: false, backlog: 13 });
     renderNotice();
     expect(await screen.findByText(/有 13 个文件包含图片或扫描页/)).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "安装说明" })).toHaveAttribute("href", "/settings#system");
+    expect(screen.getByRole("link", { name: "安装说明" })).toHaveAttribute("href", "/settings?section=system");
     expect(screen.queryByRole("button", { name: /立即识别/ })).not.toBeInTheDocument();
   });
 
