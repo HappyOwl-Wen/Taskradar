@@ -27,6 +27,7 @@ class SideEffect(StrEnum):
     LLM_SEND = "llm.send"
     GMAIL_READ = "gmail.read"
     CALENDAR_WRITE = "calendar.write"
+    CALENDAR_DELETE = "calendar.delete"
     AUTOSTART_MODIFY = "autostart.modify"
     DESKTOP_NOTIFY = "desktop.notify"
     FILE_REVEAL = "file.reveal"
@@ -168,6 +169,12 @@ class PermissionGuard:
             if not ctx.get("has_due"):
                 return False, "task_without_date", "The task has no date to put in the calendar"
             return True, "allowed", "user-confirmed calendar write"
+        if action == SideEffect.CALENDAR_DELETE:
+            if not self._secret(sk.GOOGLE_TOKEN_CALENDAR):
+                return False, "calendar_not_connected", "Google Calendar is not connected"
+            if not ctx.get("user_confirmed") and not (ctx.get("auto_rule") and settings.calendar.remove_on_dismiss):
+                return False, "confirmation_required", "Removing a calendar event requires explicit confirmation"
+            return True, "allowed", "removing an event TaskRadar created for this task"
         if action == SideEffect.AUTOSTART_MODIFY:
             if ctx.get("confirmed") is not True:
                 return False, "confirmation_required", "Changing Windows autostart requires explicit confirmation"

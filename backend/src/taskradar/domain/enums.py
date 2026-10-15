@@ -216,6 +216,7 @@ class EventType(StrEnum):
     REVERTED = "reverted"
     CALENDAR_SYNCED = "calendar_synced"
     CALENDAR_FAILED = "calendar_failed"
+    CALENDAR_REMOVED = "calendar_removed"
     LINKED = "linked"
 
 

@@ -99,6 +99,8 @@ class CalendarSettings(_Section):
     auto_sync_enabled: bool = False
     auto_sync_categories: list[Category] = Field(default_factory=list)
     reminder_minutes: int = Field(default=1440, ge=0, le=40320)
+    # When the user dismisses, merges away or deletes a task, remove its event as well.
+    remove_on_dismiss: bool = True
 
 
 class PolicySettings(_Section):

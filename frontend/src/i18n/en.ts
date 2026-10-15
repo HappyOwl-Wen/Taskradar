@@ -194,6 +194,7 @@ const en: Messages = {
     reverted: "Reverted a change",
     calendar_synced: "Written to Google Calendar",
     calendar_failed: "Writing to Google Calendar failed",
+    calendar_removed: "Removed from Google Calendar",
     linked: "Linked a related task",
   },
   field: {
@@ -500,6 +501,14 @@ const en: Messages = {
     failed: "Last write failed: {{error}}",
     apiNotEnabled: "The Google Calendar API is not enabled in your Google Cloud project. Enable it, wait 1–2 minutes, then click “Confirm & write” again.",
     enableApi: "Enable it in the Google Cloud Console",
+    remove: "Remove from calendar",
+    removeTitle: "Remove this event from Google Calendar?",
+    removeDescription: "Only the event TaskRadar created for this task is deleted; nothing else in your calendar changes. You can add it again at any time.",
+    removed: "Removed from the calendar",
+    removedState: "The calendar event was removed",
+    reAdd: "Add to calendar again",
+    notRemoved: "The calendar event could not be removed (offline or access revoked?). You can retry from the task's calendar card.",
+    notRemovedDeleted: "The task was deleted, but its calendar event could not be removed. Please delete it in Google Calendar.",
     openEvent: "View in Google Calendar",
     update: "Update calendar event",
     warnings: {
@@ -507,7 +516,17 @@ const en: Messages = {
       date_needs_confirmation: "The date still needs confirmation; check it first",
     },
   },
-  newTask: { title: "New task", description: "Manually added tasks are confirmed immediately." },
+  newTask: {
+    title: "New to-do",
+    description: "Your own to-dos are confirmed right away, get reminders and can be written to the calendar.",
+    button: "New to-do",
+    quickLabel: "Quick entry",
+    quickPlaceholder: "e.g. 周五前交房租 · Freitag 10 Uhr Zahnarzt · submit report by Oct 20 5pm",
+    quickHint: "Dates and times are recognised automatically; adjust them below before saving.",
+    recognized: "Recognised: {{when}}",
+    noDate: "No date recognised; you can pick one below.",
+    ambiguous: "The date is ambiguous; it could also be {{alternatives}}. Please check.",
+  },
   sources: {
     title: "Sources",
     description:
@@ -708,6 +727,8 @@ const en: Messages = {
       reminderMinutes: "Event reminder (minutes before)",
       autoSync: "Write confirmed tasks to the calendar automatically",
       autoSyncHint: "Off by default. When enabled, it only applies to confirmed tasks with a deadline in the categories below.",
+      removeOnDismiss: "Remove a task's event from the calendar when the task is dismissed, merged or deleted",
+      removeOnDismissHint: "Only the event TaskRadar created for that task is deleted; completed tasks stay in the calendar.",
       autoSyncCategories: "Categories to write automatically",
     },
     reminders: {

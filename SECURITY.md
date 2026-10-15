@@ -53,7 +53,7 @@ database and the Credential Manager), and the security of Google's and the LLM p
   mail as read.
 * Google Calendar: `https://www.googleapis.com/auth/calendar.app.created` only — access to calendars TaskRadar
   created, nothing else. Events are written into a dedicated "TaskRadar" calendar, never with attendees, with
-  `sendUpdates=none`; before updating an event TaskRadar checks that it carries its own task ID.
+  `sendUpdates=none`; before updating or deleting an event TaskRadar checks that it carries its own task ID.
 * OAuth uses the installed-application flow with PKCE, a `state` value that expires after 15 minutes and a
   loopback redirect URI. Only Desktop-type client configurations are accepted. Missing scopes are rejected.
   Disconnecting revokes the token at Google.
@@ -69,9 +69,10 @@ database and the Credential Manager), and the security of Google's and the LLM p
 ### Single permission gate and audit log
 
 Every external side effect calls `PermissionGuard.check()` before it happens: LLM requests, Gmail reads,
-calendar writes, autostart changes, desktop notifications, folder watching, revealing files, OAuth
+calendar writes and deletions, autostart changes, desktop notifications, folder watching, revealing files, OAuth
 connect/revoke, export and delete-all. The guard enforces the rules above (e.g. a calendar write requires a
-connected calendar, an explicit user confirmation or an opt-in rule, a confirmed task and a date; delete-all
+connected calendar, an explicit user confirmation or an opt-in rule, a confirmed task and a date; deleting an
+event requires a confirmation or the opt-in rule for tasks the user dismissed, merged or deleted; delete-all
 requires the typed phrase `DELETE`; a cloud LLM requires consent) and records every decision — allowed or
 denied — in `audit_log` without secret values.
 

@@ -1,4 +1,4 @@
-import { Check, Languages, LoaderCircle, Menu, Monitor, Moon, Search, Sun, Upload } from "lucide-react";
+import { Check, Languages, LoaderCircle, Menu, Monitor, Moon, Plus, Search, Sun, Upload } from "lucide-react";
 import { useRef, useState, type FormEvent } from "react";
 import { useNavigate } from "react-router";
 import { useTranslation } from "react-i18next";
@@ -12,6 +12,7 @@ import { api } from "@/lib/api";
 import { errorMessage } from "@/lib/errors";
 import { useTheme, type Theme } from "@/lib/theme";
 import { ACCEPTED_FILES, useUpload } from "@/lib/upload";
+import { TaskEditDialog } from "@/components/tasks/TaskEditDialog";
 import { NotificationsMenu } from "./Notifications";
 import { AgentModeChip, Brand, SidebarNav } from "./Sidebar";
 
@@ -47,6 +48,21 @@ export function UploadButton({ variant = "default" }: { variant?: "default" | "o
         {upload.isPending ? <LoaderCircle className="animate-spin" /> : <Upload />}
         <span className="hidden sm:inline">{upload.isPending ? t("topbar.uploading") : t("topbar.upload")}</span>
       </Button>
+    </>
+  );
+}
+
+/** The user's own to-dos, available on every page. */
+function NewTodoButton() {
+  const { t } = useTranslation();
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <Button variant="outline" size="sm" onClick={() => setOpen(true)} aria-label={t("newTask.button")}>
+        <Plus />
+        <span className="hidden sm:inline">{t("newTask.button")}</span>
+      </Button>
+      <TaskEditDialog open={open} onOpenChange={setOpen} />
     </>
   );
 }
@@ -102,6 +118,7 @@ export function TopBar() {
       </form>
 
       <div className="ml-auto flex items-center gap-1">
+        <NewTodoButton />
         <UploadButton />
         <NotificationsMenu />
         <DropdownMenu>

@@ -53,6 +53,7 @@ mail or document and quotes the sentence it came from. Details: [ARCHITECTURE.md
 
 | Area | What it does | Status |
 | --- | --- | --- |
+| Your own to-dos | "New to-do" on every page; one-line quick entry in zh/de/en ("周五前交房租", "Freitag 10 Uhr Zahnarzt", "submit report by Oct 20 5pm"): title, date, time and kind are recognised locally and shown for review before saving; reminders and calendar like any other task | implemented, tested, verified in a browser |
 | Uploads & folders | PDF, PNG, JPG, WebP, `.eml`; drag & drop; only folders you add are watched; originals are never modified | implemented, tested |
 | Parsing | text-first PDF extraction, OCR fallback per page (Tesseract, `chi_sim+eng`, `deu+eng`), MIME/HTML mail, quoted-reply stripping; files imported before OCR was installed can be read again from the Sources page | implemented, tested (real OCR in tests) |
 | Extraction | tasks with title, action, category, priority, deadline (date-only stays date-only), confidence, evidence; marketing/newsletters ignored; prompt-injection text treated as data | implemented, tested, evaluated |
@@ -61,7 +62,7 @@ mail or document and quotes the sentence it came from. Details: [ARCHITECTURE.md
 | Lifecycle | Candidate → Confirmed → In progress / Waiting for reply → Completed / Dismissed; completion evidence; explicit deadline changes applied with undo | implemented, tested |
 | Reminders | Overdue / 24 h / 3 days / 7 days (configurable), date-only deadlines count until the end of the day, DST-safe, deduplicated, stop after completion | implemented, tested |
 | Gmail | OAuth (installed-app flow with PKCE), `gmail.readonly` only, last 30 days, incremental history sync, request pacing, retries with backoff, attachments | implemented, tested with a fake Gmail; **verified with one real account**: initial and incremental sync, attachments, automatic recovery from Google's rate limit (request pacing was added afterwards and is tested with fakes only) |
-| Google Calendar | separate OAuth (`calendar.app.created`), preview → confirm → write into a dedicated "TaskRadar" calendar, idempotent event IDs, no invitations | implemented, tested with a fake Calendar; **verified with one real account**: calendar created, all-day deadline written, updated in place after a date change (same event, no duplicate), unchanged re-write skipped; a disabled Calendar API is explained with Google's enable link. Removing events from TaskRadar is not implemented |
+| Google Calendar | separate OAuth (`calendar.app.created`), preview → confirm → write into a dedicated "TaskRadar" calendar, idempotent event IDs, no invitations | implemented, tested with a fake Calendar; **verified with one real account**: calendar created, all-day deadline written, updated in place after a date change (same event, no duplicate), unchanged re-write skipped; a disabled Calendar API is explained with Google's enable link. Events can be removed again (button, or automatically when a task is dismissed, merged or deleted - a setting, on by default); only TaskRadar's own events are ever deleted. Removal is tested with a fake Calendar only |
 | LLM extraction | OpenAI structured outputs or OpenAI-compatible endpoint, strict schema validation, bounded retries, rules fallback, data minimisation, consent required | implemented, tested with a mocked provider; **real API not verified** (needs your key) |
 | Dashboard | Dashboard, Review inbox with evidence panel, All tasks, Task detail with history/undo, Sources, Settings, Insights; dark/light; zh/en | implemented, unit-tested, verified in a browser |
 | Background | scheduled Gmail sync, folder scans, reminder checks, automatic retries, restart recovery, optional Windows autostart (only after confirmation) | implemented, tested |
@@ -143,14 +144,14 @@ See [SECURITY.md](SECURITY.md) for the threat model.
 
 ```powershell
 cd backend
-.venv\Scripts\python.exe -m pytest            # 197 tests, about 18 s, includes real OCR
+.venv\Scripts\python.exe -m pytest            # 214 tests, about 25 s, includes real OCR
 .venv\Scripts\python.exe -m ruff check .
 .venv\Scripts\python.exe -m ruff format --check .
 .venv\Scripts\python.exe -m mypy
 .venv\Scripts\python.exe -m taskradar eval    # extraction / dedup evaluation on the labelled dataset
 
 cd ..\frontend
-npm run lint; npm run typecheck; npm test      # 35 tests
+npm run lint; npm run typecheck; npm test      # 38 tests
 ```
 
 The workflow in `.github/workflows/ci.yml` runs the same checks on Ubuntu, with Tesseract and the same pinned
@@ -211,8 +212,8 @@ TaskRadar.cmd       double-click launcher       Setup.cmd   one-time setup
 * Gmail sync and calendar writing have been exercised with one real account. The OpenAI path is implemented
   against the official API and covered by tests with a mocked provider, but has **not** been exercised with a
   real API key yet.
-* TaskRadar writes and updates its calendar events but cannot remove them yet; delete them in Google Calendar
-  (or remove the whole "TaskRadar" calendar).
+* "Delete all data" removes local data only; events already in the "TaskRadar" calendar stay there (remove that
+  calendar in Google Calendar if you want them gone).
 * Desktop toasts use Windows PowerShell/WinRT and depend on the Windows notification settings (there is a test
   button); autostart, Explorer integration and toasts are Windows-only.
 * OCR covers printed Chinese (simplified), German and English; handwriting and low-quality photos are not
@@ -239,6 +240,8 @@ TaskRadar.cmd       double-click launcher       Setup.cmd   one-time setup
    「API 和服务 → 库」中启用 Gmail API；要写入日历，还需启用 Google Calendar API。步骤见上文
    [Connecting Gmail and Google Calendar](#connecting-gmail-and-google-calendar)。Gmail 只申请只读权限。
 6. 默认使用本地规则引擎，不会把内容发给任何云服务；启用 OpenAI 前需要在设置中明确同意数据发送说明。
+7. 自己的待办：任意页面右上角「新建待办」，在「快速输入」里写一句话即可，例如“周五前交房租”“明天下午3点开组会”，
+   日期和时间会自动识别并显示出来，确认后再保存。自己的待办同样有提醒，也可以写入或移出日历。
 
 ## License
 

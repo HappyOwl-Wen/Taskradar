@@ -10,6 +10,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import datetime as dt
 import hashlib
 import json
@@ -60,6 +61,13 @@ class CalendarSyncError(Exception):
 def event_id_for(task_id: str) -> str:
     """Google event ids must be base32hex (a-v, 0-9); a uuid hex string qualifies."""
     return "tr" + task_id.replace("-", "").lower()
+
+
+def next_event_id(task_id: str, previous: str | None) -> str:
+    """Google keeps the id of a deleted event reserved, so an event added again needs a new one."""
+    base = event_id_for(task_id)
+    suffix = previous[len(base) :] if previous and previous.startswith(base) else ""
+    return f"{base}{int(suffix) + 1 if suffix.isdigit() else 1}"
 
 
 def build_event(task: Task, *, reminder_minutes: int, base_url: str, language: str = "zh-CN") -> dict[str, Any]:
@@ -224,6 +232,8 @@ class CalendarSyncService:
                 client, state, settings.calendar.calendar_name, settings.general.timezone
             )
             event_id = event_id_for(task_id)
+            if link is not None and link.status == "removed":
+                event_id = next_event_id(task_id, link.event_id)
             if (
                 link is not None
                 and link.calendar_id == calendar_id
@@ -239,11 +249,7 @@ class CalendarSyncService:
             raise
         except ConnectorError as exc:
             self._record_failure(task_id, state.get("calendar_id") or "", exc)
-            details = {}
-            if isinstance(exc, ApiNotEnabledError) and exc.activation_url:
-                details["activation_url"] = exc.activation_url
-            message = f"{exc} - you can retry" if exc.recoverable else str(exc)
-            raise CalendarSyncError(exc.code, message, 502, recoverable=exc.recoverable, details=details) from exc
+            raise _sync_error(exc) from exc
 
         with transaction(self._factory) as session:
             state["calendar_id"] = calendar_id
@@ -280,6 +286,70 @@ class CalendarSyncService:
             )
             return link_to_dict(link)
 
+    def remove(self, task_id: str, *, user_confirmed: bool, auto_rule: bool = False) -> dict[str, Any]:
+        """Delete the task's event from the TaskRadar calendar - only the event TaskRadar created for it."""
+        with transaction(self._factory) as session:
+            task = self.tasks.get(session, task_id)
+            link = session.scalar(select(CalendarLink).where(CalendarLink.task_id == task_id))
+            if link is None or link.status == "removed":
+                raise CalendarSyncError("not_in_calendar", "This task has no event in the calendar", 404)
+            try:
+                self.guard.check(
+                    SideEffect.CALENDAR_DELETE,
+                    target=task_id,
+                    session=session,
+                    user_confirmed=user_confirmed,
+                    auto_rule=auto_rule,
+                )
+            except PermissionDenied as exc:
+                status = 409 if exc.code == "calendar_not_connected" else 400
+                raise CalendarSyncError(exc.code, exc.message, status) from exc
+            calendar_id, event_id = link.calendar_id, link.event_id
+
+        if calendar_id != "pending":  # a write that never reached Google left nothing behind
+            client = self.client_factory()
+            try:
+                self._delete_owned(client, calendar_id, event_id, task_id)
+            except CalendarSyncError:
+                raise
+            except ConnectorError as exc:
+                self._record_failure(task_id, calendar_id, exc, removing=True)
+                raise _sync_error(exc) from exc
+
+        with transaction(self._factory) as session:
+            task = self.tasks.get(session, task_id)
+            link = session.scalar(select(CalendarLink).where(CalendarLink.task_id == task_id))
+            assert link is not None
+            link.status = "removed"
+            link.html_link = None
+            link.payload_hash = None
+            link.last_error = None
+            link.last_synced_at = self.clock()
+            session.flush()
+            self.tasks.record(
+                session,
+                task,
+                EventType.CALENDAR_REMOVED,
+                Actor.USER if user_confirmed else Actor.SYSTEM,
+                "已从 Google Calendar 移除",
+                data={"event_id": event_id, "calendar_id": calendar_id},
+            )
+            return link_to_dict(link)
+
+    @staticmethod
+    def _delete_owned(client: CalendarClient, calendar_id: str, event_id: str, task_id: str) -> None:
+        try:
+            current = client.get_event(calendar_id, event_id)
+        except NotFoundError:
+            return  # already deleted in Google Calendar
+        if current.get("status") == "cancelled":
+            return
+        owner = ((current.get("extendedProperties") or {}).get("private") or {}).get("taskradar_task_id")
+        if owner != task_id:
+            raise CalendarSyncError("event_not_owned", "Refusing to delete an event that TaskRadar did not create", 409)
+        with contextlib.suppress(NotFoundError):  # deleted meanwhile
+            client.delete_event(calendar_id, event_id)
+
     def _ensure_calendar(self, client: CalendarClient, state: dict[str, Any], name: str, tz: str) -> str:
         calendar_id = state.get("calendar_id")
         if calendar_id and client.calendar_exists(calendar_id):
@@ -299,10 +369,23 @@ class CalendarSyncService:
             raise CalendarSyncError("event_not_owned", "Refusing to modify an event that TaskRadar did not create", 409)
         return client.update_event(calendar_id, event_id, body)
 
-    def _record_failure(self, task_id: str, calendar_id: str, exc: ConnectorError) -> None:
+    def _record_failure(self, task_id: str, calendar_id: str, exc: ConnectorError, *, removing: bool = False) -> None:
         with transaction(self._factory) as session:
             task = self.tasks.get(session, task_id)
             link = session.scalar(select(CalendarLink).where(CalendarLink.task_id == task_id))
+            if removing and link is not None:  # the event is still there; keep the link as it was
+                link.last_error = f"{exc.code}: {exc}"[:1000]
+                link.attempts = (link.attempts or 0) + 1
+                session.flush()
+                self.tasks.record(
+                    session,
+                    task,
+                    EventType.CALENDAR_FAILED,
+                    Actor.SYSTEM,
+                    "从 Google Calendar 移除失败（可重试）",
+                    data={"error": exc.code},
+                )
+                return
             if link is None:
                 link = CalendarLink(
                     task_id=task_id,
@@ -329,6 +412,14 @@ class CalendarSyncService:
         for link in task.calendar_links:
             if link.status == "synced" and link.synced_due_version != task.due_version:
                 link.status = "out_of_sync"
+
+
+def _sync_error(exc: ConnectorError) -> CalendarSyncError:
+    details = {}
+    if isinstance(exc, ApiNotEnabledError) and exc.activation_url:
+        details["activation_url"] = exc.activation_url
+    message = f"{exc} - you can retry" if exc.recoverable else str(exc)
+    return CalendarSyncError(exc.code, message, 502, recoverable=exc.recoverable, details=details)
 
 
 def link_to_dict(link: CalendarLink) -> dict[str, Any]:

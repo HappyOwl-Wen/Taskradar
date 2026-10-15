@@ -1,5 +1,6 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
+import i18n from "@/i18n";
 import { api, type TaskQuery } from "./api";
 import { errorMessage } from "./errors";
 
@@ -70,6 +71,14 @@ export const useNotifications = () =>
 export const useMetrics = () => useQuery({ queryKey: qk.metrics, queryFn: api.metrics });
 export const useAgentRuns = () => useQuery({ queryKey: qk.agentRuns, queryFn: () => api.agentRuns(60) });
 
+/** Dismissing, merging or deleting a task also removes its calendar event; say so when that failed. */
+function calendarWarning(data: unknown): string | null {
+  if (typeof data !== "object" || data === null) return null;
+  const d = data as { calendar_warning?: string; calendar_not_removed?: unknown[]; deleted?: unknown };
+  if (d.calendar_warning !== "event_not_removed" && !d.calendar_not_removed?.length) return null;
+  return i18n.t(d.deleted ? "calendar.notRemovedDeleted" : "calendar.notRemoved");
+}
+
 interface ActionOptions<TData> {
   /** Toast shown on success; a function receives the response. */
   success?: string | ((data: TData) => string | null);
@@ -89,6 +98,8 @@ export function useAction<TVars, TData>(fn: (vars: TVars) => Promise<TData>, opt
     onSuccess: (data) => {
       const message = typeof options.success === "function" ? options.success(data) : options.success;
       if (message) toast.success(message);
+      const warning = calendarWarning(data);
+      if (warning) toast.warning(warning, { duration: 10_000 });
       options.onSuccess?.(data);
     },
     onError: (error) => {

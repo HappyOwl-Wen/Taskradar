@@ -228,6 +228,13 @@ export function CalendarSection({ settings }: { settings: Settings }) {
           />
         </div>
         <SwitchRow
+          id="set-cal-remove"
+          label={t("settings.calendar.removeOnDismiss")}
+          hint={t("settings.calendar.removeOnDismissHint")}
+          checked={v.remove_on_dismiss}
+          onCheckedChange={(c) => section.set("remove_on_dismiss", c)}
+        />
+        <SwitchRow
           id="set-cal-auto"
           label={t("settings.calendar.autoSync")}
           hint={t("settings.calendar.autoSyncHint")}

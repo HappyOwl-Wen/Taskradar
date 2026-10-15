@@ -149,12 +149,25 @@ export interface CalendarLink {
   calendar_id: string;
   event_id: string;
   event_kind: string;
-  status: "synced" | "failed" | "out_of_sync" | string;
+  status: "synced" | "failed" | "out_of_sync" | "removed" | string;
   html_link: string | null;
   last_error: string | null;
   attempts: number;
   last_synced_at: string | null;
   synced_due_version: number;
+}
+
+/** A one-line to-do parsed by the server ("周五前交房租"); nothing is saved until the user confirms. */
+export interface QuickParse {
+  title: string;
+  category: Category;
+  action_type: string;
+  due_date: string | null;
+  due_time: string | null;
+  due_text: string | null;
+  time_semantics: "deadline" | "appointment";
+  ambiguous: boolean;
+  alternatives: string[];
 }
 
 export interface TaskLinkEntry {
@@ -361,7 +374,13 @@ export interface Settings {
     scan_interval_minutes: number;
   };
   notifications: { desktop_enabled: boolean; max_per_scan: number };
-  calendar: { calendar_name: string; auto_sync_enabled: boolean; auto_sync_categories: Category[]; reminder_minutes: number };
+  calendar: {
+    calendar_name: string;
+    auto_sync_enabled: boolean;
+    auto_sync_categories: Category[];
+    reminder_minutes: number;
+    remove_on_dismiss: boolean;
+  };
   policy: {
     review_confidence_threshold: number;
     auto_complete_on_explicit_confirmation: boolean;

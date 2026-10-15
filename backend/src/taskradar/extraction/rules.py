@@ -278,6 +278,11 @@ def _strip_date_phrases(text: str) -> str:
     return re.sub(r"\s{2,}", " ", _DATE_PHRASE.sub(" ", text)).strip()
 
 
+def remove_date_phrase(text: str, spans: list[tuple[int, int]]) -> str:
+    """``text`` without the given date expressions and the deadline words around them ("bis", "by", "…前")."""
+    return _strip_date_phrases(mask_dates(text, spans)).replace(DATE_PLACEHOLDER, "").strip()
+
+
 _LIST_MARKER = re.compile(r"^\s*(?:\d{1,2}[.、)）]|[-•*·▪●]|[（(]\d{1,2}[)）]|[一二三四五六七八九十]、)\s*")
 
 

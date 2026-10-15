@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import datetime as dt
 import logging
+from collections.abc import Iterable
 from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, Query
@@ -15,7 +16,16 @@ from taskradar.api.deps import get_container, thresholds_for
 from taskradar.api.errors import ApiError
 from taskradar.api.serializers import suggestion_entry, task_detail, task_summary
 from taskradar.container import Container
-from taskradar.db.models import Document, Message, SyncJob, Task, TaskLink, TaskSource, TaskSuggestion
+from taskradar.db.models import (
+    CalendarLink,
+    Document,
+    Message,
+    SyncJob,
+    Task,
+    TaskLink,
+    TaskSource,
+    TaskSuggestion,
+)
 from taskradar.db.session import transaction
 from taskradar.deadlines.engine import local_today
 from taskradar.domain.enums import (
@@ -28,6 +38,7 @@ from taskradar.domain.enums import (
     Urgency,
 )
 from taskradar.domain.schemas import CandidateTask, DueInfo
+from taskradar.extraction.quick_add import MAX_QUICK_TEXT, parse_quick_task
 from taskradar.services.calendar_sync import CalendarSyncError
 from taskradar.services.jobs import job_to_dict
 from taskradar.services.tasks import Origin
@@ -236,19 +247,50 @@ class TaskCreate(BaseModel):
     due_date: dt.date | None = None
     due_time: dt.time | None = None
     time_semantics: TimeSemantics = TimeSemantics.DEADLINE
+    action_type: ActionType = ActionType.OTHER
+    # The user's own wording of the date (from quick entry), shown as "original wording".
+    due_text: str | None = Field(default=None, max_length=200)
+
+
+class QuickParseBody(BaseModel):
+    text: str = Field(min_length=1, max_length=MAX_QUICK_TEXT)
+
+
+@router.post("/tasks/quick-parse")
+def quick_parse(body: QuickParseBody, c: Container = Depends(get_container)) -> dict[str, Any]:
+    """Propose title and deadline for a one-line to-do ("周五前交房租"); nothing is saved."""
+    quick = parse_quick_task(body.text, now=c.clock(), tz=c.settings.get().general.timezone)
+    due = quick.due
+    return {
+        "title": quick.title,
+        "category": quick.category.value,
+        "action_type": quick.action_type.value,
+        "due_date": due.date.isoformat() if due and due.date else None,
+        "due_time": due.time.strftime("%H:%M") if due and due.time else None,
+        "due_text": due.text if due else None,
+        "time_semantics": due.semantics.value if due else TimeSemantics.DEADLINE.value,
+        "ambiguous": bool(due and due.ambiguous),
+        "alternatives": [d.isoformat() for d in due.alternatives] if due else [],
+    }
 
 
 @router.post("/tasks", status_code=201)
 def create_task(body: TaskCreate, c: Container = Depends(get_container)) -> dict[str, Any]:
+    due_text = (body.due_text or "").strip() or None
     cand = CandidateTask(
         title=body.title.strip(),
         description=body.description,
         category=body.category,
-        action_type=ActionType.OTHER,
+        action_type=body.action_type,
         action_required=body.action_required or body.title,
         priority=body.priority,
         confidence=1.0,
-        due=DueInfo(date=body.due_date, time=body.due_time if body.due_date else None, semantics=body.time_semantics),
+        due=DueInfo(
+            date=body.due_date,
+            time=body.due_time if body.due_date else None,
+            semantics=body.time_semantics,
+            text=due_text if body.due_date else None,
+        ),
     )
     with transaction(c.factory) as session:
         task = c.tasks.create_from_candidate(
@@ -323,15 +365,46 @@ def _maybe_auto_calendar(c: Container, task_id: str) -> None:
         log.info("Automatic calendar sync skipped: %s", exc.code)
 
 
+def _remove_calendar_events(c: Container, task_ids: Iterable[str]) -> list[str]:
+    """Opt-in rule (on by default): a task the user dismisses, merges away or deletes leaves the calendar too.
+
+    Returns the ids whose event could not be removed (e.g. offline); those tasks keep their link, so the
+    removal can be retried from the task page.
+    """
+    ids = list(task_ids)
+    if not ids or not c.settings.get().calendar.remove_on_dismiss:
+        return []
+    with transaction(c.factory) as session:
+        linked = list(
+            session.scalars(
+                select(CalendarLink.task_id).where(CalendarLink.task_id.in_(ids), CalendarLink.status != "removed")
+            )
+        )
+    failed: list[str] = []
+    for task_id in linked:
+        try:
+            c.calendar.remove(task_id, user_confirmed=False, auto_rule=True)
+        except CalendarSyncError as exc:
+            log.warning("Calendar event of task %s was not removed: %s", task_id, exc.code)
+            failed.append(task_id)
+    return failed
+
+
 @router.post("/tasks/{task_id}/status")
 def change_status(task_id: str, body: StatusBody, c: Container = Depends(get_container)) -> dict[str, Any]:
     with transaction(c.factory) as session:
         task = c.tasks.get(session, task_id)
         c.tasks.change_status(session, task, body.status, actor=Actor.USER, reason=body.note)
+    not_removed: list[str] = []
     if body.status == TaskStatus.CONFIRMED:
         _maybe_auto_calendar(c, task_id)
+    elif body.status == TaskStatus.DISMISSED:
+        not_removed = _remove_calendar_events(c, [task_id])
     with transaction(c.factory) as session:
-        return _detail(c, session, task_id)
+        detail = _detail(c, session, task_id)
+    if not_removed:
+        detail["calendar_warning"] = "event_not_removed"
+    return detail
 
 
 class BatchBody(BaseModel):
@@ -358,10 +431,13 @@ def batch(body: BatchBody, c: Container = Depends(get_container)) -> dict[str, A
             task = c.tasks.get(session, task_id)
             if c.tasks.change_status(session, task, target, actor=Actor.USER, reason=f"batch:{body.action}"):
                 changed.append(task_id)
+    not_removed: list[str] = []
     if target == TaskStatus.CONFIRMED:
         for task_id in changed:
             _maybe_auto_calendar(c, task_id)
-    return {"changed": changed, "count": len(changed)}
+    elif target == TaskStatus.DISMISSED:
+        not_removed = _remove_calendar_events(c, changed)
+    return {"changed": changed, "count": len(changed), "calendar_not_removed": not_removed}
 
 
 class MergeBody(BaseModel):
@@ -374,14 +450,21 @@ def merge(task_id: str, body: MergeBody, c: Container = Depends(get_container)) 
         source = c.tasks.get(session, task_id)
         target = c.tasks.get(session, body.into_task_id)
         c.tasks.merge_tasks(session, source, target, actor=Actor.USER)
+    _remove_calendar_events(c, [task_id])  # the merged-away task is dismissed
     with transaction(c.factory) as session:
         return _detail(c, session, body.into_task_id)
 
 
 @router.delete("/tasks/{task_id}")
 def delete_task(task_id: str, c: Container = Depends(get_container)) -> dict[str, Any]:
+    with transaction(c.factory) as session:
+        c.tasks.get(session, task_id)  # 404 before touching the calendar
+    not_removed = _remove_calendar_events(c, [task_id])
     c.data.delete_task(task_id)
-    return {"deleted": task_id}
+    result: dict[str, Any] = {"deleted": task_id}
+    if not_removed:
+        result["calendar_warning"] = "event_not_removed"  # the event has to be deleted in Google Calendar
+    return result
 
 
 @router.post("/events/{event_id}/undo")
@@ -424,7 +507,10 @@ def accept_suggestion(suggestion_id: int, c: Container = Depends(get_container))
     with transaction(c.factory) as session:
         suggestion = c.tasks.accept_suggestion(session, suggestion_id, actor=Actor.USER)
         task_id = suggestion.task_id
-        target_id = suggestion.related_task_id if suggestion.kind == "possible_duplicate" else task_id
+        kind = suggestion.kind
+        target_id = suggestion.related_task_id if kind == "possible_duplicate" else task_id
+    if kind in ("possible_duplicate", "mark_dismissed"):  # both dismiss suggestion.task_id
+        _remove_calendar_events(c, [task_id])
     with transaction(c.factory) as session:
         return _detail(c, session, target_id or task_id)
 
@@ -457,3 +543,10 @@ def calendar_sync(task_id: str, body: CalendarSyncBody, c: Container = Depends(g
     if not body.confirm:
         raise ApiError("confirmation_required", "Please confirm the preview before writing to Google Calendar", 400)
     return c.calendar.sync(task_id, user_confirmed=True)
+
+
+@router.post("/tasks/{task_id}/calendar/remove")
+def calendar_remove(task_id: str, body: CalendarSyncBody, c: Container = Depends(get_container)) -> dict[str, Any]:
+    if not body.confirm:
+        raise ApiError("confirmation_required", "Please confirm removing the event from Google Calendar", 400)
+    return c.calendar.remove(task_id, user_confirmed=True)

@@ -845,6 +845,30 @@ def find_dates(
     return selected
 
 
+_BARE_WEEKDAY = re.compile(rf"\b(?P<wd>{_WD_EN}|{_WD_DE})\b", re.I)
+
+
+def bare_weekday_mention(text: str, anchor: dt.date, *, tz: str = "Europe/Berlin") -> DateMention | None:
+    """A weekday name on its own ("Freitag 10 Uhr Zahnarzt") as the next such day, today included.
+
+    Mails use bare weekdays for opening hours and the like, so only the user's own quick entries use this.
+    """
+    m = _BARE_WEEKDAY.search(text)
+    index = _weekday_index(m.group("wd")) if m else None
+    if m is None or index is None:
+        return None
+    mention = DateMention(
+        start=m.start(),
+        end=m.end(),
+        text=m.group(0),
+        kind="bare_weekday",
+        date=_upcoming(anchor, index),
+        is_relative=True,
+    )
+    _attach_times(text, [mention], _time_mentions(text), tz)
+    return mention
+
+
 def mention_to_due(
     mention: DateMention,
     *,

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import datetime as dt
+from typing import Any
 
 import pytest
 
@@ -164,3 +165,134 @@ def test_failure_is_recorded_and_retry_succeeds(container: Container, calendar_c
     calendar_client.fail_with = None
     assert container.calendar.sync(task_id, user_confirmed=True)["status"] == "synced"
     assert len(calendar_client.events) == 1
+
+
+# ---------------------------------------------------------------------------------------------
+# Removing events
+# ---------------------------------------------------------------------------------------------
+
+
+def live_events(client: FakeCalendarClient) -> list[dict[str, object]]:
+    return [e for e in client.events.values() if e.get("status") != "cancelled"]
+
+
+def test_remove_deletes_the_event_and_it_can_be_added_again(
+    container: Container, calendar_client: FakeCalendarClient
+) -> None:
+    connect(container)
+    task_id = make_task(container)
+    container.calendar.sync(task_id, user_confirmed=True)
+
+    removed = container.calendar.remove(task_id, user_confirmed=True)
+    assert removed["status"] == "removed" and removed["html_link"] is None
+    assert live_events(calendar_client) == []
+    with transaction(container.factory) as session:
+        events = [e.event_type for e in container.tasks.get(session, task_id).events]
+    assert "calendar_removed" in events
+    with pytest.raises(CalendarSyncError) as info:
+        container.calendar.remove(task_id, user_confirmed=True)
+    assert info.value.code == "not_in_calendar"
+
+    # Google keeps a deleted event's id reserved, so adding it again uses a new id.
+    again = container.calendar.sync(task_id, user_confirmed=True)
+    assert again["status"] == "synced" and again["event_id"] == event_id_for(task_id) + "1"
+    assert len(live_events(calendar_client)) == 1
+
+
+def test_remove_needs_confirmation_or_the_opt_in_rule(
+    container: Container, calendar_client: FakeCalendarClient
+) -> None:
+    connect(container)
+    task_id = make_task(container)
+    container.calendar.sync(task_id, user_confirmed=True)
+    with pytest.raises(CalendarSyncError) as info:
+        container.calendar.remove(task_id, user_confirmed=False)
+    assert info.value.code == "confirmation_required"
+    container.settings.update({"calendar": {"remove_on_dismiss": False}})
+    with pytest.raises(CalendarSyncError):
+        container.calendar.remove(task_id, user_confirmed=False, auto_rule=True)
+    assert len(live_events(calendar_client)) == 1
+    container.settings.update({"calendar": {"remove_on_dismiss": True}})
+    assert container.calendar.remove(task_id, user_confirmed=False, auto_rule=True)["status"] == "removed"
+
+
+def test_remove_never_deletes_a_foreign_event(container: Container, calendar_client: FakeCalendarClient) -> None:
+    connect(container)
+    task_id = make_task(container)
+    container.calendar.sync(task_id, user_confirmed=True)
+    key = next(iter(calendar_client.events))
+    calendar_client.events[key]["extendedProperties"] = {"private": {"taskradar_task_id": "someone-else"}}
+    with pytest.raises(CalendarSyncError) as info:
+        container.calendar.remove(task_id, user_confirmed=True)
+    assert info.value.code == "event_not_owned"
+    assert "delete_event" not in calendar_client.calls and len(live_events(calendar_client)) == 1
+
+
+def test_event_deleted_in_google_calendar_counts_as_removed(
+    container: Container, calendar_client: FakeCalendarClient
+) -> None:
+    connect(container)
+    task_id = make_task(container)
+    container.calendar.sync(task_id, user_confirmed=True)
+    calendar_client.events.clear()  # the user deleted it in Google Calendar
+    assert container.calendar.remove(task_id, user_confirmed=True)["status"] == "removed"
+
+
+def test_failed_removal_keeps_the_link_for_a_retry(container: Container, calendar_client: FakeCalendarClient) -> None:
+    connect(container)
+    task_id = make_task(container)
+    container.calendar.sync(task_id, user_confirmed=True)
+    calendar_client.fail_with = TransientError("offline")
+    with pytest.raises(CalendarSyncError) as info:
+        container.calendar.remove(task_id, user_confirmed=True)
+    assert info.value.status_code == 502 and info.value.recoverable
+    with transaction(container.factory) as session:
+        link = container.tasks.get(session, task_id).calendar_links[0]
+        assert link.status == "synced" and link.last_error
+    calendar_client.fail_with = None
+    assert container.calendar.remove(task_id, user_confirmed=True)["status"] == "removed"
+
+
+def _synced_task(api: Any, title: str) -> str:
+    task = api.post("/api/tasks", json={"title": title, "due_date": "2026-11-20"}).json()
+    assert api.post(f"/api/tasks/{task['id']}/calendar", json={"confirm": True}).json()["status"] == "synced"
+    return str(task["id"])
+
+
+def test_dismissing_merging_or_deleting_a_task_removes_its_event(api: Any, calendar_client: FakeCalendarClient) -> None:
+    api.container.secrets.set(sk.GOOGLE_TOKEN_CALENDAR, '{"token": "fake"}')
+    dismissed, merged, kept, deleted, batch_a, batch_b = (
+        _synced_task(api, name) for name in ("Dismiss", "Merge", "Keep", "Delete", "Batch A", "Batch B")
+    )
+    assert len(live_events(calendar_client)) == 6
+
+    assert (
+        api.post(f"/api/tasks/{dismissed}/status", json={"status": "dismissed"}).json()["calendar"]["status"]
+        == "removed"
+    )
+    assert api.post(f"/api/tasks/{merged}/merge", json={"into_task_id": kept}).status_code == 200
+    assert api.delete(f"/api/tasks/{deleted}").json() == {"deleted": deleted}
+    batch = api.post("/api/tasks/batch", json={"ids": [batch_a, batch_b], "action": "dismiss"}).json()
+    assert batch["count"] == 2 and batch["calendar_not_removed"] == []
+    remaining = live_events(calendar_client)
+    assert [e["extendedProperties"]["private"]["taskradar_task_id"] for e in remaining] == [kept]  # type: ignore[index]
+
+    # Removing by hand needs an explicit confirmation.
+    assert api.post(f"/api/tasks/{kept}/calendar/remove", json={}).json()["error"]["code"] == "confirmation_required"
+    assert api.post(f"/api/tasks/{kept}/calendar/remove", json={"confirm": True}).json()["status"] == "removed"
+    assert live_events(calendar_client) == []
+
+
+def test_removal_rule_can_be_switched_off_and_failures_are_reported(
+    api: Any, calendar_client: FakeCalendarClient
+) -> None:
+    api.container.secrets.set(sk.GOOGLE_TOKEN_CALENDAR, '{"token": "fake"}')
+    kept, offline = _synced_task(api, "Kept"), _synced_task(api, "Offline")
+    api.put("/api/settings", json={"calendar": {"remove_on_dismiss": False}})
+    assert api.post(f"/api/tasks/{kept}/status", json={"status": "dismissed"}).json()["calendar"]["status"] == "synced"
+    assert len(live_events(calendar_client)) == 2
+
+    api.put("/api/settings", json={"calendar": {"remove_on_dismiss": True}})
+    calendar_client.fail_with = TransientError("offline")
+    deleted = api.delete(f"/api/tasks/{offline}").json()
+    assert deleted == {"deleted": offline, "calendar_warning": "event_not_removed"}  # the task is gone anyway

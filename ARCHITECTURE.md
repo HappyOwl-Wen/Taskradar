@@ -66,7 +66,8 @@ syncs of the same source; a file lock prevents two servers on the same data fold
 | Task reconciliation | `reconciliation/normalize.py`, `reconciliation/reconciler.py`, `reconciliation/judge.py` | New task, duplicate, deadline update, possible duplicate, completion target |
 | Deadline evaluation | `deadlines/engine.py`, `deadlines/reminders.py` | Effective deadline, urgency buckets, reminder planning and de-duplication |
 | Human review / policy | `policy/review.py`, `services/tasks.py` | Review reasons, what is applied automatically, revertible events, suggestions, undo/split |
-| Actions & notifications | `services/notifications.py`, `notify/desktop.py`, `services/calendar_sync.py`, `connectors/calendar.py` | In-app notifications, Windows toasts, Calendar preview and confirmed writes |
+| Actions & notifications | `services/notifications.py`, `notify/desktop.py`, `services/calendar_sync.py`, `connectors/calendar.py` | In-app notifications, Windows toasts, Calendar preview, confirmed writes and removal of TaskRadar's own events |
+| Quick entry | `extraction/quick_add.py` | One-line to-dos ("周五前交房租") parsed with the same date engine; relative dates count from the moment of typing, a bare weekday means the next one, a time without a deadline word means an appointment |
 | Orchestration | `services/ingest.py`, `services/documents.py`, `services/gmail_sync.py`, `services/jobs.py`, `scheduler/service.py` | Idempotent processing, transactions, job records, retries, restart recovery |
 
 ### Extraction
@@ -128,6 +129,7 @@ active task (object overlap, same-date bonus) and must beat the runner-up by a m
 | Explicit, confident completion for a confirmed task | Marked completed automatically (revertible); otherwise a suggestion |
 | Hedged completion ("may have", "if you have already …") | Never completes; at most a suggestion |
 | Calendar write, autostart, LLM request, delete-all | Only after an explicit user action (and, for LLM, consent) |
+| Calendar event of a task the user dismisses, merges away or deletes | Removed (opt-in setting, on by default; only the event TaskRadar created for that task) |
 
 ### Deadlines and reminders
 
@@ -175,7 +177,8 @@ managed by Alembic; migrations run automatically on start-up and with `python -m
 
 All routes live under `/api` (OpenAPI docs at `/api/docs`). Main groups: dashboard and tasks
 (`/tasks`, `/tasks/{id}/status`, `/tasks/batch`, `/tasks/{id}/merge`, `/events/{id}/undo`,
-`/suggestions/{id}/accept|reject`, `/tasks/{id}/calendar/preview`, `/tasks/{id}/calendar`), sources
+`/suggestions/{id}/accept|reject`, `/tasks/{id}/calendar/preview`, `/tasks/{id}/calendar`,
+`/tasks/{id}/calendar/remove`, `/tasks/quick-parse` for one-line to-dos), sources
 (`/sources`, `/sources/{id}/sync`, `/sources/folders`, `/documents/upload`, `/documents`, `/messages`,
 `/sync-jobs`, `/failures`, `/agent-runs`, `/demo/*`), integrations (`/integrations/google/*`,
 `/oauth/google/callback`) and system (`/session`, `/system/status`, `/settings`, `/settings/llm-key`,

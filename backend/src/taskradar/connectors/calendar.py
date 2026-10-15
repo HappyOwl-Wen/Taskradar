@@ -26,6 +26,8 @@ class CalendarClient(Protocol):
 
     def update_event(self, calendar_id: str, event_id: str, body: dict[str, Any]) -> dict[str, Any]: ...
 
+    def delete_event(self, calendar_id: str, event_id: str) -> None: ...
+
 
 class GoogleCalendarClient:
     def __init__(self, credentials: Any, *, timeout: float = 30.0) -> None:
@@ -46,6 +48,8 @@ class GoogleCalendarClient:
             status = int(exc.resp.status)
             if status == 409:
                 raise ConflictError("The event already exists") from exc
+            if status == 410:
+                raise NotFoundError("The event was already deleted") from exc
             raise map_http_error(status, exc.content, api="Google Calendar API") from exc
         except RefreshError as exc:
             raise AuthRequiredError("The Google Calendar authorization expired; please reconnect") from exc
@@ -73,6 +77,9 @@ class GoogleCalendarClient:
         return self._execute(
             self._service.events().update(calendarId=calendar_id, eventId=event_id, body=body, sendUpdates="none")
         )
+
+    def delete_event(self, calendar_id: str, event_id: str) -> None:
+        self._execute(self._service.events().delete(calendarId=calendar_id, eventId=event_id, sendUpdates="none"))
 
 
 class FakeCalendarClient:
@@ -116,6 +123,14 @@ class FakeCalendarClient:
             return self.events[(calendar_id, event_id)]
         except KeyError as exc:
             raise NotFoundError("event not found") from exc
+
+    def delete_event(self, calendar_id: str, event_id: str) -> None:
+        """Like Google: the event becomes "cancelled" and its id stays reserved."""
+        self._check("delete_event")
+        event = self.events.get((calendar_id, event_id))
+        if event is None or event.get("status") == "cancelled":
+            raise NotFoundError("event not found or already deleted")
+        self.events[(calendar_id, event_id)] = {"id": event_id, "status": "cancelled"}
 
     def update_event(self, calendar_id: str, event_id: str, body: dict[str, Any]) -> dict[str, Any]:
         self._check("update_event")

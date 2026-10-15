@@ -11,6 +11,7 @@ import type {
   MessageListItem,
   Metrics,
   NotificationItem,
+  QuickParse,
   Settings,
   Source,
   Suggestion,
@@ -151,6 +152,7 @@ export const api = {
   tasks: (query: TaskQuery = {}) => get<{ items: TaskSummary[]; total: number }>("/api/tasks", query),
   task: (id: string) => get<TaskDetail>(`/api/tasks/${id}`),
   createTask: (body: Record<string, unknown>) => post<TaskDetail>("/api/tasks", body),
+  quickParse: (text: string) => post<QuickParse>("/api/tasks/quick-parse", { text }),
   updateTask: (id: string, body: TaskPatch) => patch<TaskDetail>(`/api/tasks/${id}`, body),
   setStatus: (id: string, status: string, note?: string) => post<TaskDetail>(`/api/tasks/${id}/status`, { status, note }),
   batch: (ids: string[], action: string) => post<{ changed: string[]; count: number }>("/api/tasks/batch", { ids, action }),
@@ -162,6 +164,7 @@ export const api = {
   rejectSuggestion: (id: number) => post<TaskDetail>(`/api/suggestions/${id}/reject`),
   calendarPreview: (id: string) => get<CalendarPreview>(`/api/tasks/${id}/calendar/preview`),
   calendarSync: (id: string) => post<CalendarLink & { unchanged?: boolean }>(`/api/tasks/${id}/calendar`, { confirm: true }),
+  calendarRemove: (id: string) => post<CalendarLink>(`/api/tasks/${id}/calendar/remove`, { confirm: true }),
 
   sources: () => get<{ items: Source[] }>("/api/sources"),
   syncSource: (id: number) => post<{ job: SyncJob | null; accepted: boolean }>(`/api/sources/${id}/sync`),

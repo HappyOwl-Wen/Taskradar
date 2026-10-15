@@ -1,11 +1,11 @@
 import { useQuery } from "@tanstack/react-query";
-import { CalendarCheck, CalendarPlus, CalendarX, ExternalLink, RefreshCw, TriangleAlert } from "lucide-react";
+import { CalendarCheck, CalendarMinus, CalendarPlus, CalendarX, ExternalLink, RefreshCw, TriangleAlert } from "lucide-react";
 import { useState } from "react";
 import { Link } from "react-router";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { ConfirmDialog, Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ErrorState, Skeleton } from "@/components/ui/states";
 import { translateKey } from "@/i18n";
 import { api, ApiError } from "@/lib/api";
@@ -127,10 +127,16 @@ export function CalendarCard({ task }: { task: TaskDetail }) {
   const { t, i18n } = useTranslation();
   const { data: status } = useSystemStatus();
   const [open, setOpen] = useState(false);
+  const [removeOpen, setRemoveOpen] = useState(false);
+  const remove = useAction(() => api.calendarRemove(task.id), {
+    success: t("calendar.removed"),
+    onSuccess: () => setRemoveOpen(false),
+  });
   const connected = Boolean(status?.google.calendar_connected);
   const confirmed = ["confirmed", "in_progress", "waiting_for_reply"].includes(task.status);
   const link = task.calendar;
-  const outdated = link && (link.status === "out_of_sync" || link.synced_due_version !== task.due_version);
+  const removed = link?.status === "removed";
+  const outdated = link && !removed && (link.status === "out_of_sync" || link.synced_due_version !== task.due_version);
   const failureCode = (link?.last_error ?? "").split(":")[0];
 
   let body: React.ReactNode;
@@ -153,7 +159,9 @@ export function CalendarCard({ task }: { task: TaskDetail }) {
         {connected && !confirmed ? <p className="text-sm text-muted-foreground">{t("calendar.notConfirmed")}</p> : null}
         {link ? (
           <div className="grid gap-1 text-sm">
-            {link.status === "failed" ? (
+            {removed ? (
+              <p className="text-muted-foreground">{t("calendar.removedState")}</p>
+            ) : link.status === "failed" ? (
               <>
                 <p className="text-destructive">{t("calendar.failed", { error: translateKey(`errors.${failureCode}`, link.last_error ?? "") })}</p>
                 {failureCode === "api_not_enabled" ? <ApiNotEnabled href={CALENDAR_API_LIBRARY} /> : null}
@@ -173,11 +181,29 @@ export function CalendarCard({ task }: { task: TaskDetail }) {
             ) : null}
           </div>
         ) : null}
-        <Button variant={link && !outdated && link.status === "synced" ? "outline" : "default"} size="sm" className="w-fit" onClick={() => setOpen(true)}>
-          {link ? <RefreshCw /> : <CalendarPlus />}
-          {link ? t("calendar.update") : t("calendar.preview")}
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button variant={link && !removed && !outdated && link.status === "synced" ? "outline" : "default"} size="sm" onClick={() => setOpen(true)}>
+            {link && !removed ? <RefreshCw /> : <CalendarPlus />}
+            {link && !removed ? t("calendar.update") : removed ? t("calendar.reAdd") : t("calendar.preview")}
+          </Button>
+          {link && !removed && connected ? (
+            <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive" onClick={() => setRemoveOpen(true)}>
+              <CalendarMinus /> {t("calendar.remove")}
+            </Button>
+          ) : null}
+        </div>
         <PreviewDialog task={task} open={open} onOpenChange={setOpen} connected={connected} />
+        <ConfirmDialog
+          open={removeOpen}
+          onOpenChange={setRemoveOpen}
+          title={t("calendar.removeTitle")}
+          description={t("calendar.removeDescription")}
+          confirmLabel={t("calendar.remove")}
+          cancelLabel={t("common.cancel")}
+          destructive
+          pending={remove.isPending}
+          onConfirm={() => remove.mutate(undefined)}
+        />
       </div>
     );
   }
