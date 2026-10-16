@@ -31,6 +31,19 @@ REVIEW_UNCERTAINTIES = {
 }
 
 
+# The date engine's note on *why* a date is unclear, kept as a review reason so the UI can name the exact
+# problem ("the weekday does not match the date") instead of listing generic examples.
+DATE_NOTE_REASONS = {
+    "weekday_mismatch": "weekday_mismatch",
+    "day_month_order_ambiguous": "day_month_order_ambiguous",
+    "next_weekday_ambiguous": "next_weekday_ambiguous",
+    "this_week_day_already_passed": "this_week_day_already_passed",
+    "weekday_equals_source_day": "weekday_equals_source_day",
+    "approximate": "approximate_date",
+    "period_starts_at_unknown_event": "period_starts_at_unknown_event",
+}
+
+
 @dataclass(frozen=True)
 class PolicyConfig:
     review_confidence_threshold: float = 0.6
@@ -47,6 +60,8 @@ def review_reasons(cand: CandidateTask, config: PolicyConfig) -> list[str]:
         reasons.append("ambiguous_date")
     elif cand.due.needs_confirmation:
         reasons.append("date_needs_confirmation")
+    if cand.due.ambiguous or cand.due.needs_confirmation:
+        reasons.extend(DATE_NOTE_REASONS[note] for note in cand.due.notes if note in DATE_NOTE_REASONS)
     reasons.extend(u for u in cand.uncertainties if u in REVIEW_UNCERTAINTIES)
     return list(dict.fromkeys(reasons))
 

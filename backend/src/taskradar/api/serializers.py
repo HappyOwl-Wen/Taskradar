@@ -72,6 +72,8 @@ def task_summary(task: Task, *, now: dt.datetime, thresholds: Thresholds) -> dic
         "source_count": len(task.sources),
         "source_kinds": kinds,
         "pending_suggestions": sum(1 for s in task.suggestions if s.status == "pending"),
+        # What the open suggestions are about, so a list can say it ("deadline update", "possibly done").
+        "pending_suggestion_kinds": sorted({s.kind for s in task.suggestions if s.status == "pending"}),
         "calendar_status": link.status if link else None,
         "detected_at": _iso(task.detected_at),
         "source_published_at": _iso(task.source_published_at),

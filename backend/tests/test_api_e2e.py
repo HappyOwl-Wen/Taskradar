@@ -10,6 +10,7 @@ import pytest
 from taskradar.container import Container
 from taskradar.domain.enums import TimeSemantics
 from taskradar.extraction.rules import RuleBasedExtractor
+from taskradar.services.ingest import IngestService
 
 from .conftest import SAMPLES, requires_ocr
 
@@ -230,6 +231,27 @@ def test_reanalysis_fills_a_deadline_the_first_run_missed(api: Any, monkeypatch:
     after = api.get(f"/api/tasks/{task['id']}").json()
     assert after["due_date"] == "2026-10-30"
     assert [e["kind"] for e in after["sources"][0]["evidence"]] == ["action", "deadline"]
+
+
+def test_a_file_whose_analysis_failed_can_be_tried_again(api: Any, monkeypatch: pytest.MonkeyPatch) -> None:
+    def offline(*_: Any) -> None:
+        raise RuntimeError("extractor offline")
+
+    monkeypatch.setattr(IngestService, "process_document", offline)
+    failed = upload(api, "06_en_rental_contract.pdf")
+    assert (failed["status"], failed["error_code"]) == ("failed", "extraction_failed")
+    assert failed["document_id"] is not None  # the file is kept, so it can be processed again
+    # A failed file is not "already imported": sending it again tries it again.
+    again = upload(api, "06_en_rental_contract.pdf")
+    assert (again["status"], again["document_id"]) == ("failed", failed["document_id"])
+    monkeypatch.undo()
+
+    # "Retry" processes the stored copy; the answer has the same shape as an upload result.
+    retried = api.post(f"/api/documents/{failed['document_id']}/reprocess").json()
+    assert retried["status"] == "processed" and retried["error_code"] is None
+    assert retried["document_id"] == failed["document_id"] and retried["tasks_created"] >= 1
+    # Once it has been analysed, the same file is recognised as already imported.
+    assert upload(api, "06_en_rental_contract.pdf")["status"] == "duplicate_file"
 
 
 def test_task_editing_validation_and_manual_tasks(api: Any) -> None:
@@ -589,3 +611,20 @@ def test_demo_mailbox_tasks_are_samples(api: Any) -> None:
     removed = api.delete(f"/api/sources/{source['id']}").json()
     assert removed["removed_tasks"] == len(items)
     assert api.get("/api/tasks").json()["items"] == []
+
+
+def test_one_queue_holds_everything_waiting_for_a_decision(api: Any) -> None:
+    candidate = api.post("/api/tasks", json={"title": "Antrag abgeben", "due_date": "2026-10-20"}).json()
+    api.post(f"/api/tasks/{candidate['id']}/status", json={"status": "candidate"})
+    other = api.post("/api/tasks", json={"title": "Antrag stellen", "due_date": "2026-10-22"}).json()
+    # A confirmed task with an open suggestion belongs in the same queue as new candidates.
+    confirmed = api.post("/api/tasks", json={"title": "Miete zahlen", "due_date": "2026-10-30"}).json()
+    _duplicate_suggestion(api, confirmed["id"], other)
+    done = api.post("/api/tasks", json={"title": "Erledigt", "due_date": "2026-10-10"}).json()
+    api.post(f"/api/tasks/{done['id']}/status", json={"status": "completed"})
+
+    queue = api.get("/api/tasks", params={"needs_decision": True}).json()["items"]
+    assert {t["id"] for t in queue} == {candidate["id"], confirmed["id"]}
+    kinds = {t["id"]: t["pending_suggestion_kinds"] for t in queue}
+    assert kinds[confirmed["id"]] == ["possible_duplicate"] and kinds[candidate["id"]] == []
+    assert api.get("/api/dashboard").json()["counts"]["ever_confirmed"] is True

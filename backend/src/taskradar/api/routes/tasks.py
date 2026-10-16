@@ -124,6 +124,12 @@ def dashboard(c: Container = Depends(get_container)) -> dict[str, Any]:
         tasks = session.scalars(select(Task).options(*_TASK_LOAD)).all()
         # Demo and test data are listed elsewhere (marked as such) but never count here.
         sample_open = sum(1 for t in tasks if t.sample and t.status not in ("completed", "dismissed"))
+        # Whether the user has ever taken on a task (the first-run guide stays until then).
+        ever_confirmed = any(
+            t.confirmed_at is not None or t.status in ("confirmed", "in_progress", "waiting_for_reply", "completed")
+            for t in tasks
+            if not t.sample
+        )
         items = [task_summary(t, now=now, thresholds=thresholds) for t in tasks if not t.sample]
         jobs = [job_to_dict(j) for j in session.scalars(select(SyncJob).order_by(SyncJob.started_at.desc()).limit(8))]
         pending = [
@@ -216,6 +222,7 @@ def dashboard(c: Container = Depends(get_container)) -> dict[str, Any]:
             "overdue_candidates": len(overdue_candidates),
             "conflicts": len(conflict_ids),
             "sample_open": sample_open,
+            "ever_confirmed": ever_confirmed,
         },
         "attention": attention[:12],
         "attention_total": len(attention),
@@ -333,6 +340,8 @@ def list_tasks(
     q: str | None = None,
     needs_review: bool | None = None,
     sample: bool | None = None,
+    # Everything waiting for the user's decision: unconfirmed tasks and tasks with an open suggestion.
+    needs_decision: bool | None = None,
     sort: Literal["due", "urgency", "priority", "confidence", "created_at", "updated_at", "detected_at"] = "due",
     order: Literal["asc", "desc"] = "asc",
     limit: int = Query(default=200, ge=1, le=1000),
@@ -351,6 +360,13 @@ def list_tasks(
             stmt = stmt.where(Task.needs_review.is_(needs_review))
         if sample is not None:
             stmt = stmt.where(Task.sample.is_(sample))
+        if needs_decision:
+            stmt = stmt.where(
+                or_(
+                    Task.status == TaskStatus.CANDIDATE.value,
+                    Task.suggestions.any(TaskSuggestion.status == "pending"),
+                )
+            )
         if q:
             like = f"%{q.strip()}%"
             stmt = stmt.where(

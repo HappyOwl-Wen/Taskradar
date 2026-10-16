@@ -439,3 +439,15 @@ def test_reminders_are_deduplicated_and_stop_after_completion(container: Contain
     container.notifications.scan()
     with transaction(container.factory) as session:
         assert session.scalar(select(func.count()).select_from(Notification)) == 1
+
+
+def test_an_unclear_date_keeps_the_reason_it_is_unclear(container: Container) -> None:
+    # 4.11.2026 is a Wednesday: the UI should say that the weekday and the date disagree.
+    ingest_mail(
+        container,
+        "Einverständniserklärung",
+        "Bitte laden Sie die unterschriebene Einverständniserklärung bis Freitag, 4.11.2026 hoch.",
+    )
+    [task] = tasks(container)
+    assert task.needs_review and task.due_needs_confirmation
+    assert "ambiguous_date" in task.review_reasons and "weekday_mismatch" in task.review_reasons
