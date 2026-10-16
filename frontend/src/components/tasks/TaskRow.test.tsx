@@ -103,6 +103,27 @@ describe("TaskListItem", () => {
     expect(screen.queryByText("日期需确认")).not.toBeInTheDocument();
   });
 
+  it("shows at most two key states and names the rest on hover", () => {
+    renderRow({
+      task: { ...task, sample: true, review_reasons: ["possible_duplicate", "title_incomplete"], due_needs_confirmation: false },
+      showUnconfirmed: true,
+    });
+    // Unconfirmed and test data come first; the two problems are summed up as "+2".
+    expect(screen.getByText("待确认")).toBeInTheDocument();
+    expect(screen.getByText("测试数据")).toBeInTheDocument();
+    expect(screen.queryByText("疑似重复")).not.toBeInTheDocument();
+    expect(screen.getByText("+2")).toBeInTheDocument();
+  });
+
+  it("does not repeat a problem that the context already names", () => {
+    renderRow({
+      task: { ...task, status: "confirmed", review_reasons: ["possible_duplicate"], due_needs_confirmation: false },
+      states: [{ key: "conflict", tone: "urgent", label: "截止日期冲突" }],
+    });
+    expect(screen.getByText("截止日期冲突")).toBeInTheDocument();
+    expect(screen.queryByText("疑似重复")).not.toBeInTheDocument();
+  });
+
   it("can select the task in place instead of navigating", () => {
     let opened = 0;
     renderRow({ onSelect: () => (opened += 1), active: true });

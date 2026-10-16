@@ -2,36 +2,49 @@
 
 @custom-variant dark (&:where(.dark, .dark *));
 
+/*
+ * Colour roles (one meaning each, used everywhere):
+ *   primary  brand blue   - confirmed / selected / links / main action
+ *   violet               - unconfirmed (待确认) and open suggestions
+ *   urgent / high        - warning orange: due very soon, conflicts, things to check
+ *   overdue / destructive - red: overdue, errors, deleting
+ *   success              - green: done
+ *   neutral greys        - categories, sources, "within a week", dismissed, secondary text
+ * Text colours keep at least 4.5:1 against cards and the page background.
+ */
 :root {
   --radius: 0.75rem;
-  --background: oklch(0.985 0.003 255);
-  --foreground: oklch(0.22 0.025 265);
+  --background: oklch(0.984 0.003 247.9); /* #F8FAFC */
+  --foreground: oklch(0.21 0.035 265); /* ≈ slate-900 */
   --card: oklch(1 0 0);
-  --card-foreground: oklch(0.22 0.025 265);
+  --card-foreground: oklch(0.21 0.035 265);
   --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.22 0.025 265);
+  --popover-foreground: oklch(0.21 0.035 265);
   --primary: oklch(0.52 0.19 268);
   --primary-foreground: oklch(0.985 0.003 255);
-  --secondary: oklch(0.955 0.008 260);
-  --secondary-foreground: oklch(0.28 0.03 265);
-  --muted: oklch(0.96 0.006 260);
-  --muted-foreground: oklch(0.52 0.025 262);
-  --accent: oklch(0.945 0.018 268);
-  --accent-foreground: oklch(0.3 0.06 268);
-  --destructive: oklch(0.58 0.21 27);
+  --secondary: oklch(0.968 0.007 247.9); /* #F1F5F9 */
+  --secondary-foreground: oklch(0.28 0.035 262);
+  --muted: oklch(0.968 0.007 247.9); /* #F1F5F9 */
+  --muted-foreground: oklch(0.5 0.035 257); /* ≈ #5A6577, 5.9:1 on white */
+  /* Hover is neutral; a selected item is light blue with brand-blue text (see --selected). */
+  --accent: oklch(0.962 0.008 250);
+  --accent-foreground: oklch(0.24 0.035 265);
+  --selected: oklch(0.955 0.028 268);
+  --selected-foreground: oklch(0.45 0.19 268);
+  --destructive: oklch(0.55 0.21 27);
   --destructive-foreground: oklch(0.985 0.003 255);
-  --border: oklch(0.915 0.009 262);
-  --input: oklch(0.89 0.012 262);
+  --border: oklch(0.929 0.013 255.5); /* #E2E8F0 */
+  --input: oklch(0.869 0.022 252.9); /* #CBD5E1: fields stand out from the card they sit on */
   --ring: oklch(0.52 0.19 268);
-  --sidebar: oklch(0.975 0.005 260);
+  --sidebar: oklch(1 0 0);
 
-  --overdue: oklch(0.58 0.21 27);
-  --urgent: oklch(0.65 0.19 45);
-  --high: oklch(0.72 0.16 75);
-  --upcoming: oklch(0.58 0.15 245);
-  --normal: oklch(0.6 0.03 262);
-  --success: oklch(0.6 0.15 155);
-  --violet: oklch(0.55 0.2 300);
+  --overdue: oklch(0.55 0.21 27); /* red, 5.4:1 */
+  --urgent: oklch(0.56 0.18 42); /* warning orange, 4.9:1 */
+  --high: oklch(0.56 0.18 42);
+  --upcoming: oklch(0.42 0.04 257); /* within a week: neutral, slightly stronger than secondary text */
+  --normal: oklch(0.5 0.035 257);
+  --success: oklch(0.52 0.14 150); /* green, 5.0:1 */
+  --violet: oklch(0.52 0.21 295); /* 6.3:1 */
 }
 
 .dark {
@@ -46,23 +59,25 @@
   --secondary: oklch(0.26 0.016 265);
   --secondary-foreground: oklch(0.92 0.008 260);
   --muted: oklch(0.25 0.014 265);
-  --muted-foreground: oklch(0.7 0.02 262);
-  --accent: oklch(0.28 0.03 268);
-  --accent-foreground: oklch(0.92 0.02 268);
-  --destructive: oklch(0.65 0.19 25);
+  --muted-foreground: oklch(0.72 0.02 262);
+  --accent: oklch(0.27 0.016 265);
+  --accent-foreground: oklch(0.94 0.01 260);
+  --selected: oklch(0.29 0.05 268);
+  --selected-foreground: oklch(0.82 0.1 268);
+  --destructive: oklch(0.66 0.19 25);
   --destructive-foreground: oklch(0.985 0.003 255);
   --border: oklch(0.29 0.016 265);
-  --input: oklch(0.33 0.018 265);
+  --input: oklch(0.36 0.02 265);
   --ring: oklch(0.68 0.16 268);
   --sidebar: oklch(0.19 0.013 265);
 
-  --overdue: oklch(0.68 0.19 25);
-  --urgent: oklch(0.74 0.16 50);
-  --high: oklch(0.8 0.14 80);
-  --upcoming: oklch(0.7 0.13 245);
-  --normal: oklch(0.7 0.03 262);
-  --success: oklch(0.72 0.14 155);
-  --violet: oklch(0.7 0.16 300);
+  --overdue: oklch(0.7 0.18 25);
+  --urgent: oklch(0.76 0.15 55);
+  --high: oklch(0.76 0.15 55);
+  --upcoming: oklch(0.84 0.015 260);
+  --normal: oklch(0.72 0.02 262);
+  --success: oklch(0.74 0.14 155);
+  --violet: oklch(0.74 0.15 300);
 }
 
 @theme inline {
@@ -80,6 +95,8 @@
   --color-muted-foreground: var(--muted-foreground);
   --color-accent: var(--accent);
   --color-accent-foreground: var(--accent-foreground);
+  --color-selected: var(--selected);
+  --color-selected-foreground: var(--selected-foreground);
   --color-destructive: var(--destructive);
   --color-destructive-foreground: var(--destructive-foreground);
   --color-border: var(--border);
@@ -99,6 +116,12 @@
   --radius-xl: calc(var(--radius) + 4px);
   --font-sans: "Inter", "Segoe UI", "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", system-ui, sans-serif;
   --font-mono: "Cascadia Code", "JetBrains Mono", Consolas, ui-monospace, monospace;
+  /* Type scale: page titles 22px, section titles 16px; body text stays text-sm (14px), secondary 12-13px. */
+  --text-page: 1.375rem;
+  --text-page--line-height: 1.875rem;
+  --text-page--letter-spacing: -0.01em;
+  --text-section: 1rem;
+  --text-section--line-height: 1.5rem;
 }
 
 @layer base {

@@ -1,3 +1,4 @@
+import type { TFunction } from "i18next";
 import type { Suggestion, TaskSummary, Urgency } from "./types";
 
 /**
@@ -6,12 +7,14 @@ import type { Suggestion, TaskSummary, Urgency } from "./types";
  */
 export type IssueKind =
   | "date_conflict"
+  | "date_changed"
   | "duplicate"
   | "date_unclear"
   | "content_unclear"
   | "suspicious"
   | "not_in_source"
   | "marketing"
+  | "optional"
   | "ocr_quality"
   | "low_certainty"
   | "split";
@@ -26,6 +29,7 @@ export interface Issue {
 
 const REASON_ISSUE: Record<string, IssueKind> = {
   date_conflict: "date_conflict",
+  deadline_changed: "date_changed",
   possible_duplicate: "duplicate",
   ambiguous_date: "date_unclear",
   date_needs_confirmation: "date_unclear",
@@ -35,19 +39,28 @@ const REASON_ISSUE: Record<string, IssueKind> = {
   possible_prompt_injection: "suspicious",
   evidence_not_found_in_source: "not_in_source",
   marketing_context: "marketing",
+  permission_only: "optional",
   low_ocr_confidence: "ocr_quality",
   low_confidence: "low_certainty",
   split_from_merge: "split",
 };
 
+/** Plain-language name of an internal review reason (the label of the issue it belongs to). */
+export function reviewReasonLabel(reason: string, t: TFunction): string {
+  const kind = REASON_ISSUE[reason];
+  return kind ? t(`issue.${kind}.label`) : reason;
+}
+
 const ISSUE_ORDER: IssueKind[] = [
   "date_conflict",
+  "date_changed",
   "duplicate",
   "date_unclear",
   "content_unclear",
   "suspicious",
   "not_in_source",
   "marketing",
+  "optional",
   "ocr_quality",
   "low_certainty",
   "split",
@@ -55,12 +68,14 @@ const ISSUE_ORDER: IssueKind[] = [
 
 const SEVERITY: Record<IssueKind, Issue["severity"]> = {
   date_conflict: "high",
+  date_changed: "high",
   duplicate: "high",
   date_unclear: "high",
   content_unclear: "medium",
   suspicious: "medium",
   not_in_source: "medium",
   marketing: "medium",
+  optional: "low",
   ocr_quality: "low",
   low_certainty: "low",
   split: "low",

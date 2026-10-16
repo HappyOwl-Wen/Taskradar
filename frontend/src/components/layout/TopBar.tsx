@@ -93,7 +93,7 @@ export function TopBar() {
   };
 
   return (
-    <header className="z-30 flex h-14 shrink-0 items-center gap-2 border-b bg-background px-4 sm:px-6">
+    <header className="z-30 flex h-14 shrink-0 items-center gap-2 border-b bg-card px-4 sm:px-6">
       <Button variant="ghost" size="icon" className="lg:hidden" onClick={() => setMenuOpen(true)} aria-label={t("topbar.openMenu")}>
         <Menu />
       </Button>

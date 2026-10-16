@@ -14,9 +14,11 @@ import type {
   QuickParse,
   Settings,
   Source,
+  RecheckResult,
   Suggestion,
   SyncJob,
   SystemStatus,
+  SystemSummary,
   TaskDetail,
   TaskSummary,
 } from "./types";
@@ -130,6 +132,8 @@ export interface TaskQuery extends Query {
   source_kind?: string[];
   q?: string;
   needs_review?: boolean;
+  /** true: only demo/test data, false: only real tasks, omitted: both. */
+  sample?: boolean;
   sort?: string;
   order?: "asc" | "desc";
   limit?: number;
@@ -164,6 +168,11 @@ export const api = {
   mergeTask: (id: string, intoTaskId: string, dueChoice?: DueChoice) =>
     post<TaskDetail>(`/api/tasks/${id}/merge`, { into_task_id: intoTaskId, due_choice: dueChoice ?? null }),
   deleteTask: (id: string) => del<{ deleted: string }>(`/api/tasks/${id}`),
+  setSample: (id: string, sample: boolean) =>
+    post<TaskDetail & { calendar_warning?: string }>(`/api/tasks/${id}/sample`, { sample }),
+  /** Keep what an automatic change did (e.g. the new deadline) and clear the flag; undoable. */
+  resolveReview: (id: string, reasons: string[]) => post<TaskDetail>(`/api/tasks/${id}/review/resolve`, { reasons }),
+  recheck: () => get<RecheckResult>("/api/review/recheck"),
   undo: (eventId: number) => post<TaskDetail>(`/api/events/${eventId}/undo`),
   suggestions: () => get<{ items: Suggestion[] }>("/api/suggestions"),
   acceptSuggestion: (id: number, dueChoice?: DueChoice) =>
@@ -176,7 +185,7 @@ export const api = {
   sources: () => get<{ items: Source[] }>("/api/sources"),
   syncSource: (id: number) => post<{ job: SyncJob | null; accepted: boolean }>(`/api/sources/${id}/sync`),
   addFolder: (path: string, recursive: boolean) => post<Source>("/api/sources/folders", { path, recursive }),
-  deleteSource: (id: number) => del<{ deleted: number }>(`/api/sources/${id}`),
+  deleteSource: (id: number) => del<{ deleted: number; removed_tasks?: number }>(`/api/sources/${id}`),
   patchSource: (id: number, enabled: boolean) => patch<Source>(`/api/sources/${id}`, { enabled }),
   jobs: (limit = 30) => get<{ items: SyncJob[] }>("/api/sync-jobs", { limit }),
   failures: () => get<{ documents: DocumentBrief[]; messages: MessageListItem[]; jobs: SyncJob[] }>("/api/failures"),
@@ -208,6 +217,7 @@ export const api = {
   deleteApiKey: () => del<{ configured: boolean }>("/api/settings/llm-key"),
   testLlm: () => post<{ ok: boolean; model: string; latency_ms: number }>("/api/settings/llm/test"),
   systemStatus: () => get<SystemStatus>("/api/system/status"),
+  systemSummary: () => get<SystemSummary>("/api/system/summary"),
   setAutostart: (enabled: boolean) => post<{ enabled: boolean }>("/api/system/autostart", { enabled, confirm: true }),
   google: () => get<GoogleStatus>("/api/integrations/google"),
   uploadClientConfig: (file: File) => {

@@ -16,6 +16,8 @@ export const qk = {
   failures: ["failures"] as const,
   settings: ["settings"] as const,
   system: ["system"] as const,
+  systemSummary: ["system-summary"] as const,
+  recheck: ["recheck"] as const,
   google: ["google"] as const,
   notifications: ["notifications"] as const,
   metrics: ["metrics"] as const,
@@ -65,6 +67,12 @@ export const useSystemStatus = () =>
     // While files are being read again with OCR, poll so the page updates when the job finishes.
     refetchInterval: (query) => (query.state.data?.ocr.reprocessing ? 2000 : false),
   });
+/** Runtime problems in plain terms; it changes slowly, so a minute between checks is enough. */
+export const useSystemSummary = () =>
+  useQuery({ queryKey: qk.systemSummary, queryFn: api.systemSummary, refetchInterval: 60_000, retry: false });
+/** Re-check old tasks with the current rules: read-only, only when the user asks for it. */
+export const useRecheck = (enabled: boolean) =>
+  useQuery({ queryKey: qk.recheck, queryFn: api.recheck, enabled, staleTime: 30_000 });
 export const useGoogle = () => useQuery({ queryKey: qk.google, queryFn: api.google });
 export const useNotifications = () =>
   useQuery({ queryKey: qk.notifications, queryFn: api.notifications, refetchInterval: 30_000 });

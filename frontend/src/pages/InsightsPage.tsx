@@ -2,6 +2,7 @@ import { Activity, ChevronRight, History } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import { Link } from "react-router";
 import { useTranslation } from "react-i18next";
+import { SystemStatusList } from "@/components/layout/SystemStatus";
 import { JobItem } from "@/components/sources/JobItem";
 import { RunTrace } from "@/components/sources/RecordDetails";
 import { Button } from "@/components/ui/button";
@@ -21,7 +22,7 @@ function Section({ title, hint, aside, children }: { title: string; hint?: strin
     <section className="grid gap-2">
       <div className="flex flex-wrap items-end justify-between gap-2">
         <div className="grid gap-0.5">
-          <h2 className="text-sm font-semibold">{title}</h2>
+          <h2 className="text-section font-semibold">{title}</h2>
           {hint ? <p className="text-xs text-muted-foreground">{hint}</p> : null}
         </div>
         {aside}
@@ -32,7 +33,7 @@ function Section({ title, hint, aside, children }: { title: string; hint?: strin
 }
 
 function HealthRow({ state, title, detail, action }: { state: "ok" | "warn" | "error" | "off"; title: string; detail: ReactNode; action?: ReactNode }) {
-  const dot = { ok: "bg-success", warn: "bg-high", error: "bg-destructive", off: "bg-muted-foreground/40" }[state];
+  const dot = { ok: "bg-success", warn: "bg-urgent", error: "bg-destructive", off: "bg-muted-foreground/40" }[state];
   return (
     <li className="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2.5">
       <span className={cn("size-2 shrink-0 rounded-full", dot)} aria-hidden />
@@ -262,10 +263,13 @@ export default function InsightsPage() {
   return (
     <div className="grid gap-7">
       <header className="grid gap-0.5">
-        <h1 className="text-xl font-semibold tracking-tight">{t("insights.title")}</h1>
+        <h1 className="text-page font-semibold">{t("insights.title")}</h1>
         <p className="text-[13px] text-muted-foreground">{t("insights.description")}</p>
       </header>
-      <Section title={t("insights.healthTitle")}>
+      <Section title={t("insights.healthTitle")} hint={t("insights.healthHint")}>
+        <SystemStatusList />
+      </Section>
+      <Section title={t("insights.componentsTitle")}>
         <SystemHealth />
       </Section>
       <Section title={t("insights.processingTitle")} hint={t("insights.processingHint")}>

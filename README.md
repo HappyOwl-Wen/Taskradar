@@ -65,13 +65,16 @@ mail or document and quotes the sentence it came from. Details: [ARCHITECTURE.md
 | Parsing | text-first PDF extraction, OCR fallback per page (Tesseract, `chi_sim+eng`, `deu+eng`), MIME/HTML mail, quoted-reply stripping; files imported before OCR was installed can be read again from the Sources page | implemented, tested (real OCR in tests) |
 | Extraction | tasks with title, action, category, priority, deadline (date-only stays date-only), confidence, evidence; marketing/newsletters ignored; prompt-injection text treated as data | implemented, tested, evaluated |
 | Dates | absolute, relative and ambiguous dates in zh/de/en; relative dates resolved from the *source* date; unresolvable dates are flagged, never invented | implemented, tested |
-| Deduplication | same source / same thread, normalised similarity across languages, optional LLM judge; grey zone becomes a suggestion that you review side by side ("merge / keep separate / not now"); when the deadlines differ you choose the date that stays; every decision is undoable | implemented, tested, evaluated |
-| Lifecycle | Candidate → Confirmed → In progress / Waiting for reply → Completed / Dismissed; completion evidence; explicit deadline changes applied with undo | implemented, tested |
+| Deduplication | same source / same thread, normalised similarity across languages, optional LLM judge; grey zone becomes a suggestion that you review side by side ("merge / keep separate / not now"); **a different deadline is never merged silently** (also not a reminder in the same thread): unless the new source explicitly says the deadline changed, both tasks stay and the pair is shown as "deadlines disagree" until you choose the date that stays; every decision is undoable | implemented, tested, evaluated |
+| Lifecycle | Candidate → Confirmed → In progress / Waiting for reply → Completed / Dismissed; completion evidence; an explicitly announced deadline change is applied, marked "deadline changed" with a notification, and you keep the new date or undo it | implemented, tested, verified in a browser with synthetic mails |
+| Test data | demo mailbox mails and files imported as test data are kept apart from your own data: not counted on the dashboard or in Insights, no reminders, never written to Google Calendar, never merged with real tasks, listed after real candidates; any task can be marked or unmarked as test data (undoable), and test data can be deleted as a whole from Sources | implemented, tested, verified in a browser with synthetic data |
+| System status | the dashboard and Insights explain runtime problems in plain words with where to fix them (Gmail authorization expired or sync failing, mails or files that could not be read, an unavailable folder, calendar write failures, failing reminder checks, AI fallbacks, background jobs not running, OCR missing); no log reading needed | implemented, tested; in a browser only the "background jobs not running" state was seen (the others are covered by tests) |
+| Re-check | All tasks → "Re-check with current rules": the current rules are run again, read-only and locally, over the sources of open tasks; it lists tasks they would no longer find, tasks merged from many unrelated mails and tasks they would flag. You choose what to dismiss (undoable); nothing is deleted | implemented, tested, verified in a browser with synthetic data |
 | Reminders | Overdue / 24 h / 3 days / 7 days (configurable), date-only deadlines count until the end of the day, DST-safe, deduplicated, stop after completion | implemented, tested |
 | Gmail | OAuth (installed-app flow with PKCE), `gmail.readonly` only, last 30 days, incremental history sync, request pacing, retries with backoff, attachments | implemented, tested with a fake Gmail; **verified with one real account**: initial and incremental sync, attachments, automatic recovery from Google's rate limit (request pacing was added afterwards and is tested with fakes only) |
 | Google Calendar | separate OAuth (`calendar.app.created`), preview → confirm → write into a dedicated "TaskRadar" calendar, idempotent event IDs, no invitations | implemented, tested with a fake Calendar; **verified with one real account**: calendar created, all-day deadline written, updated in place after a date change (same event, no duplicate), unchanged re-write skipped; a disabled Calendar API is explained with Google's enable link. Events can be removed again (button, or automatically when a task is dismissed, merged or deleted - a setting, on by default); only TaskRadar's own events are ever deleted. Removal with the button verified with the real account; the automatic removal is tested with a fake Calendar |
 | LLM extraction | OpenAI structured outputs or OpenAI-compatible endpoint, strict schema validation, bounded retries, rules fallback, data minimisation, consent required | implemented, tested with a mocked provider; **real API not verified** (needs your key) |
-| User interface | Dashboard (what needs attention, unconfirmed tasks always marked), Review inbox (list + detail, sorted by what needs handling first, problems in plain language, keyboard navigation), All tasks, Task detail (deadline, open questions, quotes per source, calendar, history), Sources (connected sources + processing records with reasons), Insights (system status, processing figures with their basis), Settings (one category at a time); undo after every decision; one scroll area, layouts from 390 px phones to desktops; dark/light; zh/en | implemented, unit-tested, verified in a browser at 1440 / 1024 / 768 / 390 px, light and dark, Chinese and English |
+| User interface | Dashboard (what needs attention, grouped by overdue / due today / tomorrow / within 7 days, then changed or disputed deadlines; unconfirmed tasks always marked; pending suggestions name both tasks and their deadlines; system status), Review inbox (list + detail, sorted by what needs handling first, problems in plain language, keyboard navigation), All tasks, Task detail (deadline, open questions, quotes per source, calendar, history), Sources (connected sources + processing records with reasons), Insights (system status, processing figures with their basis), Settings (one category at a time); undo after every decision; one scroll area, layouts from 390 px phones to desktops; dark/light; zh/en | implemented, unit-tested, verified in a browser at 1440 / 1024 / 768 / 390 px, light and dark, Chinese and English |
 | Background | scheduled Gmail sync, folder scans, reminder checks, automatic retries, restart recovery, optional Windows autostart (only after confirmation) | implemented, tested |
 | Data control | export as JSON, delete single items, delete everything (typed confirmation) | implemented, tested |
 
@@ -151,21 +154,21 @@ See [SECURITY.md](SECURITY.md) for the threat model.
 
 ```powershell
 cd backend
-.venv\Scripts\python.exe -m pytest            # 234 tests, about 30 s, includes real OCR
+.venv\Scripts\python.exe -m pytest            # 280 tests, about 40 s, includes real OCR
 .venv\Scripts\python.exe -m ruff check .
 .venv\Scripts\python.exe -m ruff format --check .
 .venv\Scripts\python.exe -m mypy
 .venv\Scripts\python.exe -m taskradar eval    # extraction / dedup evaluation on the labelled dataset
 
 cd ..\frontend
-npm run lint; npm run typecheck; npm test      # 64 tests
+npm run lint; npm run typecheck; npm test      # 75 tests
 ```
 
 The workflow in `.github/workflows/ci.yml` runs the same checks on Ubuntu, with Tesseract and the same pinned
 language models. It has not run on GitHub yet (the repository has not been pushed); the backend checks were run
 locally on Windows 11 and on Ubuntu 24.04 (WSL), where the four OCR tests were skipped for lack of Tesseract.
 
-### Evaluation (rule engine, `rules-1.5`)
+### Evaluation (rule engine, `rules-1.6`)
 
 Measured with `python -m taskradar eval` on synthetic, hand-labelled cases. The development set was used while
 building the rules; the held-out set was written separately and run without tuning on it (one bug it exposed,
@@ -178,11 +181,13 @@ effect of a later fix — see [docs/EVALUATION.md](docs/EVALUATION.md)).
 | Deadline date correct | 21/21 | 13/13 |
 | Deadline time correct | 21/21 | 12/13 |
 | Marketing/info cases with false tasks | 0/7 | 0/7 |
-| Correct merges / wrong merges | 5/5 / 0 | 1/1 / 0 |
+| Correct merges / wrong merges | 4/5 / 0 (the fifth is flagged for review, see below) | 1/1 / 0 |
 | Completion evidence detected | 6/6 | 3/5 |
 
 The held-out recall shows the honest limit of hand-written rules on unseen phrasing; that is what the optional
-LLM path is for (not yet measured against a real model).
+LLM path is for (not yet measured against a real model). Since `rules-1.6` a payment reminder that sets a *new*
+deadline without saying that the deadline changed (development case de-05) is flagged as a possible duplicate
+instead of being merged: a different deadline is never merged silently. This costs one automatic merge by design.
 
 ### Performance (measured)
 
@@ -226,6 +231,8 @@ TaskRadar.cmd       double-click launcher       Setup.cmd   one-time setup
 * OCR covers printed Chinese (simplified), German and English; handwriting and low-quality photos are not
   reliable. Low OCR confidence is flagged for review.
 * Recurring obligations are recognised as "related", not modelled as series. Single user, no mobile sync.
+* Tasks created by older rule versions are not changed when the rules improve; "Re-check with current rules"
+  lists the doubtful ones for you to decide.
 * The local database is not encrypted by TaskRadar; it relies on your Windows account (BitLocker recommended).
 
 ## Roadmap

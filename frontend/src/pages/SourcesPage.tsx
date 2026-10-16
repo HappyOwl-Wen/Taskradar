@@ -3,7 +3,7 @@ import { useLocation, useNavigate } from "react-router";
 import { useTranslation } from "react-i18next";
 import { OcrBacklogNotice } from "@/components/sources/OcrBacklogNotice";
 import { ProcessingRecords } from "@/components/sources/ProcessingRecords";
-import { AddFolderForm, AddSourceMenu, DemoRow, FolderRows, GmailRow, UploadsRow } from "@/components/sources/SourceCards";
+import { AddFolderForm, AddSourceMenu, DemoRow, FolderRows, GmailRow, SampleRow, UploadsRow } from "@/components/sources/SourceCards";
 import { ErrorState, LoadingRows } from "@/components/ui/states";
 import { useTimezone } from "@/lib/hooks";
 import { useSources } from "@/lib/queries";
@@ -12,7 +12,7 @@ function SectionTitle({ title, hint, aside }: { title: string; hint?: string; as
   return (
     <div className="flex flex-wrap items-end justify-between gap-2">
       <div className="grid gap-0.5">
-        <h2 className="text-sm font-semibold">{title}</h2>
+        <h2 className="text-section font-semibold">{title}</h2>
         {hint ? <p className="text-xs text-muted-foreground">{hint}</p> : null}
       </div>
       {aside}
@@ -42,10 +42,11 @@ export default function SourcesPage() {
   const sources = data?.items ?? [];
   const demo = sources.find((s) => s.kind === "demo_mail");
   const uploads = sources.find((s) => s.kind === "upload");
+  const testData = sources.find((s) => s.kind === "sample_upload");
   return (
     <div className="grid gap-6">
       <header className="grid gap-0.5">
-        <h1 className="text-xl font-semibold tracking-tight">{t("sources.title")}</h1>
+        <h1 className="text-page font-semibold">{t("sources.title")}</h1>
         <p className="text-[13px] text-muted-foreground">{t("sources.description")}</p>
       </header>
 
@@ -60,6 +61,7 @@ export default function SourcesPage() {
             <FolderRows sources={sources} timezone={timezone} />
             {adding ? <AddFolderForm onDone={closeForm} /> : null}
             <UploadsRow count={uploads?.documents ?? 0} />
+            {testData ? <SampleRow source={testData} /> : null}
           </ul>
         ) : null}
       </section>

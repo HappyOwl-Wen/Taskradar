@@ -202,7 +202,7 @@ export function DemoRow({ source, timezone }: { source: Source; timezone: string
           <LastSync source={source} timezone={timezone} />
           {source.messages ? <span>{t("sources.messagesCount", { count: source.messages })}</span> : null}
           <span>{t("sources.demo.syntheticNote")}</span>
-          {mode !== "none" ? <span className="text-high">{t("sources.demo.failureActive", { mode: t(`sources.demo.failure.${mode}`) })}</span> : null}
+          {mode !== "none" ? <span className="text-urgent">{t("sources.demo.failureActive", { mode: t(`sources.demo.failure.${mode}`) })}</span> : null}
         </>
       }
       actions={
@@ -370,6 +370,49 @@ export function FolderRows({ sources, timezone }: { sources: Source[]; timezone:
           <FolderRow key={f.id} source={f} timezone={timezone} />
         ))}
     </>
+  );
+}
+
+/** Mails and files imported as test data: kept apart from real data and removable in one go. */
+export function SampleRow({ source }: { source: Source }) {
+  const { t } = useTranslation();
+  const [removeOpen, setRemoveOpen] = useState(false);
+  const remove = useAction(() => api.deleteSource(source.id), {
+    success: (r) => t("sample.removed", { count: r.removed_tasks ?? 0 }),
+    onSuccess: () => setRemoveOpen(false),
+  });
+  const items = (source.messages ?? 0) + (source.documents ?? 0);
+  return (
+    <Row
+      id="test-data"
+      icon={FlaskConical}
+      title={t("sample.sourceTitle")}
+      meta={
+        <>
+          <span>{t("sample.sourceItems", { count: items })}</span>
+          <span>{t("sample.sourceNote")}</span>
+        </>
+      }
+      actions={
+        <Tip content={t("sample.remove")}>
+          <Button variant="ghost" size="icon-xs" onClick={() => setRemoveOpen(true)} aria-label={t("sample.remove")}>
+            <Trash2 />
+          </Button>
+        </Tip>
+      }
+    >
+      <ConfirmDialog
+        open={removeOpen}
+        onOpenChange={setRemoveOpen}
+        title={t("sample.remove")}
+        description={t("sample.removeDescription")}
+        confirmLabel={t("sample.remove")}
+        cancelLabel={t("common.cancel")}
+        destructive
+        pending={remove.isPending}
+        onConfirm={() => remove.mutate(undefined)}
+      />
+    </Row>
   );
 }
 

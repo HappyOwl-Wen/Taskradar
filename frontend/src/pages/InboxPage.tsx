@@ -1,5 +1,5 @@
-import { ArrowLeft, Ban, Check, CircleCheckBig, Inbox, Lightbulb, X } from "lucide-react";
-import { useMemo, useState, type KeyboardEvent } from "react";
+import { ArrowLeft, Ban, Check, CircleCheckBig, FlaskConical, Inbox, Lightbulb, X } from "lucide-react";
+import { Fragment, useMemo, useState, type KeyboardEvent } from "react";
 import { Link, useSearchParams } from "react-router";
 import { useTranslation } from "react-i18next";
 import { SuggestionCard } from "@/components/tasks/SuggestionCard";
@@ -36,8 +36,12 @@ function Candidates() {
   const { data, error, isLoading, refetch } = useTasks({ status: ["candidate"], limit: 500 });
   const items = useMemo(() => {
     const all = data?.items ?? [];
-    return sortInbox(onlyIssues ? all.filter((task) => taskIssues(task).length > 0) : all, sort);
+    const shown = onlyIssues ? all.filter((task) => taskIssues(task).length > 0) : all;
+    // Test data is reviewed like everything else, but after the real tasks.
+    return [...sortInbox(shown.filter((task) => !task.sample), sort), ...sortInbox(shown.filter((task) => task.sample), sort)];
   }, [data, onlyIssues, sort]);
+  const firstSample = items.findIndex((task) => task.sample);
+  const sampleCount = items.length - (firstSample < 0 ? items.length : firstSample);
   const ids = new Set(items.map((i) => i.id));
   const chosen = [...selected].filter((id) => ids.has(id));
   const requested = params.get("task");
@@ -94,7 +98,7 @@ function Candidates() {
   };
 
   const list = (
-    <div className={cn("flex min-h-0 flex-col border-r bg-background lg:w-[320px] xl:w-[380px]", showDetail && !wide ? "hidden" : "flex-1 lg:flex-none")}>
+    <div className={cn("flex min-h-0 flex-col border-r bg-card lg:w-[340px] xl:w-[400px]", showDetail && !wide ? "hidden" : "flex-1 lg:flex-none")}>
       <div className="flex min-h-11 shrink-0 flex-wrap items-center gap-x-3 gap-y-2 border-b px-3 py-1.5">
         <Checkbox
           checked={allChecked}
@@ -155,17 +159,26 @@ function Candidates() {
         ) : null}
         <ul className="grid gap-0.5" aria-label={t("inbox.candidatesTab")}>
           {items.map((task, index) => (
-            <li key={task.id}>
-              <TaskListItem
-                task={task}
-                controlId={itemControlId(task.id)}
-                active={task.id === activeId && showDetail}
-                selected={selected.has(task.id)}
-                onSelectedChange={(on) => toggle(task.id, on)}
-                onSelect={() => open(task.id)}
-                onKeyDown={(e) => onKeyDown(e, index)}
-              />
-            </li>
+            <Fragment key={task.id}>
+              {index === firstSample ? (
+                <li role="presentation" className="mt-2 flex items-center gap-1.5 border-t px-3 pt-3 pb-1 text-xs font-semibold text-muted-foreground">
+                  <FlaskConical className="size-3.5" aria-hidden /> {t("sample.inboxGroup")}
+                  <span className="font-normal tabular-nums">{sampleCount}</span>
+                </li>
+              ) : null}
+              <li>
+                <TaskListItem
+                  task={task}
+                  controlId={itemControlId(task.id)}
+                  active={task.id === activeId && showDetail}
+                  selected={selected.has(task.id)}
+                  onSelectedChange={(on) => toggle(task.id, on)}
+                  onSelect={() => open(task.id)}
+                  onKeyDown={(e) => onKeyDown(e, index)}
+                  hideSample
+                />
+              </li>
+            </Fragment>
           ))}
         </ul>
       </div>
@@ -175,7 +188,7 @@ function Candidates() {
 
   const detail = showDetail && activeId ? (
     <div className="scroll-stable min-h-0 flex-1 overflow-y-auto">
-      <div className="mx-auto w-full max-w-3xl px-4 py-5 sm:px-6">
+      <div className="mx-auto w-full max-w-[60rem] px-4 py-5 sm:px-8">
         {!wide ? (
           <Button variant="ghost" size="sm" className="-ml-2 mb-3" onClick={backToList}>
             <ArrowLeft /> {t("inbox.backToList")}
@@ -218,7 +231,7 @@ function Suggestions() {
   const items = [...(data?.items ?? [])].sort((a, b) => KIND_ORDER.indexOf(a.kind) - KIND_ORDER.indexOf(b.kind));
   return (
     <div className="scroll-stable min-h-0 flex-1 overflow-y-auto">
-      <div className="mx-auto grid w-full max-w-3xl gap-3 px-4 py-5 sm:px-6">
+      <div className="mx-auto grid w-full max-w-[52rem] gap-3 px-4 py-5 sm:px-8">
         {isLoading ? <LoadingRows rows={3} /> : null}
         {error ? <ErrorState error={error} onRetry={() => void refetch()} /> : null}
         {!isLoading && !error && items.length === 0 ? (
@@ -238,6 +251,8 @@ export default function InboxPage() {
   const tab = params.get("tab") === "suggestions" ? "suggestions" : "candidates";
   const { data: candidates } = useTasks({ status: ["candidate"], limit: 500 });
   const { data: suggestions } = useSuggestions();
+  // Test data is listed (at the end) but not counted, like everywhere else.
+  const realCandidates = candidates ? candidates.total - candidates.items.filter((task) => task.sample).length : undefined;
   return (
     <Tabs
       value={tab}
@@ -246,12 +261,12 @@ export default function InboxPage() {
     >
       <div className="shrink-0 border-b px-4 pt-4 sm:px-6">
         <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-          <h1 className="text-xl font-semibold tracking-tight">{t("inbox.title")}</h1>
+          <h1 className="text-page font-semibold">{t("inbox.title")}</h1>
           <p className="text-[13px] text-muted-foreground">{t("inbox.description")}</p>
         </div>
         <TabsList variant="underline" className="mt-2">
           <TabsTrigger variant="underline" value="candidates">
-            {t("inbox.candidatesTab")} <TabCount value={candidates?.total} active={tab === "candidates"} />
+            {t("inbox.candidatesTab")} <TabCount value={realCandidates} active={tab === "candidates"} />
           </TabsTrigger>
           <TabsTrigger variant="underline" value="suggestions">
             {t("inbox.suggestionsTab")} <TabCount value={suggestions?.items.length} active={tab === "suggestions"} />

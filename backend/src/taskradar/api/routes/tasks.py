@@ -91,7 +91,10 @@ def _detail(c: Container, session: Session, task_id: str) -> dict[str, Any]:
                     "direction": "outgoing" if link.task_id == task_id else "incoming",
                 }
             )
-    return task_detail(task, now=c.clock(), thresholds=thresholds_for(c), links=links)
+    detail = task_detail(task, now=c.clock(), thresholds=thresholds_for(c), links=links)
+    # As on the dashboard: a suggestion names the other task and both deadlines.
+    detail["suggestions"] = [_suggestion_view(session, s) for s in task.suggestions]
+    return detail
 
 
 def _sort_key(sort: str, item: dict[str, Any]) -> tuple[Any, ...]:
@@ -217,7 +220,10 @@ def dashboard(c: Container = Depends(get_container)) -> dict[str, Any]:
         "attention": attention[:12],
         "attention_total": len(attention),
         "attention_counts": attention_counts,
-        "attention_unconfirmed": sum(1 for i in attention if i["status"] == "candidate"),
+        # Of the tasks the summary sentence counts (overdue … due within a week), how many are unconfirmed.
+        "attention_unconfirmed": sum(
+            1 for i in attention if i["status"] == "candidate" and i["attention"] in _TIME_GROUPS
+        ),
         "today_focus": today_focus[:10],
         "upcoming": upcoming[:20],
         "overdue": overdue[:20],
@@ -231,6 +237,7 @@ def dashboard(c: Container = Depends(get_container)) -> dict[str, Any]:
 
 # Time decides the order of "needs attention"; a conflict or a changed date is a marker on top of that.
 _ATTENTION_RANK = {"overdue": 0, "due_today": 1, "due_tomorrow": 2, "due_soon": 3, "date_changed": 4, "conflict": 5}
+_TIME_GROUPS = frozenset({"overdue", "due_today", "due_tomorrow", "due_soon"})
 _SUGGESTION_ORDER = {
     "possible_duplicate": 0,
     "update_due": 1,

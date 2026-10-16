@@ -1,7 +1,8 @@
-import { ArrowDownUp, Ban, Check, CircleCheck, Hourglass, ListFilter, ListTodo, Plus, RotateCcw, Search, X } from "lucide-react";
+import { ArrowDownUp, Ban, Check, CircleCheck, FlaskConical, Hourglass, ListFilter, ListTodo, Plus, RotateCcw, ScanSearch, Search, X } from "lucide-react";
 import { useState } from "react";
 import { useSearchParams } from "react-router";
 import { useTranslation } from "react-i18next";
+import { RecheckDialog } from "@/components/tasks/RecheckDialog";
 import { StatusMenu } from "@/components/tasks/StatusMenu";
 import { TaskEditDialog } from "@/components/tasks/TaskEditDialog";
 import { TaskListItem } from "@/components/tasks/TaskRow";
@@ -66,6 +67,7 @@ export default function TasksPage() {
   const { t } = useTranslation();
   const [params, setParams] = useSearchParams();
   const [createOpen, setCreateOpen] = useState(false);
+  const [recheckOpen, setRecheckOpen] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const { data: dashboard } = useDashboard();
 
@@ -74,6 +76,8 @@ export default function TasksPage() {
   const categories = params.getAll("category");
   const urgencies = params.getAll("urgency");
   const sourceKinds = params.getAll("source_kind");
+  // "1": only demo / test data (linked from the dashboard note); otherwise everything, test data marked.
+  const sampleOnly = params.get("sample") === "1";
   const sort: Sort = SORTS.includes(params.get("sort") as Sort) ? (params.get("sort") as Sort) : "due";
   const order = sort === "updated_at" || sort === "detected_at" ? "desc" : "asc";
 
@@ -89,7 +93,18 @@ export default function TasksPage() {
   };
 
   // Query keys are hashed by value, so a fresh object per render does not refetch.
-  const query: TaskQuery = { status: [...VIEWS[view]], q: q || undefined, category: categories, urgency: urgencies, source_kind: sourceKinds, sort, order, limit: 300 };
+  const query: TaskQuery = {
+    status: [...VIEWS[view]],
+    q: q || undefined,
+    category: categories,
+    urgency: urgencies,
+    source_kind: sourceKinds,
+    // Lists show real tasks (as the counts do); test data has its own filter, and a search finds both.
+    sample: sampleOnly ? true : q ? undefined : false,
+    sort,
+    order,
+    limit: 300,
+  };
   const { data, error, isLoading, isFetching, refetch } = useTasks(query);
   const items = data?.items ?? [];
   const chosen = items.filter((i) => selected.has(i.id)).map((i) => i.id);
@@ -108,19 +123,24 @@ export default function TasksPage() {
       return next;
     });
   const allChecked = items.length > 0 && chosen.length === items.length ? true : chosen.length ? "indeterminate" : false;
-  const filtered = Boolean(q || categories.length || urgencies.length || sourceKinds.length);
+  const filtered = Boolean(q || categories.length || urgencies.length || sourceKinds.length || sampleOnly);
   const counts: Partial<Record<View, number>> = { active: dashboard?.counts.active, candidate: dashboard?.counts.candidates };
 
   return (
     <div className="grid grid-cols-1 gap-4">
       <header className="flex flex-wrap items-center justify-between gap-3">
         <div className="grid gap-0.5">
-          <h1 className="text-xl font-semibold tracking-tight">{t("tasks.title")}</h1>
+          <h1 className="text-page font-semibold">{t("tasks.title")}</h1>
           <p className="text-[13px] text-muted-foreground">{t("tasks.description")}</p>
         </div>
-        <Button size="sm" onClick={() => setCreateOpen(true)}>
-          <Plus /> {t("tasks.new")}
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button variant="outline" size="sm" onClick={() => setRecheckOpen(true)}>
+            <ScanSearch /> {t("recheck.button")}
+          </Button>
+          <Button size="sm" onClick={() => setCreateOpen(true)}>
+            <Plus /> {t("tasks.new")}
+          </Button>
+        </div>
       </header>
 
       <Tabs value={view} onValueChange={(v) => update({ view: v === "active" ? null : v })} className="min-w-0">
@@ -163,8 +183,17 @@ export default function TasksPage() {
           onChange={(v) => update({ source_kind: v })}
           options={SOURCE_KINDS.map((k) => ({ value: k, label: translateKey(`sourceKind.${k}`, k) }))}
         />
+        <Button
+          variant={sampleOnly ? "secondary" : "ghost"}
+          size="sm"
+          className={sampleOnly ? "text-foreground" : "text-muted-foreground"}
+          aria-pressed={sampleOnly}
+          onClick={() => update({ sample: sampleOnly ? null : "1" })}
+        >
+          <FlaskConical /> {t("sample.filter")}
+        </Button>
         {filtered ? (
-          <Button variant="ghost" size="sm" className="text-muted-foreground" onClick={() => update({ q: null, category: [], urgency: [], source_kind: [] })}>
+          <Button variant="ghost" size="sm" className="text-muted-foreground" onClick={() => update({ q: null, category: [], urgency: [], source_kind: [], sample: null })}>
             <X /> {t("tasks.clearFilters")}
           </Button>
         ) : null}
@@ -241,7 +270,7 @@ export default function TasksPage() {
             className="m-3 border-none"
             action={
               filtered ? (
-                <Button variant="outline" size="sm" onClick={() => update({ q: null, category: [], urgency: [], source_kind: [] })}>
+                <Button variant="outline" size="sm" onClick={() => update({ q: null, category: [], urgency: [], source_kind: [], sample: null })}>
                   <X /> {t("tasks.clearFilters")}
                 </Button>
               ) : view === "active" || view === "all" ? (
@@ -268,6 +297,7 @@ export default function TasksPage() {
       </div>
 
       <TaskEditDialog open={createOpen} onOpenChange={setCreateOpen} />
+      <RecheckDialog open={recheckOpen} onOpenChange={setRecheckOpen} />
     </div>
   );
 }

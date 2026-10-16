@@ -50,12 +50,18 @@ export function DueChoicePicker({
             key={o.value}
             value={o.value}
             className={cn(
-              "grid gap-0.5 rounded-lg border bg-card px-3 py-2 text-left outline-none transition-colors hover:bg-accent/50 focus-visible:ring-[3px] focus-visible:ring-ring/40 disabled:opacity-50",
-              "data-[state=checked]:border-primary data-[state=checked]:bg-primary/5 data-[state=checked]:shadow-[inset_0_0_0_1px_var(--primary)]",
+              "group/opt flex items-start gap-2.5 rounded-lg border bg-card px-3 py-2 text-left outline-none transition-colors hover:bg-accent focus-visible:ring-[3px] focus-visible:ring-ring/40 disabled:opacity-50",
+              "data-[state=checked]:border-primary/40 data-[state=checked]:bg-selected",
             )}
           >
-            <span className="text-xs text-muted-foreground">{o.title}</span>
-            <span className="text-sm font-medium">{o.date}</span>
+            {/* A radio dot says which one is chosen; no permanent outline around the card. */}
+            <span className="mt-0.5 grid size-4 shrink-0 place-items-center rounded-full border border-input bg-card group-data-[state=checked]/opt:border-primary">
+              <span className="size-2 rounded-full bg-primary opacity-0 group-data-[state=checked]/opt:opacity-100" />
+            </span>
+            <span className="grid gap-0.5">
+              <span className="text-xs text-muted-foreground">{o.title}</span>
+              <span className="text-sm font-medium">{o.date}</span>
+            </span>
           </RadioPrimitive.Item>
         ))}
       </RadioPrimitive.Root>

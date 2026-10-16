@@ -139,7 +139,30 @@ export function CalendarCard({ task }: { task: TaskDetail }) {
   const failureCode = (link?.last_error ?? "").split(":")[0];
 
   let body: React.ReactNode;
-  if (!task.due_date) {
+  if (task.sample) {
+    // Test data never reaches the real calendar (its reminders would ring on every device).
+    body = (
+      <div className="grid gap-2">
+        <p className="text-sm text-muted-foreground">{t("sample.calendarBlocked")}</p>
+        {link && !removed && connected ? (
+          <Button variant="ghost" size="sm" className="w-fit text-destructive hover:text-destructive" onClick={() => setRemoveOpen(true)}>
+            <CalendarMinus /> {t("calendar.remove")}
+          </Button>
+        ) : null}
+        <ConfirmDialog
+          open={removeOpen}
+          onOpenChange={setRemoveOpen}
+          title={t("calendar.removeTitle")}
+          description={t("calendar.removeDescription")}
+          confirmLabel={t("calendar.remove")}
+          cancelLabel={t("common.cancel")}
+          destructive
+          pending={remove.isPending}
+          onConfirm={() => remove.mutate(undefined)}
+        />
+      </div>
+    );
+  } else if (!task.due_date) {
     body = <p className="text-sm text-muted-foreground">{t("calendar.noDue")}</p>;
   } else {
     body = (
@@ -209,8 +232,8 @@ export function CalendarCard({ task }: { task: TaskDetail }) {
 
   return (
     <section className="grid gap-2.5 border-t pt-3">
-      <h3 className="flex items-center gap-1.5 text-[13px] font-semibold text-muted-foreground">
-        <CalendarClock className="size-4" /> {t("calendar.title")}
+      <h3 className="flex items-center gap-1.5 text-sm font-semibold">
+        <CalendarClock className="size-4 text-muted-foreground" /> {t("calendar.title")}
       </h3>
       {body}
     </section>

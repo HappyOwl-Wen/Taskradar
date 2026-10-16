@@ -37,7 +37,7 @@ Definitions:
 | Completion cases | 6 | 5 |
 | Use | written and used while developing the rules | written separately; not used for tuning |
 
-## Results (`rules-1.5`)
+## Results (`rules-1.6`)
 
 ```powershell
 cd backend
@@ -52,9 +52,9 @@ cd backend
 | Deadline time correct | 21/21 | 12/13 |
 | "No deadline" kept empty | 3/3 | 1/1 (see history) |
 | Marketing/info cases with false tasks | 0/7 | 0/7 |
-| Merges correct / wrong / missed / flagged | 5/5 / 0 / 0 / 0 | 1/1 / 0 / 0 / 0 |
+| Merges correct / wrong / missed / flagged | 4/5 / 0 / 0 / 1 (de-05, by design: see History) | 1/1 / 0 / 0 / 0 |
 | Completion detected / explicit-vs-hedged correct / right task | 6/6 / 6/6 / 4/4 | 3/5 / 3/5 / 0/2 |
-| Extractor time per case (Windows 11, Ryzen 9 7940H, three runs) | 1.1 – 1.2 ms | 1.1 ms |
+| Extractor time per case (Windows 11, Ryzen 9 7940H, three runs) | 1.2 – 1.4 ms | 1.1 – 1.4 ms |
 
 The development numbers show that the rules handle the phrasings they were built for; they are not evidence of
 generalisation. The held-out numbers are the honest estimate. One held-out case (h-en-01) became correct
@@ -123,6 +123,27 @@ has **not** been measured yet (no API key was available while building this proj
   shared object. Action verbs, generic payment words and month/weekday names no longer count as object
   evidence. Both evaluation sets give identical results; regression test
   `test_shared_payment_verb_does_not_make_different_payments_duplicates`.
+* **2026-10-15, reconciliation policy: different deadlines are never merged silently.** A reminder or a
+  second notice for the same obligation with another deadline used to be merged (or applied as a deadline
+  update) when it was newer or in the same thread. Now only an explicit change ("verlängert", "延长至",
+  "has been moved to") updates the deadline - visibly flagged and announced, with undo; every other
+  difference, including the same day with another time, becomes a possible duplicate that the user resolves
+  by choosing the date. Development set: de-05 (a payment reminder with a later date and no change wording)
+  is now flagged instead of merged, so correct merges went from 5/5 to 4/5 with 1 flagged; this is the
+  intended trade-off, not a regression. The held-out set is unchanged. Regression tests in
+  `tests/test_lifecycle.py` (`test_different_deadline_without_explicit_change_is_never_merged_automatically`
+  and the tests around it).
+* **rules-1.5 → rules-1.6 (2026-10-15, real mailbox).** Many candidates on a real mailbox were not the reader's
+  duty: offers ("you can …", "only if you want"), surveys, legal boilerplate, what the sender will do
+  ("we will send you …") and polite modals outside a question. These are now skipped; a mere permission is
+  flagged "possibly optional"; a condition with a consequence ("if you do not pay by …") still counts; Chinese
+  verbs split by a line wrap are recognised and titles lose markdown underscores. A read-only comparison over
+  the same 211 real mails (only counts and titles were looked at; no mail text was copied into the project):
+  `rules-1.5` produced 63 candidates (11 flagged), `rules-1.6` produces 26 (6 flagged). The removed candidates
+  were reviewed by title and were offers, surveys, legal text or fragments; one real request (a storage
+  warning) was found in addition. Both evaluation sets give the same task scores as before. Tasks created by older
+  versions stay as they are; "Re-check with current rules" (All tasks) lists the ones the current rules
+  would no longer create, for the user to dismiss.
 
 ## End-to-end performance
 

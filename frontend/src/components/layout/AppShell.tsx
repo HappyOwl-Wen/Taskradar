@@ -100,7 +100,7 @@ export function AppShell() {
           {fullHeight ? (
             <Outlet />
           ) : (
-            <div className="mx-auto w-full max-w-7xl px-4 py-5 sm:px-6 lg:px-8">
+            <div className="mx-auto w-full max-w-7xl px-4 py-5 sm:px-6 lg:px-8 2xl:max-w-[96rem]">
               <Outlet />
             </div>
           )}

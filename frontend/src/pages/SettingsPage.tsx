@@ -118,7 +118,7 @@ export default function SettingsPage() {
   return (
     <div className="grid grid-cols-1 gap-5">
       <header className="grid gap-0.5">
-        <h1 className="text-xl font-semibold tracking-tight">{t("settings.title")}</h1>
+        <h1 className="text-page font-semibold">{t("settings.title")}</h1>
         <p className="text-[13px] text-muted-foreground">{t("settings.description")}</p>
       </header>
 
@@ -152,7 +152,7 @@ export default function SettingsPage() {
                 aria-current={section === s ? "page" : undefined}
                 className={cn(
                   "flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-left text-sm text-muted-foreground transition-colors outline-none hover:bg-accent hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/40",
-                  section === s && "bg-accent font-medium text-foreground",
+                  section === s && "bg-selected font-medium text-selected-foreground hover:bg-selected hover:text-selected-foreground",
                 )}
               >
                 <Icon className="size-4" />

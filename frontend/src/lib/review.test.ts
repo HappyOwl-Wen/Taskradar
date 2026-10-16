@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { deadlinesDiffer, reasonParts, sortInbox, taskIssues } from "./review";
+import i18n from "@/i18n";
+import { deadlinesDiffer, reasonParts, reviewReasonLabel, sortInbox, taskIssues } from "./review";
 import type { TaskSummary } from "./types";
 
 function task(overrides: Partial<TaskSummary> = {}): TaskSummary {
@@ -56,6 +57,20 @@ describe("taskIssues", () => {
     expect(taskIssues(task({ status: "confirmed", needs_review: false, review_reasons: ["low_confidence"] }))).toEqual([]);
     const issues = taskIssues(task({ status: "confirmed", needs_review: false, due_needs_confirmation: true }));
     expect(issues.map((i) => i.kind)).toEqual(["date_unclear"]);
+  });
+
+  it("names an automatic deadline change and a mere permission as their own issues", () => {
+    const issues = taskIssues(task({ status: "confirmed", needs_review: true, review_reasons: ["permission_only", "deadline_changed"] }));
+    expect(issues.map((i) => i.kind)).toEqual(["date_changed", "optional"]);
+    expect(issues[0].severity).toBe("high");
+    expect(issues[1].severity).toBe("low");
+  });
+
+  it("labels internal reasons in plain words and leaves unknown ones as they are", async () => {
+    await i18n.changeLanguage("zh-CN");
+    expect(reviewReasonLabel("deadline_changed", i18n.t)).toBe("截止日期已更新");
+    expect(reviewReasonLabel("permission_only", i18n.t)).toBe("可能只是可选");
+    expect(reviewReasonLabel("something_new", i18n.t)).toBe("something_new");
   });
 
   it("ignores closed tasks and unknown codes", () => {

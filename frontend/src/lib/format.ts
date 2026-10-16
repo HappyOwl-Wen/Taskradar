@@ -8,6 +8,21 @@ export function intlLocale(lang: string): string {
   return lang === "en" ? "en-GB" : "zh-CN";
 }
 
+/** "A、B、C" in Chinese, "A, B, C" in English. */
+export function formatList(items: string[], lang: string): string {
+  return new Intl.ListFormat(intlLocale(lang), { type: "conjunction", style: "narrow" }).format(items);
+}
+
+/** Separator between inline items of a list rendered as elements (links). */
+export function listSeparator(lang: string): string {
+  return lang === "en" ? ", " : "、";
+}
+
+/** A translated sentence used inside another sentence: without its final full stop. */
+export function clause(text: string): string {
+  return text.replace(/[。．.!！]+$/u, "");
+}
+
 /** The calendar date ("YYYY-MM-DD") of `now` in the given IANA time zone. */
 export function todayIn(timeZone: string, now: Date = new Date()): string {
   return new Intl.DateTimeFormat("en-CA", { timeZone, year: "numeric", month: "2-digit", day: "2-digit" }).format(now);

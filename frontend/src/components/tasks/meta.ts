@@ -1,5 +1,6 @@
 import {
   Ban,
+  CalendarClock,
   CalendarX2,
   Circle,
   CircleCheck,
@@ -11,6 +12,7 @@ import {
   FlaskConical,
   Folder,
   GraduationCap,
+  HandHelping,
   Hourglass,
   Landmark,
   Mail,
@@ -40,11 +42,12 @@ export const STATUS_ICON: Record<TaskStatus, LucideIcon> = {
   dismissed: Ban,
 };
 
+// Red for overdue, orange for "very soon"; a week ahead or later stays neutral.
 export const URGENCY_TONE: Record<Urgency, BadgeTone> = {
   overdue: "overdue",
   urgent: "urgent",
-  high: "high",
-  upcoming: "upcoming",
+  high: "urgent",
+  upcoming: "normal",
   normal: "normal",
   no_deadline: "outline",
   inactive: "normal",
@@ -53,7 +56,7 @@ export const URGENCY_TONE: Record<Urgency, BadgeTone> = {
 export const URGENCY_TEXT: Record<Urgency, string> = {
   overdue: "text-overdue",
   urgent: "text-urgent",
-  high: "text-high",
+  high: "text-urgent",
   upcoming: "text-upcoming",
   normal: "text-muted-foreground",
   no_deadline: "text-muted-foreground",
@@ -72,29 +75,35 @@ export const CATEGORY_ICON: Record<Category, LucideIcon> = {
 export const SOURCE_ICON: Record<string, LucideIcon> = {
   gmail: Mail,
   demo_mail: FlaskConical,
+  sample_upload: FlaskConical,
   upload: Upload,
   folder: Folder,
   manual: PenLine,
 };
 
-/** One colour per lifecycle status, used everywhere a status is shown. */
+/**
+ * One colour per lifecycle status, used everywhere a status is shown: unconfirmed violet, the user's own
+ * open work brand blue, done green; waiting and dismissed are neutral (nothing to do right now).
+ */
 export const STATUS_TONE: Record<TaskStatus, BadgeTone> = {
   candidate: "violet",
   confirmed: "primary",
-  in_progress: "upcoming",
-  waiting_for_reply: "high",
+  in_progress: "primary",
+  waiting_for_reply: "normal",
   completed: "success",
   dismissed: "normal",
 };
 
 export const ISSUE_ICON: Record<IssueKind, LucideIcon> = {
   date_conflict: CalendarX2,
+  date_changed: CalendarClock,
   duplicate: Copy,
   date_unclear: CircleHelp,
   content_unclear: FileQuestion,
   suspicious: ShieldAlert,
   not_in_source: ScanText,
   marketing: Megaphone,
+  optional: HandHelping,
   ocr_quality: ScanText,
   low_certainty: TriangleAlert,
   split: Split,
@@ -104,8 +113,8 @@ export const ISSUE_ICON: Record<IssueKind, LucideIcon> = {
 export const STATUS_TEXT: Record<TaskStatus, string> = {
   candidate: "text-violet",
   confirmed: "text-primary",
-  in_progress: "text-upcoming",
-  waiting_for_reply: "text-high",
+  in_progress: "text-primary",
+  waiting_for_reply: "text-muted-foreground",
   completed: "text-success",
   dismissed: "text-muted-foreground",
 };

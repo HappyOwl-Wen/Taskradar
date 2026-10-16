@@ -1,12 +1,13 @@
 import { Tag } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Badge } from "@/components/ui/badge";
-import type { BadgeTone } from "@/components/ui/variants";
 import { Tip } from "@/components/ui/menu";
 import { translateKey } from "@/i18n";
+import { formatList } from "@/lib/format";
 import type { Issue } from "@/lib/review";
 import type { Category, Priority, TaskStatus, Urgency } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import { ISSUE_TONE, issueStates, type KeyState } from "./keyStates";
 import { CATEGORY_ICON, ISSUE_ICON, SOURCE_ICON, STATUS_ICON, STATUS_TONE, URGENCY_TONE } from "./meta";
 
 export function StatusBadge({ status, className }: { status: TaskStatus; className?: string }) {
@@ -30,13 +31,24 @@ export function UrgencyBadge({ urgency, className }: { urgency: Urgency; classNa
 }
 
 /** Category as quiet text with its icon: it describes the task, it is not a warning. */
-export function CategoryBadge({ category, className }: { category: Category; className?: string }) {
+export function CategoryBadge({ category, className, iconOnly = false }: { category: Category; className?: string; iconOnly?: boolean }) {
   const { t } = useTranslation();
   const Icon = CATEGORY_ICON[category] ?? Tag;
+  const label = t(`category.${category}`);
+  if (iconOnly) {
+    return (
+      <Tip content={label}>
+        <span className={cn("inline-flex text-muted-foreground", className)}>
+          <Icon className="size-3.5" aria-hidden />
+          <span className="sr-only">{label}</span>
+        </span>
+      </Tip>
+    );
+  }
   return (
     <span className={cn("inline-flex items-center gap-1 text-xs whitespace-nowrap text-muted-foreground", className)}>
       <Icon className="size-3.5" aria-hidden />
-      {t(`category.${category}`)}
+      {label}
     </span>
   );
 }
@@ -64,7 +76,41 @@ export function SourceKinds({ kinds, count }: { kinds: string[]; count: number }
   );
 }
 
-const SEVERITY_TONE: Record<Issue["severity"], BadgeTone> = { high: "high", medium: "high", low: "normal" };
+/** The most important states, at most `max` of them; the rest is named on hover ("+2"). */
+export function KeyStates({ states, max = 2 }: { states: KeyState[]; max?: number }) {
+  const { i18n } = useTranslation();
+  if (states.length === 0) return null;
+  const shown = states.slice(0, max);
+  const rest = states.slice(max);
+  return (
+    <span className="inline-flex flex-wrap items-center gap-1">
+      {shown.map((s) => {
+        const Icon = s.icon;
+        const badge = (
+          <Badge key={s.key} tone={s.tone}>
+            {Icon ? <Icon /> : null}
+            {s.label}
+          </Badge>
+        );
+        return s.hint ? (
+          <Tip key={s.key} content={s.hint}>
+            {badge}
+          </Tip>
+        ) : (
+          badge
+        );
+      })}
+      {rest.length ? (
+        <Tip content={formatList(
+            rest.map((r) => r.label),
+            i18n.language,
+          )}>
+          <span className="text-xs text-muted-foreground tabular-nums">+{rest.length}</span>
+        </Tip>
+      ) : null}
+    </span>
+  );
+}
 
 /** A problem in plain language ("疑似重复", "内容待核实"); the hint explains it on hover. */
 export function IssueBadge({ issue, className }: { issue: Issue; className?: string }) {
@@ -72,7 +118,7 @@ export function IssueBadge({ issue, className }: { issue: Issue; className?: str
   const Icon = ISSUE_ICON[issue.kind];
   return (
     <Tip content={t(`issue.${issue.kind}.hint`)}>
-      <Badge tone={issue.kind === "date_conflict" ? "overdue" : SEVERITY_TONE[issue.severity]} className={className}>
+      <Badge tone={ISSUE_TONE[issue.kind]} className={className}>
         <Icon />
         {t(`issue.${issue.kind}.label`)}
       </Badge>
@@ -80,19 +126,8 @@ export function IssueBadge({ issue, className }: { issue: Issue; className?: str
   );
 }
 
-/** At most one issue in a list row (the most important), plus how many more there are. */
+/** At most one issue (the most important), plus how many more there are. */
 export function IssueSummary({ issues }: { issues: Issue[] }) {
   const { t } = useTranslation();
-  if (issues.length === 0) return null;
-  const rest = issues.slice(1).map((i) => t(`issue.${i.kind}.label`));
-  return (
-    <span className="inline-flex items-center gap-1">
-      <IssueBadge issue={issues[0]} />
-      {rest.length ? (
-        <Tip content={rest.join("、")}>
-          <span className="text-xs text-muted-foreground tabular-nums">+{rest.length}</span>
-        </Tip>
-      ) : null}
-    </span>
-  );
+  return <KeyStates states={issueStates(issues, t)} max={1} />;
 }

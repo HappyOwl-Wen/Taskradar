@@ -54,6 +54,8 @@ export interface TaskSummary {
   confirmed_at: string | null;
   completed_at: string | null;
   manual: boolean;
+  /** Demo or test data: marked, but never counted, reminded or written to the calendar (older servers omit it). */
+  sample?: boolean;
 }
 
 export interface Evidence {
@@ -142,7 +144,15 @@ export interface Suggestion {
   related_task_id: string | null;
   task_title?: string;
   task_status?: TaskStatus;
+  task_due_date?: string | null;
+  task_due_time?: string | null;
+  task_sample?: boolean;
   related_task_title?: string | null;
+  related_task_status?: TaskStatus | null;
+  related_due_date?: string | null;
+  related_due_time?: string | null;
+  /** Possible duplicate whose two tasks have different deadlines (the user has to pick one). */
+  deadlines_differ?: boolean;
 }
 
 export interface CalendarLink {
@@ -217,10 +227,13 @@ export interface SyncJob {
   details: Record<string, unknown>;
 }
 
-export type AttentionReason = "overdue" | "conflict" | "due_soon" | "unconfirmed_due";
+/** Why a task is in "needs attention": its time group first; a conflict or changed date only when not due soon. */
+export type AttentionReason = "overdue" | "due_today" | "due_tomorrow" | "due_soon" | "date_changed" | "conflict";
+export type AttentionFlag = "unconfirmed" | "conflict" | "date_changed";
 
 export interface AttentionTask extends TaskSummary {
-  attention: AttentionReason;
+  attention: AttentionReason | "unconfirmed_due";
+  attention_flags?: AttentionFlag[];
 }
 
 export interface Dashboard {
@@ -244,10 +257,14 @@ export interface Dashboard {
     overdue_candidates?: number;
     /** Tasks with an open deadline conflict (changed date or duplicate with another date). */
     conflicts?: number;
+    /** Open demo/test tasks, which are not counted anywhere on the dashboard. */
+    sample_open?: number;
   };
   /** What needs attention now, most pressing first. */
   attention?: AttentionTask[];
   attention_total?: number;
+  attention_counts?: Partial<Record<AttentionReason, number>>;
+  attention_unconfirmed?: number;
   today_focus: TaskSummary[];
   upcoming: TaskSummary[];
   overdue: TaskSummary[];
@@ -260,7 +277,7 @@ export interface Dashboard {
 
 export interface Source {
   id: number;
-  kind: "gmail" | "demo_mail" | "upload" | "folder";
+  kind: "gmail" | "demo_mail" | "upload" | "folder" | "sample_upload";
   name: string;
   account: string | null;
   folder_path: string | null;
@@ -432,6 +449,44 @@ export interface SystemStatus {
   autostart: { supported: boolean; enabled: boolean };
   desktop_notifications_supported: boolean;
   now: string;
+}
+
+export type StatusLevel = "error" | "warning" | "info";
+
+/** Where a status item can be fixed (the server never sends anything else). */
+export type StatusAction = "gmail_settings" | "ai_settings" | "sources" | "records" | "tasks" | "ocr_help";
+
+/** One runtime problem in plain terms (the UI translates `code` with `params`). */
+export interface StatusItem {
+  code: string;
+  level: StatusLevel;
+  area: string;
+  params: Record<string, unknown>;
+  since: string | null;
+  action: StatusAction | null;
+}
+
+export interface SystemSummary {
+  overall: "ok" | "attention" | "problem";
+  checked_at: string;
+  items: StatusItem[];
+}
+
+export type RecheckVerdict = "not_found" | "overmerged" | "doubtful";
+
+export interface RecheckItem {
+  task: TaskSummary;
+  verdict: RecheckVerdict;
+  doubts: string[];
+  sources_total: number;
+  sources_supporting: number;
+  extracted_by: string[];
+}
+
+export interface RecheckResult {
+  rules_version: string;
+  checked: number;
+  items: RecheckItem[];
 }
 
 export interface GoogleStatus {

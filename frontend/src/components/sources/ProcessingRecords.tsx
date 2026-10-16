@@ -155,7 +155,7 @@ function RecordRow({
 
 const PAGE = 40;
 const FILTERS: OutcomeFilter[] = ["all", "failed", "tasks", "no_tasks", "skipped"];
-const SOURCE_FILTERS = ["all", "gmail", "folder", "upload", "demo_mail"] as const;
+const SOURCE_FILTERS = ["all", "gmail", "folder", "upload", "demo_mail", "sample_upload"] as const;
 
 /** Everything TaskRadar has read, with what came of it: found tasks, nothing to do, skipped (why), failed (why). */
 export function ProcessingRecords({ timezone }: { timezone: string }) {

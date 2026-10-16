@@ -466,7 +466,8 @@ def test_attention_puts_time_before_conflicts(api: Any) -> None:
     late = api.post("/api/tasks", json={"title": "Gebühr zahlen", "due_date": "2026-10-12"}).json()
     api.post(f"/api/tasks/{late['id']}/status", json={"status": "candidate"})
 
-    attention = api.get("/api/dashboard").json()["attention"]
+    dashboard = api.get("/api/dashboard").json()
+    attention = dashboard["attention"]
     order = [(i["title"], i["attention"]) for i in attention]
     assert order[:4] == [
         (late["title"], "overdue"),
@@ -477,6 +478,14 @@ def test_attention_puts_time_before_conflicts(api: Any) -> None:
     assert order.index((month_end["title"], "conflict")) > 3
     flags = {i["id"]: i["attention_flags"] for i in attention}
     assert flags[late["id"]] == ["unconfirmed"] and set(flags[month_end["id"]]) == {"unconfirmed", "conflict"}
+    # The summary sentence counts overdue … due within a week; the unconfirmed month-end task is not part of it.
+    assert dashboard["attention_counts"] == {
+        "overdue": 1,
+        "due_today": 1,
+        "due_tomorrow": 2,
+        "conflict": 2,
+    }  # both of the pair
+    assert dashboard["attention_unconfirmed"] == 2
 
 
 def test_suggestions_name_both_tasks_and_their_deadlines(api: Any) -> None:
@@ -484,7 +493,12 @@ def test_suggestions_name_both_tasks_and_their_deadlines(api: Any) -> None:
     new = api.post("/api/tasks", json={"title": "Pay the Probe Workshop fee", "due_date": "2026-10-30"}).json()
     api.post(f"/api/tasks/{new['id']}/status", json={"status": "candidate"})
     _duplicate_suggestion(api, new["id"], existing)
-    for entry in (api.get("/api/dashboard").json()["suggestions"][0], api.get("/api/suggestions").json()["items"][0]):
+    views = (
+        api.get("/api/dashboard").json()["suggestions"][0],
+        api.get("/api/suggestions").json()["items"][0],
+        api.get(f"/api/tasks/{new['id']}").json()["suggestions"][0],  # the inbox detail says it too
+    )
+    for entry in views:
         assert (entry["task_title"], entry["task_due_date"], entry["task_status"]) == (
             new["title"],
             "2026-10-30",

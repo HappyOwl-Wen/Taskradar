@@ -72,7 +72,7 @@ syncs of the same source; a file lock prevents two servers on the same data fold
 
 ### Extraction
 
-`RuleBasedExtractor` (version `rules-1.5`) works without network access:
+`RuleBasedExtractor` (version `rules-1.6`) works without network access:
 
 * the text is split into segments (soft line wraps joined without changing offsets, so evidence offsets stay
   valid), the content type is classified (marketing/newsletter scoring, bulk headers, conditional
@@ -87,7 +87,11 @@ syncs of the same source; a file lock prevents two servers on the same data fold
 * titles are generated per language from the masked sentence ("提交在读证明", "Fehlende Unterlagen einreichen",
   "Sign and return the rental contract");
 * completion signals ("我们已收到您的材料", "Zahlung ist eingegangen", "has been received") are classified as
-  explicit or hedged.
+  explicit or hedged;
+* not every request is the reader's duty: mail templates and negated instructions (`rules-1.5`), offers ("you can
+  …", "only if you want"), surveys that are not mandatory, legal boilerplate and what the *sender* promises to do
+  are skipped; a mere permission is flagged "possibly optional"; polite modals ("could you", "würden Sie") count
+  only in a question (`rules-1.6`).
 
 `LLMExtractor` (prompt `obligation-v1`) sends one message or document per request with a strict JSON schema
 (OpenAI structured outputs, or JSON-object mode for compatible servers). The response is validated with
@@ -112,8 +116,11 @@ Three layers, applied to every candidate against existing tasks:
    names such as "TUMonline" or "portal" never count).
 3. **Semantic (optional)** – an LLM judge for the grey zone, given only minimal redacted descriptions.
 
-Scores ≥ 0.70 mean "same obligation": duplicate if the deadline matches; a *deadline update* only if the
-source announces a change or is a newer reminder/same thread; otherwise a *possible duplicate* suggestion.
+Scores ≥ 0.70 mean "same obligation": duplicate only if the deadline matches (same day and, when both state a
+time, the same time); a *deadline update* only if the new source explicitly announces the change; any other
+difference in deadline, also from a newer reminder in the same thread, becomes a *possible duplicate*
+suggestion that the UI shows as "deadlines disagree" - never a silent merge. Test data is only ever compared
+with test data.
 Scores in 0.45–0.70 become suggestions when dates agree or the candidate refers back to something; dates more
 than 120 days apart are treated as a recurring, related obligation. Completion signals are matched to the best
 active task (object overlap, same-date bonus) and must beat the runner-up by a margin.
@@ -125,7 +132,9 @@ active task (object overlap, same-date bonus) and must beat the runner-up by a m
 | New task detected | Created as **candidate**, never confirmed automatically |
 | Low confidence, ambiguous/unconfirmed date, unverified evidence, injection-like text, low OCR quality | Candidate flagged **needs review** with reasons |
 | Duplicate notice / reminder | Attached as evidence automatically (revertible: undo splits it into its own task) |
-| Explicitly announced deadline change | Applied automatically unless the user edited the deadline (revertible); otherwise a suggestion |
+| Explicitly announced deadline change | Applied automatically unless the user edited the deadline (revertible), flagged `deadline_changed` and announced in a notification; the user keeps the new date (`/tasks/{id}/review/resolve`, revertible) or undoes the change; otherwise a suggestion |
+| Same obligation, different deadline, no explicit change | Never merged automatically: a possible-duplicate suggestion (deadline conflict) |
+| Test data (demo mailbox, files imported as test data, tasks marked as such) | Kept apart: not counted in the dashboard or metrics, no reminders, never written to the calendar (409 `sample_task`), never merged with real tasks (409 `sample_mismatch`) |
 | Explicit, confident completion for a confirmed task | Marked completed automatically (revertible); otherwise a suggestion |
 | Hedged completion ("may have", "if you have already …") | Never completes; at most a suggestion |
 | Calendar write, autostart, LLM request, delete-all | Only after an explicit user action (and, for LLM, consent) |
@@ -152,7 +161,16 @@ per-user `403 rateLimitExceeded` at a few requests per second. Rate limits, HTTP
 retried with exponential back-off and jitter inside the job (rate limits from 2 s, others from 1 s, at most 32 s,
 6 attempts; a `Retry-After` is honoured as a minimum) and then re-scheduled (2, 4, 8 … minutes, at most
 5 attempts); an invalid or revoked token sets the source to "re-authorization needed" and is never retried
-blindly. Interrupted jobs are marked on start-up. No failure deletes stored data.
+blindly. A mail deleted in Gmail between listing and fetching (404) is counted as skipped (`gone`) and no
+longer keeps the checkpoint from moving. Interrupted jobs are marked on start-up. No failure deletes stored data.
+
+`services/status_summary.py` condenses sources, job history, calendar links, reminder runs, the LLM fallbacks and
+the scheduler into a few items (`GET /api/system/summary`: code, level, area, parameters, since when, where to
+fix it); the UI phrases them in the user's language, so nobody has to read the log.
+
+`services/recheck.py` runs the current rule engine again over the stored sources of open, extracted tasks
+(read-only, no LLM) and reports tasks the rules no longer find, tasks merged from many sources of which few still
+support them, and tasks the rules would flag (`GET /api/review/recheck`). It changes nothing; the user decides.
 
 Files imported while no OCR engine was installed keep an `ocr_unavailable` warning. While Tesseract is missing
 it is looked for again at most every 30 s, so installing it needs no restart; the Sources page then offers to
@@ -166,7 +184,7 @@ read those files again in a `reprocess` job (oldest first, so identical copies r
 | `messages` | Normalised mails: Gmail message/thread IDs, web link, sender, dates, labels, body text, status |
 | `documents`, `document_pages` | Files (original path or stored copy, SHA-256, size, type), extracted text per page, method, OCR confidence |
 | `extraction_runs`, `task_candidates` | One row per extraction run (extractor, model, tokens, cost, latency, trace) and per candidate with the reconciliation decision |
-| `tasks` | Title, action, category, priority, status, confidence, deadline fields, review reasons, entities, user-locked fields |
+| `tasks` | Title, action, category, priority, status, confidence, deadline fields, review reasons, entities, user-locked fields, `sample` (test data) |
 | `task_sources` | Evidence links between tasks and messages/documents with relation (origin, duplicate, deadline update, completion evidence, manual merge) |
 | `task_events`, `task_suggestions`, `task_links` | History with before/after data and revert markers; pending suggestions; related tasks |
 | `calendar_links` | Google event IDs, sync status and payload hash per task |
@@ -180,15 +198,19 @@ managed by Alembic; migrations run automatically on start-up and with `python -m
 All routes live under `/api` (OpenAPI docs at `/api/docs`). Main groups: dashboard and tasks
 (`/tasks`, `/tasks/{id}/status`, `/tasks/batch`, `/tasks/{id}/merge`, `/events/{id}/undo`,
 `/suggestions/{id}/accept|reject`, `/tasks/{id}/calendar/preview`, `/tasks/{id}/calendar`,
-`/tasks/{id}/calendar/remove`, `/tasks/quick-parse` for one-line to-dos), sources
+`/tasks/{id}/calendar/remove`, `/tasks/quick-parse` for one-line to-dos, `/tasks/{id}/sample`,
+`/tasks/{id}/review/resolve`, `/review/recheck`), sources
 (`/sources`, `/sources/{id}/sync`, `/sources/folders`, `/documents/upload`, `/documents`, `/messages`,
 `/sync-jobs`, `/failures`, `/agent-runs`, `/demo/*`), integrations (`/integrations/google/*`,
-`/oauth/google/callback`) and system (`/session`, `/system/status`, `/settings`, `/settings/llm-key`,
+`/oauth/google/callback`) and system (`/session`, `/system/status`, `/system/summary`, `/settings`, `/settings/llm-key`,
 `/notifications`, `/metrics`, `/data/export`, `/data/delete-all`, `/system/autostart`). Errors use one envelope:
 `{"error": {"code", "message", "recoverable", "details"}}`; the UI translates codes. Responses to a change
 (status, batch, merge, suggestion decision) carry `undo_event_id` / `undo_event_ids`, which the UI offers as
-"Undo"; `/dashboard` returns an `attention` list (overdue, deadline conflict, due soon, unconfirmed and due
-soon) and non-overlapping counts (`needs_action`, `due_soon`, `due_soon_candidates`, `overdue_candidates`).
+"Undo"; `/dashboard` returns an `attention` list ordered by time (overdue, due today, due tomorrow, due within
+7 days, then changed or disputed deadlines; confirmed before unconfirmed within a group) with `attention_flags`
+(unconfirmed, conflict, date_changed), `attention_counts`, non-overlapping counts (`needs_action`, `due_soon`,
+`due_soon_candidates`, `overdue_candidates`, `sample_open`) and suggestions that name both tasks with their
+status and deadline (`deadlines_differ`).
 
 ## Frontend
 
@@ -205,10 +227,16 @@ full-height route whose list and detail scroll separately, and below 1024 px the
 deadline - never by the extractor's score); `TaskListItem` (status, title, issues, category, sources and
 deadline always in the same place), `DeadlineIndicator`, `TaskDetailView` (deadline and main actions, open
 questions, quotes per source, then calendar, history and collapsed technical details), `DuplicateCompare` and
-`DueChoicePicker` (side-by-side review of a possible duplicate with the required date choice), `StatusMenu`,
+`DueChoicePicker` (side-by-side review of a possible duplicate with the required date choice), `KeyStates`
+(at most two coloured states per row: unconfirmed, test data or the most important problem; the rest on hover),
+`SystemStatus` (plain-language status card and list), `RecheckDialog`, `StatusMenu`,
 `TechnicalDetails` (scores, rule signals and IDs, labelled as uncalibrated debugging aids) and
 `lib/records.ts` (mails and files as one processing list, attachments under their mail, every outcome with a
 reason). Settings show one category at a time (`?section=`) and warn before unsaved edits are dropped.
+Colours and sizes come from tokens in `src/index.css`: page background `#F8FAFC`, white cards with `#E2E8F0`
+borders, one light-blue selection colour (`--selected`) for the sidebar, tabs and lists, and fixed meanings for
+colour (brand blue for actions, violet for unconfirmed, orange for warnings and disputed dates, red for overdue,
+green for done, grey for everything descriptive); `text-page` / `text-section` set the heading scale.
 Pages: Dashboard, Review, All tasks, Task detail, Sources, Insights, Settings. `npm run build` writes the
 bundle into `backend/src/taskradar/static`, which the backend serves (no external CDN; strict CSP).
 
@@ -236,4 +264,6 @@ bundle into `backend/src/taskradar/static`, which the backend serves (no externa
 * Frontend: Vitest + Testing Library for formatting/DST, the API client (CSRF retry, error envelope), edit diffs,
   translation completeness and components, including the review flows: issue mapping and inbox order,
   keyboard navigation and moving on after a decision, undo toasts, the duplicate comparison (date choice
-  required, correct API call) and the processing records (grouping, reasons, failures first).
+  required, correct API call) and the processing records (grouping, reasons, failures first), the dashboard
+  (time groups, conflict and unconfirmed marks, suggestion texts, test data note, system status), at most two
+  states per row and test data listed after real candidates.

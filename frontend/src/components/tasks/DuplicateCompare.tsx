@@ -16,23 +16,18 @@ import { DueChoicePicker } from "./DueChoice";
 import { sourceTitle, useSourceWhen } from "./sourceMeta";
 import { TechnicalDetails } from "./TechnicalDetails";
 
-function sameEntities(a: string[], b: string[]): boolean {
-  const norm = (xs: string[]) => [...new Set(xs.map((x) => x.trim().toLowerCase()))].sort().join("|");
-  return norm(a) === norm(b);
-}
-
 function Row({ label, incoming, existing, differs, note }: { label: string; incoming: ReactNode; existing: ReactNode; differs?: "conflict" | "different"; note?: string }) {
   const { t } = useTranslation();
   const cell = cn(
     "min-w-0 rounded-md px-2.5 py-1.5 text-sm break-words",
-    differs === "conflict" && "bg-overdue/8 ring-1 ring-overdue/30",
-    differs === "different" && "bg-high/10 ring-1 ring-high/30",
+    differs === "conflict" && "bg-urgent/8 ring-1 ring-urgent/35",
+    differs === "different" && "bg-muted ring-1 ring-border",
   );
   return (
     <div className="grid gap-1.5 border-b py-2.5 last:border-b-0 sm:grid-cols-[7.5rem_minmax(0,1fr)_minmax(0,1fr)] sm:gap-3">
       <div className="flex flex-wrap items-center gap-1.5 text-xs font-medium text-muted-foreground sm:block sm:pt-2">
         {label}
-        {note ? <span className={cn("sm:mt-1 sm:block", differs === "conflict" ? "text-overdue" : "text-high")}>{note}</span> : null}
+        {note ? <span className={cn("sm:mt-1 sm:block", differs === "conflict" ? "text-urgent" : "text-muted-foreground")}>{note}</span> : null}
       </div>
       <div className={cell}>
         <span className="mb-0.5 block text-[11px] text-muted-foreground sm:hidden">{t("compare.incoming")}</span>
@@ -135,7 +130,7 @@ export function DuplicateCompare({
       <DialogContent className="gap-5 sm:max-w-3xl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Copy className="size-5 text-high" /> {t("compare.title")}
+            <Copy className="size-5 text-urgent" /> {t("compare.title")}
           </DialogTitle>
           <DialogDescription>{t("compare.description")}</DialogDescription>
         </DialogHeader>
@@ -152,13 +147,6 @@ export function DuplicateCompare({
               <>
                 <Row label={t("compare.fieldTitle")} incoming={<span className="font-medium">{a.title}</span>} existing={<span className="font-medium">{b.title}</span>} />
                 <Row label={t("compare.fieldAction")} incoming={a.action_required || a.title} existing={b.action_required || b.title} />
-                <Row
-                  label={t("compare.fieldEntities")}
-                  incoming={a.entities.join(" · ") || "—"}
-                  existing={b.entities.join(" · ") || "—"}
-                  differs={a.entities.length && b.entities.length && !sameEntities(a.entities, b.entities) ? "different" : undefined}
-                  note={a.entities.length && b.entities.length && !sameEntities(a.entities, b.entities) ? t("compare.different") : undefined}
-                />
                 <Row
                   label={t("compare.fieldDue")}
                   incoming={<Due task={a} />}
@@ -192,6 +180,8 @@ export function DuplicateCompare({
           rows={[
             [t("tech.similarity"), `${typeof suggestion.payload.score === "number" ? suggestion.payload.score.toFixed(2) : suggestion.confidence.toFixed(2)} ${t("tech.uncalibrated")}`],
             [t("tech.ruleReasons"), reasonParts(suggestion.reason).join(" · ") || "—"],
+            // The extractor's matching keys ("exam_registration"): internal ids, so only here.
+            ...(a && b ? [[t("compare.fieldEntities"), `${a.entities.join(", ") || "—"} ↔ ${b.entities.join(", ") || "—"}`] as [string, string]] : []),
             [t("tech.suggestionId"), `#${suggestion.id}`],
           ]}
         />
