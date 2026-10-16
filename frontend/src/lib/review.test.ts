@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import i18n from "@/i18n";
-import { dateDetail, deadlinesDiffer, reasonParts, reviewReasonLabel, sortInbox, taskIssues } from "./review";
-import type { TaskSummary } from "./types";
+import { makeDetail, makeSuggestion } from "@/test/fixtures";
+import { dateDetail, dateQuote, dateSpan, deadlinesDiffer, reasonParts, reviewReasonLabel, sortInbox, suggestionPayload, taskIssues } from "./review";
+import type { TaskSourceEntry, TaskSummary } from "./types";
 
 function task(overrides: Partial<TaskSummary> = {}): TaskSummary {
   return {
@@ -131,5 +132,39 @@ describe("helpers", () => {
   it("splits rule signals for the technical details", () => {
     expect(reasonParts("entities=None; action=0.80;  text=0.41;")).toEqual(["entities=None", "action=0.80", "text=0.41"]);
     expect(reasonParts(null)).toEqual([]);
+  });
+});
+
+describe("the sentence of a date being fixed", () => {
+  const source = (quotes: [string, "action" | "deadline" | "context"][]) =>
+    ({ evidence: quotes.map(([quote, kind]) => ({ quote, kind })) }) as unknown as TaskSourceEntry;
+
+  it("finds the quote that holds the date as written, preferring the deadline sentence", () => {
+    const task = makeDetail({
+      due_text: "4.11.2026",
+      sources: [source([["Bitte laden Sie die Erklärung hoch.", "action"], ["Abgabe bis Freitag, 4.11.2026.", "deadline"]])],
+    });
+    expect(dateQuote(task)).toBe("Abgabe bis Freitag, 4.11.2026.");
+    expect(dateQuote({ ...task, due_text: "5.11.2026" })).toBeNull();
+    expect(dateQuote({ ...task, due_text: null })).toBeNull();
+  });
+
+  it("marks the date together with a weekday written right before it", () => {
+    const quote = "Abgabe bis Freitag, 4.11.2026.";
+    expect(dateSpan(quote, "4.11.2026")).toEqual([quote.indexOf("Freitag"), quote.indexOf("4.11.2026") + 9]);
+    const zh = "截止日期：周五，11月4日";
+    expect(dateSpan(zh, "11月4日")).toEqual([zh.indexOf("周五"), zh.length]);
+    // Not the end of another word ("also"), and no weekday at all.
+    expect(dateSpan("also 4.11.2026", "4.11.2026")).toEqual([5, 14]);
+    expect(dateSpan("bis 4.11.2026", "4.11.2026")).toEqual([4, 13]);
+    expect(dateSpan("bis 4.11.2026", "5.11.2026")).toBeNull();
+  });
+});
+
+describe("suggestionPayload", () => {
+  it("names the other task as it is now, the saved title only when it is gone", () => {
+    const renamed = makeSuggestion({ payload: { other_task_id: "old", other_title: "Alter Titel" }, related_task_title: "Neuer Titel" });
+    expect(suggestionPayload(renamed).otherTitle).toBe("Neuer Titel");
+    expect(suggestionPayload({ ...renamed, related_task_title: null }).otherTitle).toBe("Alter Titel");
   });
 });

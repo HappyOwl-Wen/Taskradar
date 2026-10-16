@@ -6,7 +6,7 @@ import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import i18n from "@/i18n";
 import { api, ApiError } from "@/lib/api";
 import type { ImportResult } from "@/lib/types";
-import { recordImport, useUpload } from "@/lib/upload";
+import { importSummary, recordImport, useUpload } from "@/lib/upload";
 import { LastImportCard } from "./LastImport";
 
 function result(overrides: Partial<ImportResult>): ImportResult {
@@ -65,6 +65,27 @@ describe("LastImportCard", () => {
     expect(reprocess).toHaveBeenCalledWith(7);
     expect(within(scan).queryByRole("button", { name: /重试/ })).not.toBeInTheDocument();
     expect(screen.getByRole("link", { name: /去确认/ })).toHaveAttribute("href", "/inbox");
+  });
+});
+
+describe("importSummary", () => {
+  beforeAll(async () => {
+    await i18n.changeLanguage("zh-CN");
+  });
+
+  it("counts new tasks and suggestions in their own units, never added up", () => {
+    // Two mails about one thing: two new tasks, and a duplicate suggestion between them.
+    act(() =>
+      recordImport([
+        result({ filename: "a.eml", tasks_created: 1 }),
+        result({ filename: "b.eml", tasks_created: 1, suggestions_created: 1 }),
+      ]),
+    );
+    wrap(<LastImportCard />);
+    expect(screen.getByText("发现 2 个新任务，1 条建议需要你核对")).toBeInTheDocument();
+    expect(screen.queryByText(/发现 3/)).not.toBeInTheDocument();
+    expect(importSummary([result({ tasks_updated: 1 }), result({ duplicates_merged: 2 })], i18n.t)).toBe("1 个已有任务有更新，2 条合并到已有任务");
+    expect(importSummary([result({})], i18n.t)).toBe("没有发现需要处理的事项");
   });
 });
 

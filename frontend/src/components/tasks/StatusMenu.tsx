@@ -1,4 +1,5 @@
 import { Ban, ChevronDown, Circle, CircleCheck, CircleDashed, Ellipsis } from "lucide-react";
+import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import {
@@ -95,6 +96,14 @@ export function StatusMenu({
 export function CompleteToggle({ task, onLeaving }: { task: TaskSummary; onLeaving?: (leaving: boolean) => void }) {
   const { t } = useTranslation();
   const change = useStatusChange(task.id);
+  // What the click asked for is shown at once and kept until the task itself reports a status again (the
+  // list refreshed, or the change was undone); a failed request drops it. Box, label and title then agree.
+  const [wanted, setWanted] = useState<TaskStatus | null>(null);
+  const [reported, setReported] = useState(task.status);
+  if (reported !== task.status) {
+    setReported(task.status);
+    setWanted(null);
+  }
   if (task.status === "candidate" || task.status === "dismissed") {
     const StateIcon = task.status === "candidate" ? CircleDashed : Ban;
     return (
@@ -106,26 +115,30 @@ export function CompleteToggle({ task, onLeaving }: { task: TaskSummary; onLeavi
       </Tip>
     );
   }
-  const done = task.status === "completed";
-  const next: TaskStatus = done ? "confirmed" : "completed";
-  // Shown ticked as soon as it is clicked; the list refreshes right after.
-  const shownDone = change.isPending || change.isSuccess ? next === "completed" : done;
+  const done = (wanted ?? task.status) === "completed";
   const toggle = () => {
+    const next: TaskStatus = done ? "confirmed" : "completed";
+    setWanted(next);
     onLeaving?.(true);
-    change.mutate(next, { onError: () => onLeaving?.(false) });
+    change.mutate(next, {
+      onError: () => {
+        setWanted(null);
+        onLeaving?.(false);
+      },
+    });
   };
   return (
     <Tip content={done ? t("statusAction.reopen") : t("statusAction.complete")}>
       <button
         type="button"
         role="checkbox"
-        aria-checked={shownDone}
+        aria-checked={done}
         aria-label={done ? t("taskItem.reopen", { title: task.title }) : t("taskItem.complete", { title: task.title })}
         onClick={toggle}
         disabled={change.isPending}
         className="group/done touch-target relative grid size-8 shrink-0 place-items-center rounded-full outline-none focus-visible:ring-[3px] focus-visible:ring-ring/40 disabled:cursor-wait"
       >
-        {shownDone ? (
+        {done ? (
           <CircleCheck className="size-5 text-success" aria-hidden />
         ) : (
           <>

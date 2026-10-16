@@ -4,13 +4,14 @@ import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { ConfirmDialog, Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { ConfirmDialog, Dialog, DialogActions, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Field, Input, Textarea } from "@/components/ui/form";
 import { SimpleSelect } from "@/components/ui/select";
 import { api } from "@/lib/api";
 import { formatDate } from "@/lib/format";
 import { markJustAdded } from "@/lib/justAdded";
 import { useAction } from "@/lib/queries";
+import { dateSpan } from "@/lib/review";
 import { diffPatch, initialState, type FormState } from "@/lib/task-form";
 import { CATEGORIES, PRIORITIES, type Category, type Priority, type QuickParse, type TaskDetail, type TimeSemantics } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -19,6 +20,11 @@ import { cn } from "@/lib/utils";
 export type EditIntent = "edit" | "confirm";
 /** The field the dialog starts in (a "fix the date" button opens it at the date). */
 export type EditFocus = "title" | "date";
+/** The source's own sentence, shown above the fields when one of them is being fixed; `mark` is the part in question. */
+export interface EditContext {
+  text: string;
+  mark?: string | null;
+}
 
 export function TaskEditDialog({
   open,
@@ -36,7 +42,7 @@ export function TaskEditDialog({
   intent?: EditIntent;
   focus?: EditFocus;
   /** The source's own wording, shown above the fields when the dialog is opened to fix one of them. */
-  context?: string | null;
+  context?: EditContext | null;
   onSaved?: (task: TaskDetail) => void;
 }) {
   const { t } = useTranslation();
@@ -73,15 +79,28 @@ export function TaskEditDialog({
   );
 }
 
-/**
- * Buttons at the end of the form; on phones they stay in view at the bottom of the dialog. The dialog's
- * bottom padding moves into the bar there, because a sticky element stops at the padding edge.
- */
-function FormFooter({ children }: { children: ReactNode }) {
+/** The source's sentence above the fields, with the part being fixed (a date and its weekday) marked. */
+function SourceSentence({ context }: { context: EditContext }) {
+  const { t } = useTranslation();
+  const { text, mark } = context;
+  const span = dateSpan(text, mark);
   return (
-    <div className="sticky bottom-0 z-10 -mx-6 grid grid-cols-2 gap-2 border-t bg-card px-6 pt-3 pb-6 max-sm:[&_button]:h-11 sm:static sm:mx-0 sm:flex sm:justify-end sm:border-t-0 sm:bg-transparent sm:p-0">
-      {children}
-    </div>
+    <p className="flex items-start gap-2 rounded-md bg-muted px-3 py-2 text-[13px] leading-relaxed [overflow-wrap:anywhere]">
+      <Quote className="mt-0.5 size-3.5 shrink-0 text-muted-foreground" aria-hidden />
+      <span className="min-w-0">
+        <span className="text-muted-foreground">{t("due.original")}: </span>“
+        {span ? (
+          <>
+            {text.slice(0, span[0])}
+            <mark className="rounded-sm bg-urgent/15 px-0.5 font-medium text-foreground">{text.slice(span[0], span[1])}</mark>
+            {text.slice(span[1])}
+          </>
+        ) : (
+          text
+        )}
+        ”
+      </span>
+    </p>
   );
 }
 
@@ -317,14 +336,14 @@ function AddForm({
           <Textarea id="task-description" rows={3} value={description} onChange={(e) => setDescription(e.target.value)} />
         </Field>
       </MoreOptions>
-      <FormFooter>
+      <DialogActions>
         <Button type="button" variant="outline" onClick={onCancel} disabled={save.isPending}>
           {t("common.cancel")}
         </Button>
         <Button type="submit" disabled={save.isPending || !text.trim()}>
           {save.isPending ? t("common.saving") : t("newTask.submit")}
         </Button>
-      </FormFooter>
+      </DialogActions>
     </form>
   );
 }
@@ -346,7 +365,7 @@ function EditForm({
   task: TaskDetail;
   intent: EditIntent;
   focus: EditFocus;
-  context?: string | null;
+  context?: EditContext | null;
   onCancel: () => void;
   onClose: () => void;
   onSaved?: (task: TaskDetail) => void;
@@ -393,14 +412,7 @@ function EditForm({
         <DialogTitle>{confirming ? t("detail.confirmEditTitle") : t("detail.edit")}</DialogTitle>
         {confirming ? <DialogDescription>{t("detail.confirmEditDescription")}</DialogDescription> : null}
       </DialogHeader>
-      {context ? (
-        <p className="flex items-start gap-2 rounded-md bg-muted px-3 py-2 text-[13px] leading-relaxed break-words">
-          <Quote className="mt-0.5 size-3.5 shrink-0 text-muted-foreground" aria-hidden />
-          <span className="min-w-0">
-            <span className="text-muted-foreground">{t("due.original")}: </span>“{context}”
-          </span>
-        </p>
-      ) : null}
+      {context ? <SourceSentence context={context} /> : null}
       <Field label={t("field.title")} htmlFor="task-title">
         <Input id="task-title" value={form.title} maxLength={200} required onChange={(e) => set("title", e.target.value)} autoFocus={focus === "title"} />
       </Field>
@@ -422,7 +434,7 @@ function EditForm({
         </Field>
         <CategoryPriority category={form.category} priority={form.priority} onCategory={(v) => set("category", v)} onPriority={(v) => set("priority", v)} />
       </MoreOptions>
-      <FormFooter>
+      <DialogActions>
         <Button type="button" variant="outline" onClick={onCancel} disabled={save.isPending} className={cn(confirming && "max-sm:order-2")}>
           {t("common.cancel")}
         </Button>
@@ -434,7 +446,7 @@ function EditForm({
         <Button type="submit" disabled={save.isPending || !form.title.trim()} className={cn(confirming && "max-sm:order-1 max-sm:col-span-2")}>
           {save.isPending ? t("common.saving") : confirming ? t("detail.saveAndConfirm") : t("common.save")}
         </Button>
-      </FormFooter>
+      </DialogActions>
     </form>
   );
 }

@@ -2,7 +2,7 @@ import { ArrowRight, Copy, GitMerge, Split } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogActions, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { LoadingRows } from "@/components/ui/states";
 import { api, type DueChoice } from "@/lib/api";
 import { formatDue } from "@/lib/format";
@@ -16,7 +16,21 @@ import { DueChoicePicker } from "./DueChoice";
 import { sourceTitle, useSourceWhen } from "./sourceMeta";
 import { TechnicalDetails } from "./TechnicalDetails";
 
-function Row({ label, incoming, existing, differs, note }: { label: string; incoming: ReactNode; existing: ReactNode; differs?: "conflict" | "different"; note?: string }) {
+function Row({
+  label,
+  incoming,
+  existing,
+  differs,
+  note,
+  className,
+}: {
+  label: string;
+  incoming: ReactNode;
+  existing: ReactNode;
+  differs?: "conflict" | "different";
+  note?: string;
+  className?: string;
+}) {
   const { t } = useTranslation();
   const cell = cn(
     "min-w-0 rounded-md px-2.5 py-1.5 text-sm break-words",
@@ -24,7 +38,7 @@ function Row({ label, incoming, existing, differs, note }: { label: string; inco
     differs === "different" && "bg-muted ring-1 ring-border",
   );
   return (
-    <div className="grid gap-1.5 border-b py-2.5 last:border-b-0 sm:grid-cols-[7.5rem_minmax(0,1fr)_minmax(0,1fr)] sm:gap-3">
+    <div className={cn("grid gap-1.5 border-b py-2.5 last:border-b-0 sm:grid-cols-[7.5rem_minmax(0,1fr)_minmax(0,1fr)] sm:gap-3", className)}>
       <div className="flex flex-wrap items-center gap-1.5 text-xs font-medium text-muted-foreground sm:block sm:pt-2">
         {label}
         {note ? <span className={cn("sm:mt-1 sm:block", differs === "conflict" ? "text-urgent" : "text-muted-foreground")}>{note}</span> : null}
@@ -94,6 +108,8 @@ export function DuplicateCompare({
   const incoming = useTask(open ? suggestion.task_id : undefined);
   const existing = useTask(open && payload.otherTaskId ? payload.otherTaskId : undefined);
   const [choice, setChoice] = useState<DueChoice | null>(null);
+  // Phones show what differs (and the deadline, which the decision turns on); the rest is one tap away.
+  const [allRows, setAllRows] = useState(false);
   const close = () => onOpenChange(false);
   const merge = useAction((due: DueChoice | undefined) => api.acceptSuggestion(suggestion.id, due), {
     success: (r) => t("compare.merged", { title: r.title }),
@@ -118,6 +134,9 @@ export function DuplicateCompare({
   // An existing task without a deadline simply takes the new one; anything else is the user's call.
   const effectiveChoice = choice ?? (needsChoice && b && !b.due_date ? "new" : null);
   const canMerge = Boolean(a && b) && (!needsChoice || effectiveChoice !== null) && !busy;
+  const titleDiffers = a && b ? a.title.trim() !== b.title.trim() : false;
+  const actionDiffers = a && b ? (a.action_required || a.title).trim() !== (b.action_required || b.title).trim() : false;
+  const phoneHidden = (shownOnPhone: boolean) => (shownOnPhone || allRows ? undefined : "max-sm:hidden");
 
   return (
     <Dialog
@@ -127,7 +146,7 @@ export function DuplicateCompare({
         onOpenChange(o);
       }}
     >
-      <DialogContent className="gap-5 sm:max-w-3xl">
+      <DialogContent className="gap-5 max-sm:pb-0 sm:max-w-3xl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Copy className="size-5 text-urgent" /> {t("compare.title")}
@@ -145,8 +164,18 @@ export function DuplicateCompare({
             </div>
             {b ? (
               <>
-                <Row label={t("compare.fieldTitle")} incoming={<span className="font-medium">{a.title}</span>} existing={<span className="font-medium">{b.title}</span>} />
-                <Row label={t("compare.fieldAction")} incoming={a.action_required || a.title} existing={b.action_required || b.title} />
+                <Row
+                  label={t("compare.fieldTitle")}
+                  incoming={<span className="font-medium">{a.title}</span>}
+                  existing={<span className="font-medium">{b.title}</span>}
+                  className={phoneHidden(titleDiffers)}
+                />
+                <Row
+                  label={t("compare.fieldAction")}
+                  incoming={a.action_required || a.title}
+                  existing={b.action_required || b.title}
+                  className={phoneHidden(actionDiffers)}
+                />
                 <Row
                   label={t("compare.fieldDue")}
                   incoming={<Due task={a} />}
@@ -154,9 +183,23 @@ export function DuplicateCompare({
                   differs={needsChoice ? (b.due_date ? "conflict" : "different") : undefined}
                   note={needsChoice ? (b.due_date ? t("compare.conflict") : t("compare.onlyNewHasDate")) : undefined}
                 />
-                <Row label={t("compare.fieldSource")} incoming={<Origin task={a} />} existing={<Origin task={b} />} />
-                <Row label={t("compare.fieldStatus")} incoming={<StatusBadge status={a.status} />} existing={<StatusBadge status={b.status} />} />
+                <Row label={t("compare.fieldSource")} incoming={<Origin task={a} />} existing={<Origin task={b} />} className={phoneHidden(false)} />
+                <Row
+                  label={t("compare.fieldStatus")}
+                  incoming={<StatusBadge status={a.status} />}
+                  existing={<StatusBadge status={b.status} />}
+                  className={phoneHidden(false)}
+                />
               </>
+            ) : null}
+            {b ? (
+              <button
+                type="button"
+                className="mt-1 w-fit py-1 text-[13px] text-muted-foreground underline-offset-2 hover:text-foreground hover:underline sm:hidden"
+                onClick={() => setAllRows((v) => !v)}
+              >
+                {allRows ? t("compare.showLess") : t("compare.showAll")}
+              </button>
             ) : null}
           </div>
         ) : null}
@@ -186,8 +229,8 @@ export function DuplicateCompare({
           ]}
         />
 
-        <div className="flex flex-col-reverse gap-2 sm:flex-row sm:items-center sm:justify-end">
-          <Button variant="ghost" onClick={close} disabled={busy}>
+        <DialogActions>
+          <Button variant="ghost" onClick={close} disabled={busy} className="max-sm:order-last max-sm:col-span-2">
             {t("compare.later")}
           </Button>
           <Button variant="outline" onClick={() => keep.mutate(undefined)} disabled={busy}>
@@ -196,7 +239,7 @@ export function DuplicateCompare({
           <Button onClick={() => merge.mutate(needsChoice ? (effectiveChoice ?? undefined) : undefined)} disabled={!canMerge}>
             <ArrowRight /> {t("compare.merge")}
           </Button>
-        </div>
+        </DialogActions>
       </DialogContent>
     </Dialog>
   );

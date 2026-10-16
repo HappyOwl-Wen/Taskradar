@@ -12,7 +12,7 @@ import { errorMessage } from "@/lib/errors";
 import { formatRelativeTime } from "@/lib/format";
 import { refreshAll } from "@/lib/queries";
 import type { ImportResult } from "@/lib/types";
-import { ACCEPTED_FILES, importTotals, replaceImportResult, useLastImport, useUpload } from "@/lib/upload";
+import { ACCEPTED_FILES, importSummary, importTotals, replaceImportResult, useLastImport, useUpload } from "@/lib/upload";
 import { cn } from "@/lib/utils";
 
 /** Failures the same file may get past on a second attempt; the others need another file. */
@@ -84,7 +84,7 @@ export function LastImportCard({ maxAgeMinutes, className }: { maxAgeMinutes?: n
             {t("upload.lastTitle", { count: last.results.length })}
             <span className="ml-2 text-xs font-normal text-muted-foreground">{formatRelativeTime(last.at, i18n.language)}</span>
           </h2>
-          <p className="text-[13px] text-muted-foreground">{found ? t("upload.found", { count: found }) : t("upload.nothingFound")}</p>
+          <p className="text-[13px] text-muted-foreground">{importSummary(last.results, t)}</p>
         </div>
         <div className="flex items-center gap-1">
           {found ? (

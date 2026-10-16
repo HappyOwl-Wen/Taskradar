@@ -1,5 +1,6 @@
 import { ChevronRight, Ellipsis, ExternalLink, Eye, FileText, FolderOpen, Image, Mail, RefreshCw, Search, Trash2, X } from "lucide-react";
 import { useMemo, useState } from "react";
+import { useSearchParams } from "react-router";
 import { useTranslation } from "react-i18next";
 import { Badge } from "@/components/ui/badge";
 import type { BadgeTone } from "@/components/ui/variants";
@@ -163,9 +164,20 @@ export function ProcessingRecords({ timezone }: { timezone: string }) {
   const documents = useDocuments();
   const messages = useMessages();
   const [filter, setFilter] = useState<OutcomeFilter>("all");
-  const [source, setSource] = useState<(typeof SOURCE_FILTERS)[number]>("all");
+  // `?records=upload` (from a source's "view files") opens the records filtered to that source.
+  const [params] = useSearchParams();
+  const requested = SOURCE_FILTERS.find((s) => s === params.get("records")) ?? null;
+  const [source, setSource] = useState<(typeof SOURCE_FILTERS)[number]>(requested ?? "all");
   const [q, setQ] = useState("");
   const [shown, setShown] = useState(PAGE);
+  const [seenRequest, setSeenRequest] = useState(requested);
+  if (requested !== seenRequest) {
+    setSeenRequest(requested);
+    if (requested) {
+      setSource(requested);
+      setShown(PAGE);
+    }
+  }
   const [details, setDetails] = useState<RecordItem | null>(null);
   const [toDelete, setToDelete] = useState<RecordItem | null>(null);
   const remove = useAction(() => (toDelete?.kind === "message" ? api.deleteMessage(toDelete.id) : api.deleteDocument(toDelete?.id ?? 0)), {

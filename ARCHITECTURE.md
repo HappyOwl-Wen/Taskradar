@@ -245,19 +245,27 @@ whose fix buttons open the field concerned with the original wording, quotes per
 history; technical details in a dialog from the "…" menu), `TaskEditDialog` (adding: one sentence, the
 recognised date in editable fields, the rest under "More options"; editing with an intent, so "Edit & confirm"
 saves and confirms while "Save only" stays possible), `DuplicateCompare` and `DueChoicePicker` (side-by-side
-review of a possible duplicate with the required date choice), `KeyStates` (at most two coloured states per
-row; "N more" opens the rest, also by touch), `StatusMenu` and `CompleteToggle` (one-step completion with undo;
-other statuses behind "…"), `SystemStatus` (one line while everything works, otherwise the problems with where
+review of a possible duplicate with the required date choice; on phones only what differs and the deadline,
+the rest one tap away), `KeyStates` (at most two coloured states per row; "N more" opens the rest, also by
+touch), `StatusMenu` and `CompleteToggle` (one-step completion with undo; other statuses behind "…"; the box
+shows what was asked for until the task itself reports its status again, so box, label and title always agree
+after completing, reopening or undoing; a row's fade lasts only until the list shows the change), `SystemStatus` (one line while everything works, otherwise the problems with where
 to fix them), `LastImportCard` with `lib/upload.ts` (the last import's result stays for the session: what was
-found with the way to confirm it, and each file's outcome with "retry" for failures that may pass or "another
-file" otherwise), `RecheckDialog`, `TechnicalDetails` (scores, rule signals and IDs, labelled as uncalibrated
+found, new tasks and suggestions counted in their own units, with the way to confirm it, and each file's
+outcome with "retry" for failures that may pass or "another file" otherwise), `RecheckDialog`, `TechnicalDetails` (scores, rule signals and IDs, labelled as uncalibrated
 debugging aids) and `lib/records.ts` (mails and files as one processing list, attachments under their mail,
 every outcome with a reason). Settings show one category at a time (`?section=`); unsaved edits are protected
 on every way out (another category, the sidebar, links, back/forward via `useBlocker`, closing the window via
 `beforeunload`), and appearance and language say that they apply at once. Gmail is connected step by step, with
 the technical details folded away. On touch screens `.touch-target` gives small controls a tap area of at
 least 44 px without changing their drawn size, and the buttons that finish a dialog or a decision are 44 px
-tall on phones. A task the user just added is highlighted for a moment in whichever list shows it;
+tall on phones (`DialogActions`: the buttons that finish a dialog stay in view at its bottom). In To confirm
+the decision bar sits at the bottom edge of the pane and publishes its height (`lib/toastClearance.ts`), which
+the toaster adds to its offset; toasts rise only a little into place and take no taps while arriving or
+leaving, so a tap meant for the next decision never lands on "Undo". After a decision the next task is read
+from its start (the pane's scroll is reset; the list keeps its own) and, where the list gives way to the task,
+its title takes the focus. A fix for a date shows the whole sentence it came from, with the date and a weekday
+written next to it marked. A task the user just added is highlighted for a moment in whichever list shows it;
 `prefers-reduced-motion` switches off non-essential motion.
 Colours and sizes come from tokens in `src/index.css`: page background `#F8FAFC`, white cards with `#E2E8F0`
 borders, one light-blue selection colour (`--selected`) for the sidebar, tabs and lists, and fixed meanings for
@@ -296,4 +304,8 @@ bundle into `backend/src/taskradar/static`, which the backend serves (no externa
   first-run guide), at most two states per row and test data listed after real candidates; the edit dialog
   (edit & confirm by default from that entry, save only, add with one sentence), the settings guard on every
   navigation, Gmail status while unknown, accessible names in the top bar, one-step completion, import results
-  with retries, and the highlight of a just-added task.
+  with retries, and the highlight of a just-added task. Cross-state tests follow one control through several
+  changes: the same completion box re-rendered with the updated task (done, reopened, undone), a task ticked
+  off and brought back in the open list (no fade left behind), the next task after a decision (scroll position
+  and focus), toasts kept clear of the decision bar, an import whose new task has a duplicate suggestion
+  (not counted as two things), and a renamed related task (one name in the note and in the comparison).

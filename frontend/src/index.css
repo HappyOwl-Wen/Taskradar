@@ -188,3 +188,16 @@
     }
   }
 }
+
+/*
+ * A toast never passes over the action bar at the bottom (see keepToastsClear), where a tap meant for the next
+ * decision must not land on "Undo": it rises only a little into place instead of from below its own height,
+ * and while arriving or leaving it takes no taps.
+ */
+[data-sonner-toast][data-y-position="bottom"]:not([data-mounted="true"]) {
+  --y: translateY(16px);
+}
+[data-sonner-toast][data-mounted="false"],
+[data-sonner-toast][data-removed="true"] {
+  pointer-events: none;
+}

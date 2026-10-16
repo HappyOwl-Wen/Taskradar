@@ -83,6 +83,8 @@ export function TopBar() {
   const { pathname } = useLocation();
   // The task list has its own search (one search per screen); elsewhere this one searches all tasks.
   const onTasks = pathname === "/tasks";
+  // "Add content" has importing as its own main button; a second one up here would only repeat it.
+  const onSources = pathname === "/sources";
   const [theme, setTheme] = useTheme();
   const [query, setQuery] = useState("");
   const [menuOpen, setMenuOpen] = useState(false);
@@ -146,7 +148,7 @@ export function TopBar() {
 
       <div className="ml-auto flex items-center gap-1">
         <NewTodoButton />
-        <UploadButton />
+        {onSources ? null : <UploadButton />}
         <NotificationsMenu />
         {/* Phones: theme and language are rarely changed, so they share one menu. */}
         <DropdownMenu>

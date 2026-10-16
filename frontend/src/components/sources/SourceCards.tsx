@@ -2,7 +2,6 @@ import { Ellipsis, FlaskConical, Folder, FolderPlus, LoaderCircle, Mail, MailPlu
 import { useState, type FormEvent, type ReactNode } from "react";
 import { Link } from "react-router";
 import { useTranslation } from "react-i18next";
-import { UploadButton } from "@/components/layout/TopBar";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/dialog";
 import { Checkbox, Input, Label, Switch } from "@/components/ui/form";
@@ -437,6 +436,7 @@ export function SampleRow({ source }: { source: Source }) {
   );
 }
 
+/** Files added by hand: how many, and the way to them in the records (importing is the page's own button). */
 export function UploadsRow({ count }: { count: number }) {
   const { t } = useTranslation();
   return (
@@ -445,7 +445,13 @@ export function UploadsRow({ count }: { count: number }) {
       icon={Upload}
       title={t("sources.uploads.title")}
       meta={<span>{count ? t("sources.folders.files", { count }) : t("sources.uploads.description")}</span>}
-      actions={<UploadButton variant="outline" compact={false} />}
+      actions={
+        count ? (
+          <Button variant="outline" size="sm" asChild>
+            <Link to="?records=upload#records">{t("sources.uploads.viewFiles")}</Link>
+          </Button>
+        ) : null
+      }
     />
   );
 }

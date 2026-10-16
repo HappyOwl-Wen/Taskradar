@@ -10,9 +10,9 @@ import { ErrorState, LoadingRows } from "@/components/ui/states";
 import { useTimezone } from "@/lib/hooks";
 import { useSources } from "@/lib/queries";
 
-function SectionTitle({ title, hint, aside }: { title: string; hint?: string; aside?: React.ReactNode }) {
+function SectionTitle({ id, title, hint, aside }: { id?: string; title: string; hint?: string; aside?: React.ReactNode }) {
   return (
-    <div className="flex flex-wrap items-end justify-between gap-2">
+    <div id={id} className="flex scroll-mt-4 flex-wrap items-end justify-between gap-2">
       <div className="grid gap-0.5">
         <h2 className="text-section font-semibold">{title}</h2>
         {hint ? <p className="text-xs text-muted-foreground">{hint}</p> : null}
@@ -68,7 +68,7 @@ export default function SourcesPage() {
             {demo ? <DemoRow source={demo} timezone={timezone} /> : null}
             <FolderRows sources={sources} timezone={timezone} />
             {adding ? <AddFolderForm onDone={closeForm} /> : null}
-            <UploadsRow count={uploads?.documents ?? 0} />
+            <UploadsRow count={(uploads?.documents ?? 0) + (uploads?.messages ?? 0)} />
             {testData ? <SampleRow source={testData} /> : null}
           </ul>
         ) : null}
@@ -77,7 +77,7 @@ export default function SourcesPage() {
       <OcrBacklogNotice />
 
       <section className="grid gap-2">
-        <SectionTitle title={t("records.title")} hint={t("records.hint")} />
+        <SectionTitle id="records" title={t("records.title")} hint={t("records.hint")} />
         <ProcessingRecords timezone={timezone} />
       </section>
     </div>

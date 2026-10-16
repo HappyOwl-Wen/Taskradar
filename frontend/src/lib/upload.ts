@@ -1,4 +1,5 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import type { TFunction } from "i18next";
 import { useSyncExternalStore } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router";
@@ -76,6 +77,21 @@ export function importTotals(results: ImportResult[]) {
   };
 }
 
+/**
+ * What an import produced, each in its own unit: new tasks, suggestions to check (a possible duplicate of a
+ * new task is one task with one suggestion, not two things), existing tasks updated, notices merged.
+ */
+export function importSummary(results: ImportResult[], t: TFunction): string {
+  const totals = importTotals(results);
+  const parts = [
+    totals.created ? t("upload.foundTasks", { count: totals.created }) : null,
+    totals.suggestions ? t("upload.foundSuggestions", { count: totals.suggestions }) : null,
+    totals.updated ? t("upload.foundUpdated", { count: totals.updated }) : null,
+    totals.merged ? t("upload.foundMerged", { count: totals.merged }) : null,
+  ].filter(Boolean);
+  return parts.length ? parts.join(t("upload.foundJoin")) : t("upload.nothingFound");
+}
+
 /** Upload files (in batches) and say what came of them, with the way to the tasks that were found. */
 export function useUpload() {
   const { t } = useTranslation();
@@ -99,7 +115,7 @@ export function useUpload() {
       const totals = importTotals(results);
       const failed = results.filter((r) => r.status === "failed");
       const lines = [
-        totals.created + totals.suggestions > 0 ? t("upload.found", { count: totals.created + totals.suggestions }) : t("upload.nothingFound"),
+        importSummary(results, t),
         ...failed.map((r) =>
           t("upload.failedFile", {
             name: r.filename,

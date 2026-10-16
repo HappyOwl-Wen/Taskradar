@@ -5,7 +5,7 @@ import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { TooltipProvider } from "@/components/ui/menu";
 import i18n from "@/i18n";
 import { api } from "@/lib/api";
-import type { TaskSummary } from "@/lib/types";
+import type { TaskStatus, TaskSummary } from "@/lib/types";
 import { makeDetail, makeTask } from "@/test/fixtures";
 import { CompleteToggle } from "./StatusMenu";
 
@@ -47,6 +47,43 @@ describe("CompleteToggle", () => {
     renderToggle(task);
     await userEvent.click(screen.getByRole("checkbox", { name: "把「Bericht abgeben」恢复为未完成" }));
     await waitFor(() => expect(setStatus).toHaveBeenCalledWith("t2", "confirmed"));
+  });
+
+  it("stays right when the same toggle receives the updated task: done, reopened, done and undone", async () => {
+    const client = new QueryClient();
+    const view = (task: TaskSummary) => (
+      <QueryClientProvider client={client}>
+        <TooltipProvider>
+          <CompleteToggle task={task} />
+        </TooltipProvider>
+      </QueryClientProvider>
+    );
+    const open = makeTask({ id: "t3", title: "Steuer abgeben", status: "confirmed" });
+    const done: TaskSummary = { ...open, status: "completed" };
+    const setStatus = vi.spyOn(api, "setStatus").mockImplementation(async (_id: string, status: string) => makeDetail({ ...open, status: status as TaskStatus }));
+    const { rerender } = render(view(open));
+    const box = () => screen.getByRole("checkbox");
+    const settled = () => waitFor(() => expect(box()).toBeEnabled());
+
+    await userEvent.click(box());
+    await settled();
+    expect(box()).toHaveAttribute("aria-checked", "true"); // until the list refreshes
+    rerender(view(done)); // the list refreshed
+    expect(box()).toHaveAttribute("aria-checked", "true");
+    expect(box()).toHaveAccessibleName("把「Steuer abgeben」恢复为未完成");
+
+    await userEvent.click(box());
+    await settled();
+    expect(setStatus).toHaveBeenLastCalledWith("t3", "confirmed");
+    rerender(view(open));
+    expect(box()).toHaveAttribute("aria-checked", "false");
+    expect(box()).toHaveAccessibleName("把「Steuer abgeben」标记为已完成");
+
+    await userEvent.click(box());
+    await settled();
+    rerender(view(done));
+    rerender(view(open)); // undone from the toast: the task reports "confirmed" again
+    expect(box()).toHaveAttribute("aria-checked", "false");
   });
 
   it("is not a tick box for tasks that cannot be completed yet", () => {

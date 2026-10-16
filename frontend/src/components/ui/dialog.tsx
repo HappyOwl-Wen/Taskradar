@@ -14,6 +14,23 @@ const overlayClass = "fixed inset-0 z-50 bg-black/45 backdrop-blur-[1px]";
 const contentClass =
   "fixed top-[50%] left-[50%] z-50 grid max-h-[calc(100dvh-2rem)] w-full max-w-[calc(100%-2rem)] translate-x-[-50%] translate-y-[-50%] gap-4 overflow-y-auto rounded-xl border bg-card p-6 shadow-xl outline-none sm:max-w-lg";
 
+/**
+ * The buttons that finish a dialog. On phones they stay in view at the bottom while the content scrolls and
+ * are 44 px tall; the dialog's bottom padding moves into this bar there (give DialogContent `max-sm:pb-0`),
+ * because a sticky element stops at the padding edge.
+ */
+export function DialogActions({ className, ...props }: ComponentProps<"div">) {
+  return (
+    <div
+      className={cn(
+        "sticky bottom-0 z-10 -mx-6 grid grid-cols-2 gap-2 border-t bg-card px-6 pt-3 pb-6 max-sm:[&_button]:h-11 sm:static sm:mx-0 sm:flex sm:items-center sm:justify-end sm:border-t-0 sm:bg-transparent sm:p-0",
+        className,
+      )}
+      {...props}
+    />
+  );
+}
+
 export function DialogContent({
   className,
   children,

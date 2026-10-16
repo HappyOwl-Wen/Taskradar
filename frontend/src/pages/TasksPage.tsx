@@ -103,7 +103,8 @@ export default function TasksPage() {
   const [recheckOpen, setRecheckOpen] = useState(false);
   const [selecting, setSelecting] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [leaving, setLeaving] = useState<Set<string>>(new Set());
+  // Rows being ticked off in the open view fade, each with the status it had when clicked.
+  const [leaving, setLeaving] = useState<Map<string, TaskStatus>>(new Map());
   const [limit, setLimit] = useState(PAGE);
   const { data: dashboard } = useDashboard();
 
@@ -145,6 +146,13 @@ export default function TasksPage() {
   };
   const { data, error, isLoading, isFetching, refetch } = useTasks(query);
   const items = data?.items ?? [];
+  // A fade lasts until the list has caught up: once a row is gone or shows another status (done, restored,
+  // undone, another view), its mark is dropped, so a task that comes back is never left looking disabled.
+  const [leavingSeen, setLeavingSeen] = useState(data);
+  if (leavingSeen !== data) {
+    setLeavingSeen(data);
+    if (leaving.size) setLeaving(new Map([...leaving].filter(([id, status]) => items.some((i) => i.id === id && i.status === status))));
+  }
   const total = data?.total ?? 0;
   const chosen = items.filter((i) => selected.has(i.id)).map((i) => i.id);
 
@@ -165,11 +173,11 @@ export default function TasksPage() {
       else next.delete(id);
       return next;
     });
-  const markLeaving = (id: string, on: boolean) =>
+  const markLeaving = (task: TaskSummary, on: boolean) =>
     setLeaving((prev) => {
-      const next = new Set(prev);
-      if (on) next.add(id);
-      else next.delete(id);
+      const next = new Map(prev);
+      if (on) next.set(task.id, task.status);
+      else next.delete(task.id);
       return next;
     });
   const allChecked = items.length > 0 && chosen.length === items.length ? true : chosen.length ? "indeterminate" : false;
@@ -355,8 +363,8 @@ export default function TasksPage() {
                 variant="row"
                 selected={selecting ? selected.has(task.id) : undefined}
                 onSelectedChange={selecting ? (on) => toggle(task.id, on) : undefined}
-                leading={selecting ? undefined : <CompleteToggle task={task} onLeaving={(on) => markLeaving(task.id, on)} />}
-                leaving={leaving.has(task.id) && view === "active"}
+                leading={selecting ? undefined : <CompleteToggle task={task} onLeaving={(on) => markLeaving(task, on)} />}
+                leaving={view === "active" && leaving.get(task.id) === task.status}
                 actions={
                   selecting ? undefined : (
                     <>

@@ -180,6 +180,24 @@ describe("DashboardPage", () => {
     expect(screen.getByRole("link", { name: "查看来源" })).toHaveAttribute("href", "/sources");
   });
 
+  it("does not say there is nothing to do while decisions are waiting", async () => {
+    vi.spyOn(api, "dashboard").mockResolvedValue(dashboard({ attention: [disputed], attention_counts: { conflict: 1 }, attention_unconfirmed: 0 }));
+    renderDashboard();
+    expect(await screen.findByText("近期没有到期的任务，另有 2 件事等待你确认。")).toBeInTheDocument();
+    expect(screen.queryByText("目前没有需要你关注的事项。")).not.toBeInTheDocument();
+  });
+
+  it("points to the queue for a disputed date that waits there, instead of listing it a second time", async () => {
+    const queued: AttentionTask = { ...disputed, pending_suggestions: 1 };
+    vi.spyOn(api, "dashboard").mockResolvedValue(dashboard({ attention: [overdue, queued], attention_counts: { overdue: 1, conflict: 1 } }));
+    renderDashboard();
+    const group = await screen.findByRole("region", { name: "截止日期有分歧" });
+    expect(within(group).queryByText("Miete überweisen")).not.toBeInTheDocument();
+    expect(within(group).getByRole("link", { name: /1 项在待确认中/ })).toHaveAttribute("href", "/inbox?task=disputed");
+    // A disputed date that is not waiting for a decision stays listed.
+    expect(within(screen.getByRole("region", { name: "已逾期" })).getByText("Bücher zurückgeben")).toBeInTheDocument();
+  });
+
   it("says when everything is running", async () => {
     renderDashboard();
     // A quiet single line while nothing needs the user.

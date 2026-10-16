@@ -151,10 +151,14 @@ describe("TaskEditDialog: edit and confirm", () => {
     expect(setStatus).not.toHaveBeenCalled();
   });
 
-  it("opened to fix the date, it starts at the date and shows the source's wording", () => {
-    wrap(<TaskEditDialog open onOpenChange={() => undefined} task={candidate} focus="date" context="bis Freitag, 4.11.2026" />);
+  it("opened to fix the date, it starts at the date and shows the whole sentence with the date marked", () => {
+    const sentence = "Bitte laden Sie die Erklärung bis Freitag, 4.11.2026 hoch.";
+    wrap(<TaskEditDialog open onOpenChange={() => undefined} task={candidate} focus="date" context={{ text: sentence, mark: "4.11.2026" }} />);
     expect(screen.getByLabelText("日期")).toHaveFocus();
-    expect(screen.getByText(/“bis Freitag, 4.11.2026”/)).toBeInTheDocument();
+    // The weekday that disagrees with the date is shown and marked together with it.
+    const marked = screen.getByText("Freitag, 4.11.2026");
+    expect(marked.tagName).toBe("MARK");
+    expect(marked.closest("p")).toHaveTextContent(`“${sentence}”`);
     expect(screen.getByRole("button", { name: "保存" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "保存并确认" })).not.toBeInTheDocument();
   });

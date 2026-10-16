@@ -16,7 +16,7 @@ import {
   Trash2,
   Undo2,
 } from "lucide-react";
-import { useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Link, useNavigate } from "react-router";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
@@ -29,7 +29,8 @@ import { api, ApiError } from "@/lib/api";
 import { formatDate, formatDateTime, formatDue, listSeparator } from "@/lib/format";
 import { useTimezone } from "@/lib/hooks";
 import { useAction, useTask } from "@/lib/queries";
-import { dateDetail, taskIssues, type Issue } from "@/lib/review";
+import { dateDetail, dateQuote, suggestionPayload, taskIssues, type Issue } from "@/lib/review";
+import { keepToastsClear } from "@/lib/toastClearance";
 import type { Suggestion, TaskDetail, TaskEvent, TaskSourceEntry, TaskStatus } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { CategoryBadge, StatusBadge } from "./badges";
@@ -43,7 +44,7 @@ import { SourceList } from "./SourceList";
 import { sourceTitle, useSourceWhen } from "./sourceMeta";
 import { StatusMenu } from "./StatusMenu";
 import { SuggestionCard } from "./SuggestionCard";
-import { TaskEditDialog, type EditFocus, type EditIntent } from "./TaskEditDialog";
+import { TaskEditDialog, type EditContext, type EditFocus, type EditIntent } from "./TaskEditDialog";
 import { TechnicalRows } from "./TechnicalDetails";
 import { Timeline } from "./Timeline";
 import { useRelativeDueText } from "./useRelativeDueText";
@@ -196,8 +197,15 @@ function DateChangedActions({ task }: { task: TaskDetail }) {
 }
 
 /** The sentence the task was taken from (shown when the title is being fixed). */
-function actionQuote(task: TaskDetail): string | null {
-  return task.sources[0]?.evidence.find((e) => e.kind === "action")?.quote ?? null;
+function actionQuote(task: TaskDetail): EditContext | null {
+  const quote = task.sources[0]?.evidence.find((e) => e.kind === "action")?.quote;
+  return quote ? { text: quote } : null;
+}
+
+/** The whole sentence the date comes from (with a weekday or anchor written next to it), the date marked. */
+function dateContext(task: TaskDetail): EditContext | null {
+  if (!task.due_text) return null;
+  return { text: dateQuote(task) ?? task.due_text, mark: task.due_text };
 }
 
 function IssueRow({
@@ -210,12 +218,13 @@ function IssueRow({
   issue: Issue;
   task: TaskDetail;
   duplicate?: Suggestion;
-  onEdit: (focus: EditFocus, context: string | null) => void;
+  onEdit: (focus: EditFocus, context: EditContext | null) => void;
   onCompare: () => void;
 }) {
   const { t, i18n } = useTranslation();
   const Icon = ISSUE_ICON[issue.kind];
-  const other = duplicate ? (typeof duplicate.payload.other_title === "string" ? duplicate.payload.other_title : duplicate.related_task_title) : null;
+  // The other task as it is now (the title saved with the suggestion only if it is gone).
+  const other = duplicate ? suggestionPayload(duplicate).otherTitle : null;
   let text: string = t(`issue.${issue.kind}.hint`);
   let action: ReactNode = null;
   if (issue.kind === "duplicate" && duplicate) {
@@ -251,7 +260,7 @@ function IssueRow({
       text = `${text} ${t("issue.originalWording", { text: task.due_text })}`;
     }
     action = (
-      <Button variant="outline" size="sm" onClick={() => onEdit("date", task.due_text)}>
+      <Button variant="outline" size="sm" onClick={() => onEdit("date", dateContext(task))}>
         <Pencil /> {t("issue.fixDate")}
       </Button>
     );
@@ -323,6 +332,7 @@ export function TaskDetailView({
   embedded = false,
   onDeleted,
   onDecided,
+  focusTitle = false,
 }: {
   taskId: string;
   /** Shown next to a list (one column, smaller heading; decisions in a bar that stays in view). */
@@ -330,12 +340,19 @@ export function TaskDetailView({
   onDeleted?: () => void;
   /** Called after a status decision (the inbox moves on to the next task). */
   onDecided?: () => void;
+  /** Put the keyboard focus on the title once the task is shown (a clear starting point after moving on). */
+  focusTitle?: boolean;
 }) {
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
   const timezone = useTimezone();
   const { data: task, error, isLoading, refetch } = useTask(taskId);
-  const [edit, setEdit] = useState<{ intent: EditIntent; focus: EditFocus; context: string | null } | null>(null);
+  const [edit, setEdit] = useState<{ intent: EditIntent; focus: EditFocus; context: EditContext | null } | null>(null);
+  const title = useRef<HTMLHeadingElement>(null);
+  const shown = Boolean(task);
+  useEffect(() => {
+    if (focusTitle && shown) title.current?.focus({ preventScroll: true });
+  }, [focusTitle, shown]);
   const [techOpen, setTechOpen] = useState(false);
   const [mergeOpen, setMergeOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
@@ -462,7 +479,9 @@ export function TaskDetailView({
   );
 
   return (
-    <div className={cn("grid min-w-0 grid-cols-[minmax(0,1fr)] gap-6", embedded && "@container")}>
+    // With a decision bar the view fills the pane and the bar sits at its bottom edge, so the decisions are
+    // always in the same place and nothing (a toast, see keepToastsClear) covers them.
+    <div className={cn("grid min-w-0 grid-cols-[minmax(0,1fr)] gap-6", embedded && "@container", decisionBar && "grow grid-rows-[auto_1fr_auto]")}>
       <header className="grid min-w-0 grid-cols-1 gap-3">
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
           <StatusBadge status={task.status} />
@@ -488,7 +507,11 @@ export function TaskDetailView({
           ) : null}
         </div>
         <div className="flex items-start gap-2">
-          <Heading className={cn("min-w-0 flex-1 font-semibold tracking-tight [overflow-wrap:anywhere]", embedded ? "text-xl leading-snug" : "text-page sm:text-2xl sm:leading-snug")}>
+          <Heading
+            ref={title}
+            tabIndex={-1}
+            className={cn("min-w-0 flex-1 font-semibold tracking-tight outline-none [overflow-wrap:anywhere]", embedded ? "text-xl leading-snug" : "text-page sm:text-2xl sm:leading-snug")}
+          >
             {task.title}
           </Heading>
           <DropdownMenu>
@@ -536,7 +559,7 @@ export function TaskDetailView({
       </header>
 
       {embedded ? (
-        <div className="grid grid-cols-[minmax(0,1fr)] gap-6 @4xl:grid-cols-[minmax(0,1fr)_17rem] @4xl:gap-8">
+        <div className="grid grid-cols-[minmax(0,1fr)] gap-6 self-start @4xl:grid-cols-[minmax(0,1fr)_17rem] @4xl:gap-8">
           {main}
           {side}
         </div>
@@ -551,7 +574,10 @@ export function TaskDetailView({
       )}
 
       {decisionBar ? (
-        <div className="sticky bottom-0 z-10 -mx-4 -mb-4 flex flex-wrap items-center gap-2 border-t bg-card/95 px-4 py-3 backdrop-blur-sm max-sm:[&_button]:h-11 sm:-mx-8 sm:-mb-5 sm:px-8">
+        <div
+          ref={keepToastsClear}
+          className="sticky bottom-0 z-10 -mx-4 -mb-4 flex flex-wrap items-center gap-2 border-t bg-card/95 px-4 py-3 backdrop-blur-sm max-sm:[&_button]:h-11 sm:-mx-8 sm:-mb-5 sm:px-8"
+        >
           <PrimaryActions task={task} onEditConfirm={() => setEdit({ intent: "confirm", focus: "title", context: null })} onDone={onDecided} />
           <span className="ml-auto hidden text-xs text-muted-foreground xl:inline">{t("inbox.decisionHint")}</span>
         </div>

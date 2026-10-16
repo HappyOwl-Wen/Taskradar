@@ -1,5 +1,5 @@
 import type { TFunction } from "i18next";
-import type { Suggestion, TaskSummary, Urgency } from "./types";
+import type { Evidence, Suggestion, TaskDetail, TaskSummary, Urgency } from "./types";
 
 /**
  * Plain-language problems of a task, derived from the extractor's review reasons. The reasons are
@@ -180,16 +180,47 @@ function str(value: unknown): string | null {
   return typeof value === "string" && value ? value : null;
 }
 
-/** Fields of a suggestion payload that the UI understands. */
+/**
+ * Fields of a suggestion payload that the UI understands. The other task is named as it is now (the server
+ * sends its current title); the title saved with the suggestion is only the fallback when it is gone.
+ */
 export function suggestionPayload(s: Suggestion) {
   return {
     dueDate: str(s.payload.due_date),
     dueTime: str(s.payload.due_time),
     dueText: str(s.payload.due_text),
     previousDueDate: str(s.payload.previous_due_date),
-    otherTitle: str(s.payload.other_title) ?? s.related_task_title ?? null,
-    otherTaskId: str(s.payload.other_task_id) ?? s.related_task_id,
+    otherTitle: s.related_task_title ?? str(s.payload.other_title) ?? null,
+    otherTaskId: s.related_task_id ?? str(s.payload.other_task_id),
   };
+}
+
+const QUOTE_ORDER: Evidence["kind"][] = ["deadline", "action", "context", "completion"];
+
+/**
+ * The sentence a deadline was read from, so that a weekday or an anchor written next to the date ("Freitag,
+ * 4.11.2026") can be seen while the date is fixed. Null when no quote contains the date as written.
+ */
+export function dateQuote(task: Pick<TaskDetail, "due_text" | "sources">): string | null {
+  const text = task.due_text;
+  if (!text) return null;
+  const quotes = task.sources.flatMap((source) => source.evidence).filter((e) => e.quote.includes(text));
+  quotes.sort((a, b) => QUOTE_ORDER.indexOf(a.kind) - QUOTE_ORDER.indexOf(b.kind));
+  return quotes[0]?.quote ?? null;
+}
+
+// A weekday written right before a date ("Freitag, ", "Fri ", "周五，"), which belongs to what is checked
+// (not the end of another Latin word: "also 4.11." has no weekday).
+const WEEKDAY_BEFORE =
+  /(?<!\p{Script=Latin})(?:montag|dienstag|mittwoch|donnerstag|freitag|samstag|sonntag|monday|tuesday|wednesday|thursday|friday|saturday|sunday|(?:mo|di|mi|do|fr|sa|so|mon|tue|wed|thu|fri|sat|sun)\.?|(?:周|星期|礼拜)[一二三四五六日天])[,，]?\s*$/iu;
+
+/** Where the date sits in a quote, together with a weekday written right before it: [start, end) or null. */
+export function dateSpan(quote: string, dueText: string | null | undefined): [number, number] | null {
+  if (!dueText) return null;
+  const start = quote.indexOf(dueText);
+  if (start < 0) return null;
+  const weekday = quote.slice(0, start).match(WEEKDAY_BEFORE);
+  return [start - (weekday ? weekday[0].length : 0), start + dueText.length];
 }
 
 /** The extractor's reason string split into its parts ("action=0.80; text=0.41; …"), for the technical details. */

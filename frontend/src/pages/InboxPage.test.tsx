@@ -185,4 +185,47 @@ describe("InboxPage", () => {
     expect(await screen.findByRole("heading", { level: 2, name: "Register for only" })).toBeInTheDocument();
     await waitFor(() => expect(screen.queryByRole("button", { name: "Bücher zurückgeben" })).not.toBeInTheDocument());
   });
+
+  it("on a narrow screen the next task starts at its title, read from the top", async () => {
+    vi.stubGlobal("matchMedia", () => ({ matches: false, addEventListener: () => undefined, removeEventListener: () => undefined }) as unknown as MediaQueryList);
+    // The queue moves on before the list has refreshed (as in the app), so the same pane shows the next task.
+    vi.spyOn(api, "setStatus").mockResolvedValue({ ...makeDetail({ ...overdue, status: "confirmed" }), undo_event_id: 42 } as Awaited<ReturnType<typeof api.setStatus>>);
+    renderInbox("/inbox?task=overdue");
+    const scroller = (await screen.findByRole("heading", { level: 2, name: "Bücher zurückgeben" })).closest(".overflow-y-auto") as HTMLElement;
+    scroller.scrollTop = 90; // read down to the bottom of a long task
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "确认任务" }));
+    });
+    const next = await screen.findByRole("heading", { level: 2, name: "Register for only" });
+    await waitFor(() => expect(next).toHaveFocus());
+    expect(scroller.scrollTop).toBe(0);
+    expect(screen.getByRole("button", { name: /返回列表/ })).toBeInTheDocument();
+  });
+
+  it("names the other task of a possible duplicate as it is now, in the note and in the comparison", async () => {
+    const rent = makeTask({ id: "new", title: "Mietzahlung November", needs_review: true, review_reasons: ["possible_duplicate"], pending_suggestions: 1 });
+    candidates = [rent];
+    // The existing task was renamed after the suggestion was made; the suggestion still holds the old title.
+    vi.mocked(api.task).mockImplementation(async (id: string) =>
+      id === "old"
+        ? makeDetail({ id: "old", title: "交互复查：November-Miete überweisen", status: "confirmed" })
+        : makeDetail({ ...rent, suggestions: [makeSuggestion({ related_task_title: "交互复查：November-Miete überweisen" })] }),
+    );
+    renderInbox("/inbox?task=new");
+    expect(await screen.findByText(/「交互复查：November-Miete überweisen」/)).toBeInTheDocument();
+    expect(screen.queryByText(/Miete November überweisen/)).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /查看差异/ }));
+    const dialog = await screen.findByRole("dialog");
+    expect(await within(dialog).findAllByText("交互复查：November-Miete überweisen")).not.toHaveLength(0);
+  });
+
+  it("keeps toasts clear of the decision bar while it is shown", async () => {
+    const { unmount } = renderInbox();
+    await screen.findByRole("heading", { level: 2, name: "Bücher zurückgeben" });
+    // The bar publishes its height for the toaster (0 px here: jsdom does no layout).
+    expect(document.documentElement.style.getPropertyValue("--toast-clearance")).toBe("0px");
+    unmount();
+    // Taken back a moment after the bar has gone (the next task's bar usually follows).
+    await waitFor(() => expect(document.documentElement.style.getPropertyValue("--toast-clearance")).toBe(""), { timeout: 2000 });
+  });
 });

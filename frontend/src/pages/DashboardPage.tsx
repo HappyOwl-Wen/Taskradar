@@ -46,30 +46,51 @@ function attentionStates(task: AttentionTask, t: TFunction): KeyState[] {
   ];
 }
 
+/** Waits for a decision (new, or with a pending suggestion): handled in the queue. */
+const inQueue = (task: AttentionTask) => task.status === "candidate" || task.pending_suggestions > 0;
+/** Groups that are about a date's reliability, not its closeness: a queued task there is decided in the queue. */
+const QUEUE_GROUPS = new Set<AttentionReason>(["date_changed", "conflict"]);
+
 function AttentionList({ items }: { items: AttentionTask[] }) {
   const { t } = useTranslation();
   const groups = GROUPS.map((g) => ({ group: g, tasks: items.filter((task) => groupOf(task) === g) })).filter((g) => g.tasks.length);
   return (
     <div className="overflow-hidden rounded-lg border bg-card">
-      {groups.map(({ group, tasks }) => (
-        <section key={group} aria-label={t(`dashboard.group.${group}`)} className="border-b last:border-b-0">
-          <h3 className={cn("flex items-center gap-2 bg-muted/50 px-4 py-1.5 text-xs font-semibold", GROUP_TONE[group])}>
-            {t(`dashboard.group.${group}`)}
-            <span className="font-normal text-muted-foreground tabular-nums">{tasks.length}</span>
-          </h3>
-          <ul className="grid gap-px p-1">
-            {tasks.map((task) => (
-              <li key={task.id}>
-                <TaskListItem
-                  task={task}
-                  to={task.status === "candidate" ? `/inbox?task=${task.id}` : `/tasks/${task.id}`}
-                  states={attentionStates(task, t)}
-                />
-              </li>
-            ))}
-          </ul>
-        </section>
-      ))}
+      {groups.map(({ group, tasks }) => {
+        // Listed once: what already waits in "things to decide" is pointed to here, not repeated.
+        const queued = QUEUE_GROUPS.has(group) ? tasks.filter(inQueue) : [];
+        const listed = tasks.filter((task) => !queued.includes(task));
+        return (
+          <section key={group} aria-label={t(`dashboard.group.${group}`)} className="border-b last:border-b-0">
+            <h3 className={cn("flex items-center gap-2 bg-muted/50 px-4 py-1.5 text-xs font-semibold", GROUP_TONE[group])}>
+              {t(`dashboard.group.${group}`)}
+              <span className="font-normal text-muted-foreground tabular-nums">{tasks.length}</span>
+            </h3>
+            <ul className="grid gap-px p-1">
+              {listed.map((task) => (
+                <li key={task.id}>
+                  <TaskListItem
+                    task={task}
+                    to={task.status === "candidate" ? `/inbox?task=${task.id}` : `/tasks/${task.id}`}
+                    states={attentionStates(task, t)}
+                  />
+                </li>
+              ))}
+              {queued.length ? (
+                <li>
+                  <Link
+                    to={`/inbox?task=${queued[0].id}`}
+                    className="flex min-h-11 items-center gap-2 rounded-md px-3 py-2 text-[13px] text-muted-foreground hover:bg-accent hover:text-foreground"
+                  >
+                    <span className="min-w-0 flex-1">{t("dashboard.inQueue", { count: queued.length })}</span>
+                    <ArrowRight className="size-4 shrink-0" aria-hidden />
+                  </Link>
+                </li>
+              ) : null}
+            </ul>
+          </section>
+        );
+      })}
     </div>
   );
 }
@@ -81,8 +102,8 @@ function shortDue(date: string | null | undefined, time: string | null | undefin
 /** "and «other task» (date)" for a possible duplicate, so the decision can be judged from here. */
 function DuplicateNote({ suggestion }: { suggestion: Suggestion }) {
   const { t, i18n } = useTranslation();
-  // The other task's current title; older servers send it only inside the payload. Never a bare dash.
-  const other = suggestion.related_task_title ?? suggestionPayload(suggestion).otherTitle ?? t("dashboard.suggestion.otherTask");
+  // The other task's current title (the one saved with the suggestion if it is gone); never a bare dash.
+  const other = suggestionPayload(suggestion).otherTitle ?? t("dashboard.suggestion.otherTask");
   const due = shortDue(suggestion.related_due_date, suggestion.related_due_time, i18n.language);
   return (
     <>
@@ -303,7 +324,13 @@ function summaryLine(data: Dashboard, t: TFunction): string {
     counts.due_tomorrow ? t("dashboard.summaryTomorrow", { count: counts.due_tomorrow }) : null,
     counts.due_soon ? t("dashboard.summaryWeek", { count: counts.due_soon }) : null,
   ].filter(Boolean);
-  if (!parts.length) return t("dashboard.summaryNone");
+  if (!parts.length) {
+    // Nothing is due soon, but that is not the same as "nothing to do".
+    const waiting = data.counts.needs_action ?? 0;
+    if (waiting) return t("dashboard.summaryNothingDue", { count: waiting });
+    const watch = data.attention?.length ?? 0;
+    return watch ? t("dashboard.summaryNothingDueWatch", { count: watch }) : t("dashboard.summaryNone");
+  }
   const unconfirmed = data.attention_unconfirmed ?? 0;
   return parts.join(t("dashboard.summaryJoin")) + (unconfirmed ? t("dashboard.summaryUnconfirmed", { count: unconfirmed }) : "");
 }

@@ -1,5 +1,5 @@
 import { ArrowLeft, Ban, Check, ChevronDown, ChevronUp, CircleCheckBig, FlaskConical, Inbox, ListChecks, X } from "lucide-react";
-import { Fragment, useMemo, useState, type KeyboardEvent } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { Link, useSearchParams } from "react-router";
 import { useTranslation } from "react-i18next";
 import { TaskDetailView } from "@/components/tasks/TaskDetailView";
@@ -71,7 +71,13 @@ export default function InboxPage() {
     }
     setParams(next, { replace: !push });
   };
-  const open = (id: string) => setParam({ task: id }, !wide);
+  // On a narrow screen the list gives way to the task: its title takes the keyboard focus, so the place to
+  // continue from is clear (on wide screens the focus stays in the list).
+  const [focusTitleOf, setFocusTitleOf] = useState<string | null>(null);
+  const open = (id: string) => {
+    setParam({ task: id }, !wide);
+    if (!wide) setFocusTitleOf(id);
+  };
   const backToList = () => setParam({ task: null });
   const focusItem = (id: string) => window.requestAnimationFrame(() => document.getElementById(itemControlId(id))?.focus());
   const goTo = (task: TaskSummary | undefined) => {
@@ -82,9 +88,15 @@ export default function InboxPage() {
   // After a decision the next task in the list is shown (not the top of the list), with the focus on it.
   const afterDecision = () => {
     const next = items[activeIndex + 1] ?? items[activeIndex - 1];
-    if (next) goTo(next);
-    else backToList();
+    if (!next) return backToList();
+    goTo(next);
+    if (!wide) setFocusTitleOf(next.id);
   };
+  // Each task is read from its start; the list keeps its own scroll position.
+  const detailScroll = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (detailScroll.current) detailScroll.current.scrollTop = 0;
+  }, [activeId]);
 
   const endSelection = () => {
     setSelecting(false);
@@ -230,8 +242,9 @@ export default function InboxPage() {
 
   const detail =
     showDetail && activeId ? (
-      <div className="scroll-stable min-h-0 min-w-0 flex-1 overflow-y-auto">
-        <div className="mx-auto w-full max-w-[60rem] px-4 py-4 sm:px-8 sm:py-5">
+      <div ref={detailScroll} className="scroll-stable min-h-0 min-w-0 flex-1 overflow-y-auto">
+        {/* At least as tall as the pane, so the decision bar of a short task still sits at the bottom. */}
+        <div className="mx-auto flex min-h-full w-full max-w-[60rem] flex-col px-4 py-4 sm:px-8 sm:py-5">
           {/* Where am I in the queue, and the way back or on (also without a keyboard). */}
           <div className="mb-3 flex items-center gap-1 pointer-coarse:gap-3">
             {!wide ? (
@@ -263,7 +276,14 @@ export default function InboxPage() {
               <ChevronDown />
             </Button>
           </div>
-          <TaskDetailView key={activeId} taskId={activeId} embedded onDeleted={afterDecision} onDecided={afterDecision} />
+          <TaskDetailView
+            key={activeId}
+            taskId={activeId}
+            embedded
+            focusTitle={focusTitleOf === activeId}
+            onDeleted={afterDecision}
+            onDecided={afterDecision}
+          />
         </div>
       </div>
     ) : wide ? (

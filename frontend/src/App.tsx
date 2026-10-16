@@ -107,7 +107,15 @@ export default function App() {
     <QueryClientProvider client={queryClient}>
       <TooltipProvider delayDuration={300}>
         <SessionGate />
-        <Toaster richColors closeButton position="bottom-right" toastOptions={{ className: "whitespace-pre-line" }} />
+        <Toaster
+          richColors
+          closeButton
+          position="bottom-right"
+          // Above an action bar at the bottom of the screen (see keepToastsClear), so the next decision stays reachable.
+          offset={{ bottom: "calc(24px + var(--toast-clearance, 0px))" }}
+          mobileOffset={{ bottom: "calc(16px + var(--toast-clearance, 0px))" }}
+          toastOptions={{ className: "whitespace-pre-line" }}
+        />
       </TooltipProvider>
     </QueryClientProvider>
   );
