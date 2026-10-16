@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import i18n from "@/i18n";
-import { deadlinesDiffer, reasonParts, reviewReasonLabel, sortInbox, taskIssues } from "./review";
+import { dateDetail, deadlinesDiffer, reasonParts, reviewReasonLabel, sortInbox, taskIssues } from "./review";
 import type { TaskSummary } from "./types";
 
 function task(overrides: Partial<TaskSummary> = {}): TaskSummary {
@@ -76,6 +76,22 @@ describe("taskIssues", () => {
   it("ignores closed tasks and unknown codes", () => {
     expect(taskIssues(task({ status: "dismissed", needs_review: true, review_reasons: ["possible_duplicate"] }))).toEqual([]);
     expect(taskIssues(task({ needs_review: true, review_reasons: ["something_new"] }))).toEqual([]);
+  });
+});
+
+describe("dateDetail", () => {
+  it("names the recorded reason for an unclear date, the most specific one first", () => {
+    expect(dateDetail(["ambiguous_date", "weekday_mismatch"], "bis Freitag, 4.11.2026")).toBe("weekday_mismatch");
+    expect(dateDetail(["date_needs_confirmation", "approximate_date"], "Ende November")).toBe("approximate_date");
+    expect(taskIssues(task({ needs_review: true, review_reasons: ["ambiguous_date", "weekday_mismatch"] }))[0].reasons).toEqual([
+      "ambiguous_date",
+      "weekday_mismatch",
+    ]);
+  });
+
+  it("asks to compare with the source instead of guessing when no reason was recorded", () => {
+    expect(dateDetail(["ambiguous_date"], "bis 4.11.")).toBe("check");
+    expect(dateDetail(["date_needs_confirmation"], null)).toBe("checkNoText");
   });
 });
 

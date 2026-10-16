@@ -110,15 +110,36 @@ function Row({ id, icon: Icon, title, meta, status, actions, children }: { id?: 
 
 export function GmailRow({ sources, timezone }: { sources: Source[]; timezone: string }) {
   const { t } = useTranslation();
-  const { data: status } = useSystemStatus();
+  const { data: status, isError, isFetching, refetch } = useSystemStatus();
   const { data: settings } = useSettings();
   const source = sources.find((s) => s.kind === "gmail");
-  const connected = Boolean(status?.google.gmail_connected) && Boolean(source);
+  // Until the connection status has loaded, "not connected" would be a guess: a stored Gmail source is
+  // shown from its own record, and without one the row says that it is still checking (or cannot tell).
+  const known = status !== undefined;
+  const connected = known ? Boolean(status.google.gmail_connected) && Boolean(source) : Boolean(source && source.status !== "disconnected");
   const readonly = (
     <span className="inline-flex items-center gap-1">
       <ShieldCheck className="size-3.5 text-success" /> {t("sources.gmail.readonly")} (gmail.readonly)
     </span>
   );
+  if (!known && !source) {
+    return (
+      <Row
+        id="gmail"
+        icon={Mail}
+        title={t("sources.gmail.title")}
+        status={<SourceHealth label={isError ? t("sources.gmail.statusUnknown") : t("sources.gmail.checking")} />}
+        meta={readonly}
+        actions={
+          isError ? (
+            <Button variant="outline" size="xs" onClick={() => void refetch()} disabled={isFetching}>
+              <RefreshCw /> {t("common.retry")}
+            </Button>
+          ) : null
+        }
+      />
+    );
+  }
   if (!connected || !source) {
     return (
       <Row
@@ -424,7 +445,7 @@ export function UploadsRow({ count }: { count: number }) {
       icon={Upload}
       title={t("sources.uploads.title")}
       meta={<span>{count ? t("sources.folders.files", { count }) : t("sources.uploads.description")}</span>}
-      actions={<UploadButton variant="outline" />}
+      actions={<UploadButton variant="outline" compact={false} />}
     />
   );
 }

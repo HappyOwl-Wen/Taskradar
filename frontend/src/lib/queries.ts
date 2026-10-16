@@ -1,8 +1,10 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
+import { useMemo } from "react";
 import { toast } from "sonner";
 import i18n from "@/i18n";
 import { api, type TaskQuery } from "./api";
 import { errorMessage } from "./errors";
+import { sortInbox, type InboxSort } from "./review";
 
 export const qk = {
   dashboard: ["dashboard"] as const,
@@ -28,6 +30,20 @@ export const useDashboard = () => useQuery({ queryKey: qk.dashboard, queryFn: ap
 
 export const useTasks = (query: TaskQuery) =>
   useQuery({ queryKey: qk.tasks(query), queryFn: () => api.tasks(query), placeholderData: keepPreviousData });
+
+/**
+ * Everything waiting for a decision (new tasks and tasks with an open suggestion) in the order it should
+ * be handled; test data last. The filter is repeated here so that a server without `needs_decision`
+ * (one that has not been restarted after an update) does not fill the queue with every task.
+ */
+export function useDecisionQueue(sort: InboxSort = "priority", limit = 500) {
+  const query = useTasks({ needs_decision: true, limit });
+  const items = useMemo(() => {
+    const all = (query.data?.items ?? []).filter((task) => task.status === "candidate" || task.pending_suggestions > 0);
+    return [...sortInbox(all.filter((task) => !task.sample), sort), ...sortInbox(all.filter((task) => task.sample), sort)];
+  }, [query.data, sort]);
+  return { ...query, items };
+}
 
 export const useTask = (id: string | undefined) =>
   useQuery({ queryKey: qk.task(id ?? ""), queryFn: () => api.task(id ?? ""), enabled: Boolean(id) });

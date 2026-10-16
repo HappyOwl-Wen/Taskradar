@@ -35,6 +35,14 @@ const REASON_ISSUE: Record<string, IssueKind> = {
   date_needs_confirmation: "date_unclear",
   relative_date_without_source_date: "date_unclear",
   date_not_found_in_source: "date_unclear",
+  // What exactly is unclear about the date (recorded for tasks found from now on; older ones only have the codes above).
+  weekday_mismatch: "date_unclear",
+  day_month_order_ambiguous: "date_unclear",
+  next_weekday_ambiguous: "date_unclear",
+  this_week_day_already_passed: "date_unclear",
+  weekday_equals_source_day: "date_unclear",
+  approximate_date: "date_unclear",
+  period_starts_at_unknown_event: "date_unclear",
   title_incomplete: "content_unclear",
   possible_prompt_injection: "suspicious",
   evidence_not_found_in_source: "not_in_source",
@@ -82,6 +90,30 @@ const SEVERITY: Record<IssueKind, Issue["severity"]> = {
 };
 
 type IssueTask = Pick<TaskSummary, "review_reasons" | "needs_review" | "due_needs_confirmation" | "status">;
+
+/** The most specific explanation of an unclear date that the reasons allow, most specific first. */
+const DATE_DETAILS = [
+  "weekday_mismatch",
+  "day_month_order_ambiguous",
+  "next_weekday_ambiguous",
+  "this_week_day_already_passed",
+  "weekday_equals_source_day",
+  "approximate_date",
+  "period_starts_at_unknown_event",
+  "relative_date_without_source_date",
+  "date_not_found_in_source",
+] as const;
+export type DateDetail = (typeof DATE_DETAILS)[number] | "check" | "checkNoText";
+
+/**
+ * Which explanation fits an unclear date. Only a reason the extractor actually recorded is named;
+ * otherwise the user is asked to compare with the source instead of guessing from examples.
+ */
+export function dateDetail(reasons: string[], dueText: string | null | undefined): DateDetail {
+  const known = DATE_DETAILS.find((code) => reasons.includes(code));
+  if (known) return known;
+  return dueText ? "check" : "checkNoText";
+}
 
 /**
  * Issues the user still has to look at. Once the user has reviewed a task (confirmed or edited it),

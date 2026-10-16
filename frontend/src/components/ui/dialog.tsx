@@ -27,7 +27,7 @@ export function DialogContent({
       <DialogPrimitive.Content data-slot="dialog-content" className={cn(contentClass, className)} {...props}>
         {children}
         {showClose ? (
-          <DialogPrimitive.Close className="absolute top-4 right-4 rounded-md p-1 text-muted-foreground opacity-80 transition-opacity hover:bg-accent hover:opacity-100 focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none">
+          <DialogPrimitive.Close className="touch-target absolute top-3 right-3 grid size-8 place-items-center rounded-md text-muted-foreground opacity-80 transition-opacity hover:bg-accent hover:opacity-100 focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none">
             <X className="size-4" />
             <span className="sr-only">{t("common.close")}</span>
           </DialogPrimitive.Close>

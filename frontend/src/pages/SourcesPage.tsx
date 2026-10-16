@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router";
 import { useTranslation } from "react-i18next";
+import { UploadButton } from "@/components/layout/TopBar";
+import { LastImportCard } from "@/components/sources/LastImport";
 import { OcrBacklogNotice } from "@/components/sources/OcrBacklogNotice";
 import { ProcessingRecords } from "@/components/sources/ProcessingRecords";
 import { AddFolderForm, AddSourceMenu, DemoRow, FolderRows, GmailRow, SampleRow, UploadsRow } from "@/components/sources/SourceCards";
@@ -45,10 +47,16 @@ export default function SourcesPage() {
   const testData = sources.find((s) => s.kind === "sample_upload");
   return (
     <div className="grid gap-6">
-      <header className="grid gap-0.5">
-        <h1 className="text-page font-semibold">{t("sources.title")}</h1>
-        <p className="text-[13px] text-muted-foreground">{t("sources.description")}</p>
+      {/* Adding something is what this page is for: importing is its main action. */}
+      <header className="flex flex-wrap items-start justify-between gap-3">
+        <div className="grid min-w-0 flex-1 basis-72 gap-0.5">
+          <h1 className="text-page font-semibold">{t("sources.title")}</h1>
+          <p className="text-[13px] text-muted-foreground">{t("sources.description")}</p>
+        </div>
+        <UploadButton variant="default" compact={false} />
       </header>
+
+      <LastImportCard />
 
       <section className="grid gap-2">
         <SectionTitle title={t("sources.connected")} aside={data ? <AddSourceMenu sources={sources} onAddFolder={() => setAddingFolder(true)} /> : null} />

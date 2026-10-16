@@ -1,4 +1,4 @@
-import { ChevronDown } from "lucide-react";
+import { Ban, ChevronDown, Circle, CircleCheck, CircleDashed, Ellipsis } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import {
@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/menu";
 import { api } from "@/lib/api";
 import { useAction } from "@/lib/queries";
-import { TASK_STATUSES, type TaskStatus } from "@/lib/types";
+import { TASK_STATUSES, type TaskStatus, type TaskSummary } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { STATUS_ICON, STATUS_TEXT } from "./meta";
 
@@ -26,43 +26,38 @@ const STATUS_TEXT_MENU: Record<TaskStatus, string> = {
   dismissed: "text-muted-foreground!",
 };
 
+function useStatusChange(taskId: string) {
+  const { t } = useTranslation();
+  return useAction((next: TaskStatus) => api.setStatus(taskId, next), {
+    success: (r) => t(`detail.statusDone.${r.status}`, { title: r.title }),
+    undo: (r) => r.undo_event_id,
+  });
+}
+
 /**
  * Sets any lifecycle status; every change is recorded and can be undone from the toast.
- * `variant="icon"` is the compact form used in lists (the coloured status icon is the trigger).
+ * `variant="button"` shows the current status (task page); `variant="more"` is the quiet "…" at the end
+ * of a list row, next to the one-step actions.
  */
 export function StatusMenu({
   taskId,
   status,
   size = "sm",
   variant = "button",
-  showLabel = false,
 }: {
   taskId: string;
   status: TaskStatus;
   size?: "sm" | "xs";
-  variant?: "button" | "icon";
-  /** With `variant="icon"`: also show the status name next to the icon. */
-  showLabel?: boolean;
+  variant?: "button" | "more";
 }) {
   const { t } = useTranslation();
-  const change = useAction((next: TaskStatus) => api.setStatus(taskId, next), {
-    success: (r) => t(`detail.statusDone.${r.status}`, { title: r.title }),
-    undo: (r) => r.undo_event_id,
-  });
+  const change = useStatusChange(taskId);
   const Icon = STATUS_ICON[status];
   const label = t(`status.${status}`);
   const trigger =
-    variant === "icon" ? (
-      <Button
-        variant="ghost"
-        size={showLabel ? "xs" : "icon-xs"}
-        disabled={change.isPending}
-        aria-label={t("tasks.changeStatus", { status: label })}
-        // Wide enough for the longest label in every language ("Waiting for reply"); icon only on phones.
-        className={cn(STATUS_TEXT[status], showLabel && "justify-start px-1.5 sm:w-[7.75rem]")}
-      >
-        <Icon />
-        {showLabel ? <span className="hidden truncate text-xs font-medium sm:inline">{label}</span> : null}
+    variant === "more" ? (
+      <Button variant="ghost" size="icon-sm" disabled={change.isPending} aria-label={t("tasks.changeStatus", { status: label })} className="touch-target relative text-muted-foreground">
+        <Ellipsis />
       </Button>
     ) : (
       <Button variant="outline" size={size} disabled={change.isPending} aria-label={t("tasks.changeStatus", { status: label })}>
@@ -73,14 +68,8 @@ export function StatusMenu({
     );
   return (
     <DropdownMenu>
-      {variant === "icon" && !showLabel ? (
-        <Tip content={t("tasks.changeStatus", { status: label })}>
-          <DropdownMenuTrigger asChild>{trigger}</DropdownMenuTrigger>
-        </Tip>
-      ) : (
-        <DropdownMenuTrigger asChild>{trigger}</DropdownMenuTrigger>
-      )}
-      <DropdownMenuContent align="start">
+      <DropdownMenuTrigger asChild>{trigger}</DropdownMenuTrigger>
+      <DropdownMenuContent align={variant === "more" ? "end" : "start"}>
         <DropdownMenuLabel>{t("tasks.columns.status")}</DropdownMenuLabel>
         <DropdownMenuRadioGroup value={status} onValueChange={(v) => change.mutate(v as TaskStatus)}>
           {TASK_STATUSES.map((s) => {
@@ -95,5 +84,56 @@ export function StatusMenu({
         </DropdownMenuRadioGroup>
       </DropdownMenuContent>
     </DropdownMenu>
+  );
+}
+
+/**
+ * The one-step action at the start of a list row: tick an open task off (or untick a completed one).
+ * Unconfirmed and dismissed tasks show their state instead; their one-step action ("confirm", "restore")
+ * sits at the end of the row. `onLeaving` lets the list fade the row while it is being completed.
+ */
+export function CompleteToggle({ task, onLeaving }: { task: TaskSummary; onLeaving?: (leaving: boolean) => void }) {
+  const { t } = useTranslation();
+  const change = useStatusChange(task.id);
+  if (task.status === "candidate" || task.status === "dismissed") {
+    const StateIcon = task.status === "candidate" ? CircleDashed : Ban;
+    return (
+      <Tip content={t(`status.${task.status}`)}>
+        <span className={cn("grid size-8 place-items-center", STATUS_TEXT[task.status])}>
+          <StateIcon className="size-[18px]" aria-hidden />
+          <span className="sr-only">{t(`status.${task.status}`)}</span>
+        </span>
+      </Tip>
+    );
+  }
+  const done = task.status === "completed";
+  const next: TaskStatus = done ? "confirmed" : "completed";
+  // Shown ticked as soon as it is clicked; the list refreshes right after.
+  const shownDone = change.isPending || change.isSuccess ? next === "completed" : done;
+  const toggle = () => {
+    onLeaving?.(true);
+    change.mutate(next, { onError: () => onLeaving?.(false) });
+  };
+  return (
+    <Tip content={done ? t("statusAction.reopen") : t("statusAction.complete")}>
+      <button
+        type="button"
+        role="checkbox"
+        aria-checked={shownDone}
+        aria-label={done ? t("taskItem.reopen", { title: task.title }) : t("taskItem.complete", { title: task.title })}
+        onClick={toggle}
+        disabled={change.isPending}
+        className="group/done touch-target relative grid size-8 shrink-0 place-items-center rounded-full outline-none focus-visible:ring-[3px] focus-visible:ring-ring/40 disabled:cursor-wait"
+      >
+        {shownDone ? (
+          <CircleCheck className="size-5 text-success" aria-hidden />
+        ) : (
+          <>
+            <Circle className="size-5 text-input group-hover/done:hidden" aria-hidden />
+            <CircleCheck className="hidden size-5 text-success group-hover/done:block" aria-hidden />
+          </>
+        )}
+      </button>
+    </Tip>
   );
 }

@@ -7,6 +7,7 @@ import type {
   DocumentDetail,
   GoogleStatus,
   ImportResult,
+  IngestOutcome,
   MessageDetail,
   MessageListItem,
   Metrics,
@@ -134,6 +135,8 @@ export interface TaskQuery extends Query {
   needs_review?: boolean;
   /** true: only demo/test data, false: only real tasks, omitted: both. */
   sample?: boolean;
+  /** Unconfirmed tasks and tasks with an open suggestion: everything waiting for a decision. */
+  needs_decision?: boolean;
   sort?: string;
   order?: "asc" | "desc";
   limit?: number;
@@ -208,7 +211,7 @@ export const api = {
   messages: () => get<{ items: MessageListItem[] }>("/api/messages", { limit: 1000 }),
   message: (id: number) => get<MessageDetail>(`/api/messages/${id}`),
   deleteMessage: (id: number) => del<{ deleted: number }>(`/api/messages/${id}`),
-  reprocessMessage: (id: number) => post<Record<string, unknown>>(`/api/messages/${id}/reprocess`),
+  reprocessMessage: (id: number) => post<IngestOutcome>(`/api/messages/${id}/reprocess`),
   agentRuns: (limit = 50) => get<{ items: AgentRun[] }>("/api/agent-runs", { limit }),
 
   settings: () => get<Settings>("/api/settings"),

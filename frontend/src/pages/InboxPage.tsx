@@ -1,53 +1,67 @@
-import { ArrowLeft, Ban, Check, CircleCheckBig, FlaskConical, Inbox, Lightbulb, X } from "lucide-react";
+import { ArrowLeft, Ban, Check, ChevronDown, ChevronUp, CircleCheckBig, FlaskConical, Inbox, ListChecks, X } from "lucide-react";
 import { Fragment, useMemo, useState, type KeyboardEvent } from "react";
 import { Link, useSearchParams } from "react-router";
 import { useTranslation } from "react-i18next";
-import { SuggestionCard } from "@/components/tasks/SuggestionCard";
 import { TaskDetailView } from "@/components/tasks/TaskDetailView";
 import { TaskListItem } from "@/components/tasks/TaskRow";
 import { Button } from "@/components/ui/button";
 import { Checkbox, Label, Switch } from "@/components/ui/form";
 import { SimpleSelect } from "@/components/ui/select";
 import { EmptyState, ErrorState, LoadingRows } from "@/components/ui/states";
-import { TabCount, Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { api } from "@/lib/api";
 import { useMediaQuery } from "@/lib/hooks";
-import { useAction, useSuggestions, useTasks } from "@/lib/queries";
-import { sortInbox, taskIssues, type InboxSort } from "@/lib/review";
-import type { Suggestion } from "@/lib/types";
+import { useAction, useDecisionQueue } from "@/lib/queries";
+import { taskIssues, type InboxSort } from "@/lib/review";
+import type { TaskSummary } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 const SORTS: InboxSort[] = ["priority", "due", "detected"];
 const NAV_KEYS = new Set(["ArrowDown", "ArrowUp", "j", "k"]);
+const PAGE = 500;
 
 function itemControlId(id: string): string {
   return `inbox-item-${id}`;
 }
 
-function Candidates() {
+/**
+ * The review queue: new tasks to confirm, and confirmed tasks with an open suggestion (a changed date,
+ * a possible duplicate, "possibly done") in one list, each with what needs deciding. On wide screens the
+ * list and the selected task stand side by side; below 1280 px they take turns, so the task keeps enough
+ * room for its evidence and actions.
+ */
+export default function InboxPage() {
   const { t } = useTranslation();
   const [params, setParams] = useSearchParams();
-  // Side by side from 1024 px; below that the list and the detail take turns.
-  const wide = useMediaQuery("(min-width: 1024px)");
+  const wide = useMediaQuery("(min-width: 1280px)");
+  const [selecting, setSelecting] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [limit, setLimit] = useState(PAGE);
   const sortParam = params.get("sort") as InboxSort | null;
   const sort: InboxSort = sortParam && SORTS.includes(sortParam) ? sortParam : "priority";
   const onlyIssues = params.get("issues") === "1";
-  const { data, error, isLoading, refetch } = useTasks({ status: ["candidate"], limit: 500 });
-  const items = useMemo(() => {
-    const all = data?.items ?? [];
-    const shown = onlyIssues ? all.filter((task) => taskIssues(task).length > 0) : all;
-    // Test data is reviewed like everything else, but after the real tasks.
-    return [...sortInbox(shown.filter((task) => !task.sample), sort), ...sortInbox(shown.filter((task) => task.sample), sort)];
-  }, [data, onlyIssues, sort]);
+  const { items: queue, data, error, isLoading, isFetching, refetch } = useDecisionQueue(sort, limit);
+  const items = useMemo(
+    () => (onlyIssues ? queue.filter((task) => taskIssues(task).length > 0 || task.pending_suggestions > 0) : queue),
+    [queue, onlyIssues],
+  );
   const firstSample = items.findIndex((task) => task.sample);
   const sampleCount = items.length - (firstSample < 0 ? items.length : firstSample);
+  const realCount = queue.filter((task) => !task.sample).length;
   const ids = new Set(items.map((i) => i.id));
+  // Batch decisions are for new tasks (confirm or dismiss); suggestions are decided one by one.
+  const selectable = items.filter((i) => i.status === "candidate");
   const chosen = [...selected].filter((id) => ids.has(id));
   const requested = params.get("task");
   // A decided task leaves the list; on wide screens the first remaining one is shown.
   const activeId = requested && ids.has(requested) ? requested : wide ? items[0]?.id : undefined;
   const showDetail = Boolean(activeId) && (wide || Boolean(requested && ids.has(requested)));
+  const activeIndex = activeId ? items.findIndex((i) => i.id === activeId) : -1;
+  // The position is counted among real tasks (as the header count is), or among test data for test data.
+  const activeTask = activeIndex >= 0 ? items[activeIndex] : undefined;
+  const peers = activeTask ? items.filter((i) => i.sample === activeTask.sample) : [];
+  const peerIndex = activeTask ? peers.indexOf(activeTask) : -1;
+  const loaded = data?.items.length ?? 0;
+  const total = data?.total ?? loaded;
 
   const setParam = (changes: Record<string, string | null>, push = false) => {
     const next = new URLSearchParams(params);
@@ -59,23 +73,32 @@ function Candidates() {
   };
   const open = (id: string) => setParam({ task: id }, !wide);
   const backToList = () => setParam({ task: null });
+  const focusItem = (id: string) => window.requestAnimationFrame(() => document.getElementById(itemControlId(id))?.focus());
+  const goTo = (task: TaskSummary | undefined) => {
+    if (!task) return;
+    setParam({ task: task.id });
+    if (wide) focusItem(task.id);
+  };
+  // After a decision the next task in the list is shown (not the top of the list), with the focus on it.
   const afterDecision = () => {
-    const i = items.findIndex((x) => x.id === activeId);
-    const next = items[i + 1] ?? items[i - 1];
-    if (wide && next) setParam({ task: next.id });
+    const next = items[activeIndex + 1] ?? items[activeIndex - 1];
+    if (next) goTo(next);
     else backToList();
   };
 
-  const clear = () => setSelected(new Set());
+  const endSelection = () => {
+    setSelecting(false);
+    setSelected(new Set());
+  };
   const confirmBatch = useAction(() => api.batch(chosen, "confirm"), {
     success: (r) => t("inbox.confirmed", { count: r.count }),
     undo: (r) => r.undo_event_ids,
-    onSuccess: clear,
+    onSuccess: endSelection,
   });
   const dismissBatch = useAction(() => api.batch(chosen, "dismiss"), {
     success: (r) => t("inbox.dismissed", { count: r.count }),
     undo: (r) => r.undo_event_ids,
-    onSuccess: clear,
+    onSuccess: endSelection,
   });
   const batchBusy = confirmBatch.isPending || dismissBatch.isPending;
   const toggle = (id: string, on: boolean) =>
@@ -85,7 +108,7 @@ function Candidates() {
       else next.delete(id);
       return next;
     });
-  const allChecked = items.length > 0 && chosen.length === items.length ? true : chosen.length > 0 ? "indeterminate" : false;
+  const allChecked = selectable.length > 0 && chosen.length === selectable.length ? true : chosen.length > 0 ? "indeterminate" : false;
 
   const onKeyDown = (event: KeyboardEvent<HTMLElement>, index: number) => {
     if (!NAV_KEYS.has(event.key) || event.altKey || event.ctrlKey || event.metaKey) return;
@@ -98,25 +121,29 @@ function Candidates() {
   };
 
   const list = (
-    <div className={cn("flex min-h-0 flex-col border-r bg-card lg:w-[340px] xl:w-[400px]", showDetail && !wide ? "hidden" : "flex-1 lg:flex-none")}>
+    <div className={cn("flex min-h-0 flex-col border-r bg-card xl:w-[380px] 2xl:w-[420px]", showDetail && !wide ? "hidden" : "flex-1 xl:flex-none")}>
       <div className="flex min-h-11 shrink-0 flex-wrap items-center gap-x-3 gap-y-2 border-b px-3 py-1.5">
-        <Checkbox
-          checked={allChecked}
-          onCheckedChange={(v) => setSelected(v === true ? new Set(items.map((i) => i.id)) : new Set())}
-          aria-label={t("inbox.selectAll")}
-          disabled={items.length === 0}
-        />
-        {chosen.length ? (
+        {selecting ? (
           <>
-            <span className="text-[13px]">{t("common.selected", { count: chosen.length })}</span>
+            <Checkbox
+              checked={allChecked}
+              onCheckedChange={(v) => setSelected(v === true ? new Set(selectable.map((i) => i.id)) : new Set())}
+              aria-label={t("inbox.selectAll")}
+              disabled={selectable.length === 0}
+            />
+            <span className="text-[13px]">{chosen.length ? t("common.selected", { count: chosen.length }) : t("inbox.selectHint")}</span>
             <div className="ml-auto flex gap-1">
-              <Button size="xs" onClick={() => confirmBatch.mutate(undefined)} disabled={batchBusy}>
-                <Check /> {t("inbox.confirmSelected")}
-              </Button>
-              <Button variant="outline" size="xs" onClick={() => dismissBatch.mutate(undefined)} disabled={batchBusy}>
-                <Ban /> {t("inbox.dismissSelected")}
-              </Button>
-              <Button variant="ghost" size="icon-xs" onClick={clear} aria-label={t("common.clearSelection")}>
+              {chosen.length ? (
+                <>
+                  <Button size="sm" onClick={() => confirmBatch.mutate(undefined)} disabled={batchBusy}>
+                    <Check /> {t("inbox.confirmSelected")}
+                  </Button>
+                  <Button variant="outline" size="sm" onClick={() => dismissBatch.mutate(undefined)} disabled={batchBusy}>
+                    <Ban /> {t("inbox.dismissSelected")}
+                  </Button>
+                </>
+              ) : null}
+              <Button variant="ghost" size="icon-xs" onClick={endSelection} aria-label={t("tasks.endSelection")}>
                 <X />
               </Button>
             </div>
@@ -127,13 +154,20 @@ function Candidates() {
               <Switch checked={onlyIssues} onCheckedChange={(on) => setParam({ issues: on ? "1" : null })} />
               {t("inbox.onlyIssues")}
             </Label>
-            <SimpleSelect
-              className="ml-auto h-7 w-auto text-[13px]"
-              value={sort}
-              onValueChange={(v) => setParam({ sort: v === "priority" ? null : v })}
-              ariaLabel={t("common.sort")}
-              options={SORTS.map((s) => ({ value: s, label: t(`inbox.sort.${s}`) }))}
-            />
+            <div className="ml-auto flex items-center gap-1">
+              <SimpleSelect
+                className="h-7 w-auto text-[13px]"
+                value={sort}
+                onValueChange={(v) => setParam({ sort: v === "priority" ? null : v })}
+                ariaLabel={t("common.sort")}
+                options={SORTS.map((s) => ({ value: s, label: t(`inbox.sort.${s}`) }))}
+              />
+              {selectable.length > 1 ? (
+                <Button variant="ghost" size="icon-sm" onClick={() => setSelecting(true)} aria-label={t("tasks.selectMany")} className="text-muted-foreground">
+                  <ListChecks />
+                </Button>
+              ) : null}
+            </div>
           </>
         )}
       </div>
@@ -141,7 +175,7 @@ function Candidates() {
         {isLoading ? <LoadingRows rows={6} className="p-1.5" /> : null}
         {error ? <ErrorState error={error} onRetry={() => void refetch()} className="m-1.5" /> : null}
         {!isLoading && !error && items.length === 0 ? (
-          onlyIssues && (data?.items.length ?? 0) > 0 ? (
+          onlyIssues && queue.length > 0 ? (
             <EmptyState
               compact
               icon={CircleCheckBig}
@@ -157,7 +191,7 @@ function Candidates() {
             <EmptyState compact icon={Inbox} title={t("inbox.empty")} description={t("inbox.emptyHint")} className="m-1.5" />
           )
         ) : null}
-        <ul className="grid gap-0.5" aria-label={t("inbox.candidatesTab")}>
+        <ul className="grid gap-0.5" aria-label={t("inbox.listLabel")}>
           {items.map((task, index) => (
             <Fragment key={task.id}>
               {index === firstSample ? (
@@ -171,8 +205,8 @@ function Candidates() {
                   task={task}
                   controlId={itemControlId(task.id)}
                   active={task.id === activeId && showDetail}
-                  selected={selected.has(task.id)}
-                  onSelectedChange={(on) => toggle(task.id, on)}
+                  selected={selecting ? selected.has(task.id) : undefined}
+                  onSelectedChange={selecting && task.status === "candidate" ? (on) => toggle(task.id, on) : undefined}
                   onSelect={() => open(task.id)}
                   onKeyDown={(e) => onKeyDown(e, index)}
                   hideSample
@@ -181,104 +215,89 @@ function Candidates() {
             </Fragment>
           ))}
         </ul>
-      </div>
-      {items.length > 1 ? <p className="hidden shrink-0 border-t px-3 py-1.5 text-[11px] text-muted-foreground lg:block">{t("inbox.keyboardHint")}</p> : null}
-    </div>
-  );
-
-  const detail = showDetail && activeId ? (
-    <div className="scroll-stable min-h-0 flex-1 overflow-y-auto">
-      <div className="mx-auto w-full max-w-[60rem] px-4 py-5 sm:px-8">
-        {!wide ? (
-          <Button variant="ghost" size="sm" className="-ml-2 mb-3" onClick={backToList}>
-            <ArrowLeft /> {t("inbox.backToList")}
-          </Button>
-        ) : null}
-        <TaskDetailView key={activeId} taskId={activeId} embedded onDeleted={afterDecision} onDecided={afterDecision} />
-      </div>
-    </div>
-  ) : wide ? (
-    <div className="hidden flex-1 items-center justify-center p-6 lg:flex">
-      {!isLoading && items.length === 0 && !onlyIssues ? (
-        <EmptyState
-          icon={CircleCheckBig}
-          title={t("inbox.allDone")}
-          description={t("inbox.allDoneHint")}
-          action={
-            <Button variant="outline" size="sm" asChild>
-              <Link to="/tasks">{t("inbox.toTasks")}</Link>
+        {total > loaded ? (
+          <div className="grid justify-items-center gap-2 px-3 py-3 text-xs text-muted-foreground">
+            {t("tasks.countPartial", { shown: loaded, count: total })}
+            <Button variant="outline" size="xs" onClick={() => setLimit((n) => n + PAGE)} disabled={isFetching}>
+              {t("common.showMore")}
             </Button>
-          }
-          className="border-none"
-        />
-      ) : null}
-    </div>
-  ) : null;
-
-  return (
-    <div className="flex min-h-0 flex-1">
-      {list}
-      {detail}
-    </div>
-  );
-}
-
-const KIND_ORDER: Suggestion["kind"][] = ["possible_duplicate", "update_due", "mark_completed", "mark_dismissed", "mark_waiting"];
-
-function Suggestions() {
-  const { t } = useTranslation();
-  const { data, error, isLoading, refetch } = useSuggestions();
-  const items = [...(data?.items ?? [])].sort((a, b) => KIND_ORDER.indexOf(a.kind) - KIND_ORDER.indexOf(b.kind));
-  return (
-    <div className="scroll-stable min-h-0 flex-1 overflow-y-auto">
-      <div className="mx-auto grid w-full max-w-[52rem] gap-3 px-4 py-5 sm:px-8">
-        {isLoading ? <LoadingRows rows={3} /> : null}
-        {error ? <ErrorState error={error} onRetry={() => void refetch()} /> : null}
-        {!isLoading && !error && items.length === 0 ? (
-          <EmptyState icon={Lightbulb} title={t("inbox.suggestionsEmpty")} description={t("inbox.suggestionsEmptyHint")} />
+          </div>
         ) : null}
-        {items.map((s) => (
-          <SuggestionCard key={s.id} suggestion={s} />
-        ))}
       </div>
+      {items.length > 1 ? <p className="hidden shrink-0 border-t px-3 py-1.5 text-[11px] text-muted-foreground xl:block">{t("inbox.keyboardHint")}</p> : null}
     </div>
   );
-}
 
-export default function InboxPage() {
-  const { t } = useTranslation();
-  const [params, setParams] = useSearchParams();
-  const tab = params.get("tab") === "suggestions" ? "suggestions" : "candidates";
-  const { data: candidates } = useTasks({ status: ["candidate"], limit: 500 });
-  const { data: suggestions } = useSuggestions();
-  // Test data is listed (at the end) but not counted, like everywhere else.
-  const realCandidates = candidates ? candidates.total - candidates.items.filter((task) => task.sample).length : undefined;
+  const detail =
+    showDetail && activeId ? (
+      <div className="scroll-stable min-h-0 min-w-0 flex-1 overflow-y-auto">
+        <div className="mx-auto w-full max-w-[60rem] px-4 py-4 sm:px-8 sm:py-5">
+          {/* Where am I in the queue, and the way back or on (also without a keyboard). */}
+          <div className="mb-3 flex items-center gap-1 pointer-coarse:gap-3">
+            {!wide ? (
+              <Button variant="ghost" size="sm" className="touch-target relative -ml-2" onClick={backToList}>
+                <ArrowLeft /> {t("inbox.backToList")}
+              </Button>
+            ) : null}
+            <span className="ml-auto pr-1 text-xs text-muted-foreground tabular-nums" aria-live="polite">
+              {peerIndex >= 0 ? t("inbox.position", { index: peerIndex + 1, count: peers.length }) : null}
+            </span>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              className="touch-target relative"
+              onClick={() => goTo(items[activeIndex - 1])}
+              disabled={activeIndex <= 0}
+              aria-label={t("inbox.previous")}
+            >
+              <ChevronUp />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              className="touch-target relative"
+              onClick={() => goTo(items[activeIndex + 1])}
+              disabled={activeIndex < 0 || activeIndex >= items.length - 1}
+              aria-label={t("inbox.next")}
+            >
+              <ChevronDown />
+            </Button>
+          </div>
+          <TaskDetailView key={activeId} taskId={activeId} embedded onDeleted={afterDecision} onDecided={afterDecision} />
+        </div>
+      </div>
+    ) : wide ? (
+      <div className="hidden flex-1 items-center justify-center p-6 xl:flex">
+        {!isLoading && items.length === 0 && !onlyIssues ? (
+          <EmptyState
+            icon={CircleCheckBig}
+            title={t("inbox.allDone")}
+            description={t("inbox.allDoneHint")}
+            action={
+              <Button variant="outline" size="sm" asChild>
+                <Link to="/tasks">{t("inbox.toTasks")}</Link>
+              </Button>
+            }
+            className="border-none"
+          />
+        ) : null}
+      </div>
+    ) : null;
+
   return (
-    <Tabs
-      value={tab}
-      onValueChange={(v) => setParams(v === "suggestions" ? { tab: v } : {}, { replace: true })}
-      className="flex h-full flex-col"
-    >
-      <div className="shrink-0 border-b px-4 pt-4 sm:px-6">
+    <div className="flex h-full min-h-0 flex-col">
+      <div className="shrink-0 border-b px-4 py-3 sm:px-6">
         <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-          <h1 className="text-page font-semibold">{t("inbox.title")}</h1>
+          <h1 className="text-page font-semibold">
+            {t("inbox.title")} <span className="text-base font-normal text-muted-foreground tabular-nums">{realCount}</span>
+          </h1>
           <p className="text-[13px] text-muted-foreground">{t("inbox.description")}</p>
         </div>
-        <TabsList variant="underline" className="mt-2">
-          <TabsTrigger variant="underline" value="candidates">
-            {t("inbox.candidatesTab")} <TabCount value={realCandidates} active={tab === "candidates"} />
-          </TabsTrigger>
-          <TabsTrigger variant="underline" value="suggestions">
-            {t("inbox.suggestionsTab")} <TabCount value={suggestions?.items.length} active={tab === "suggestions"} />
-          </TabsTrigger>
-        </TabsList>
       </div>
-      <TabsContent value="candidates" className="flex min-h-0 flex-1">
-        <Candidates />
-      </TabsContent>
-      <TabsContent value="suggestions" className="flex min-h-0 flex-1">
-        <Suggestions />
-      </TabsContent>
-    </Tabs>
+      <div className="flex min-h-0 flex-1">
+        {list}
+        {detail}
+      </div>
+    </div>
   );
 }

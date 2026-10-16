@@ -1,14 +1,11 @@
 import { Tag } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Badge } from "@/components/ui/badge";
-import { Tip } from "@/components/ui/menu";
-import { translateKey } from "@/i18n";
-import { formatList } from "@/lib/format";
-import type { Issue } from "@/lib/review";
+import { Popover, PopoverContent, PopoverTrigger, Tip } from "@/components/ui/menu";
 import type { Category, Priority, TaskStatus, Urgency } from "@/lib/types";
 import { cn } from "@/lib/utils";
-import { ISSUE_TONE, issueStates, type KeyState } from "./keyStates";
-import { CATEGORY_ICON, ISSUE_ICON, SOURCE_ICON, STATUS_ICON, STATUS_TONE, URGENCY_TONE } from "./meta";
+import type { KeyState } from "./keyStates";
+import { CATEGORY_ICON, STATUS_ICON, STATUS_TONE, URGENCY_TONE } from "./meta";
 
 export function StatusBadge({ status, className }: { status: TaskStatus; className?: string }) {
   const { t } = useTranslation();
@@ -59,35 +56,21 @@ export function PriorityBadge({ priority }: { priority: Priority }) {
   return <Badge tone="urgent">{t("priority.high")}</Badge>;
 }
 
-export function SourceKinds({ kinds, count }: { kinds: string[]; count: number }) {
-  const { t } = useTranslation();
-  if (count === 0) return null;
-  const labels = kinds.map((k) => translateKey(`sourceKind.${k}`, k)).join(" · ");
-  return (
-    <Tip content={`${t("common.sources")}: ${labels || count}`}>
-      <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
-        {kinds.slice(0, 3).map((k) => {
-          const Icon = SOURCE_ICON[k] ?? Tag;
-          return <Icon key={k} className="size-3.5" aria-hidden />;
-        })}
-        {count > 1 ? <span className="tabular-nums">×{count}</span> : null}
-      </span>
-    </Tip>
-  );
-}
-
-/** The most important states, at most `max` of them; the rest is named on hover ("+2"). */
+/**
+ * The most important states, at most `max` of them. Further ones are not hidden behind a hover: "N more"
+ * opens a small list with an explanation of each (also on touch screens).
+ */
 export function KeyStates({ states, max = 2 }: { states: KeyState[]; max?: number }) {
-  const { i18n } = useTranslation();
+  const { t } = useTranslation();
   if (states.length === 0) return null;
   const shown = states.slice(0, max);
   const rest = states.slice(max);
   return (
-    <span className="inline-flex flex-wrap items-center gap-1">
+    <span className="inline-flex flex-wrap items-center gap-1.5">
       {shown.map((s) => {
         const Icon = s.icon;
         const badge = (
-          <Badge key={s.key} tone={s.tone}>
+          <Badge key={s.key} tone={s.tone} className="text-[13px] [&_svg]:size-3.5">
             {Icon ? <Icon /> : null}
             {s.label}
           </Badge>
@@ -101,33 +84,33 @@ export function KeyStates({ states, max = 2 }: { states: KeyState[]; max?: numbe
         );
       })}
       {rest.length ? (
-        <Tip content={formatList(
-            rest.map((r) => r.label),
-            i18n.language,
-          )}>
-          <span className="text-xs text-muted-foreground tabular-nums">+{rest.length}</span>
-        </Tip>
+        <Popover>
+          <PopoverTrigger asChild>
+            <button
+              type="button"
+              className="touch-target relative z-10 rounded-sm text-[13px] text-muted-foreground underline-offset-2 outline-none hover:text-foreground hover:underline focus-visible:ring-[3px] focus-visible:ring-ring/40"
+            >
+              {t("taskItem.moreStates", { count: rest.length })}
+            </button>
+          </PopoverTrigger>
+          <PopoverContent align="start" className="w-72 p-3">
+            <ul className="grid gap-2.5">
+              {rest.map((s) => {
+                const Icon = s.icon;
+                return (
+                  <li key={s.key} className="grid gap-1">
+                    <Badge tone={s.tone} className="w-fit">
+                      {Icon ? <Icon /> : null}
+                      {s.label}
+                    </Badge>
+                    {s.hint ? <p className="text-xs leading-relaxed text-muted-foreground">{s.hint}</p> : null}
+                  </li>
+                );
+              })}
+            </ul>
+          </PopoverContent>
+        </Popover>
       ) : null}
     </span>
   );
-}
-
-/** A problem in plain language ("疑似重复", "内容待核实"); the hint explains it on hover. */
-export function IssueBadge({ issue, className }: { issue: Issue; className?: string }) {
-  const { t } = useTranslation();
-  const Icon = ISSUE_ICON[issue.kind];
-  return (
-    <Tip content={t(`issue.${issue.kind}.hint`)}>
-      <Badge tone={ISSUE_TONE[issue.kind]} className={className}>
-        <Icon />
-        {t(`issue.${issue.kind}.label`)}
-      </Badge>
-    </Tip>
-  );
-}
-
-/** At most one issue (the most important), plus how many more there are. */
-export function IssueSummary({ issues }: { issues: Issue[] }) {
-  const { t } = useTranslation();
-  return <KeyStates states={issueStates(issues, t)} max={1} />;
 }

@@ -29,11 +29,14 @@ export function SuggestionCard({
   suggestion,
   showTask = true,
   className,
+  onDecided,
 }: {
   suggestion: Suggestion;
   /** Name the task the suggestion is about (lists that are not inside a task). */
   showTask?: boolean;
   className?: string;
+  /** Called after the user accepted or rejected it (the review queue moves on). */
+  onDecided?: () => void;
 }) {
   const { t, i18n } = useTranslation();
   const [compareOpen, setCompareOpen] = useState(false);
@@ -43,10 +46,12 @@ export function SuggestionCard({
   const accept = useAction(() => api.acceptSuggestion(suggestion.id), {
     success: t(`suggestionCard.${kind}.accepted`),
     undo: (r) => r.undo_event_id,
+    onSuccess: () => onDecided?.(),
   });
   const reject = useAction(() => api.rejectSuggestion(suggestion.id), {
     success: t(`suggestionCard.${kind}.rejected`),
     undo: (r) => r.undo_event_id,
+    onSuccess: () => onDecided?.(),
   });
   const busy = accept.isPending || reject.isPending;
   const Icon = KIND_ICON[kind];
@@ -120,7 +125,7 @@ export function SuggestionCard({
           )}
         </div>
       </footer>
-      {kind === "possible_duplicate" ? <DuplicateCompare suggestion={suggestion} open={compareOpen} onOpenChange={setCompareOpen} /> : null}
+      {kind === "possible_duplicate" ? <DuplicateCompare suggestion={suggestion} open={compareOpen} onOpenChange={setCompareOpen} onMerged={onDecided} /> : null}
     </article>
   );
 }

@@ -1,11 +1,11 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { TooltipProvider } from "@/components/ui/menu";
 import i18n from "@/i18n";
 import { api } from "@/lib/api";
-import type { AttentionTask, Dashboard, SystemSummary } from "@/lib/types";
+import type { AttentionTask, Dashboard, SystemSummary, TaskSummary } from "@/lib/types";
 import { makeSuggestion, makeTask } from "@/test/fixtures";
 import DashboardPage from "./DashboardPage";
 
@@ -75,6 +75,7 @@ function dashboard(overrides: Partial<Dashboard> = {}): Dashboard {
 }
 
 let summary: SystemSummary;
+let queue: TaskSummary[];
 
 function renderDashboard() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -98,6 +99,13 @@ describe("DashboardPage", () => {
     summary = { overall: "ok", checked_at: "2026-10-15T10:00:00+00:00", items: [] };
     vi.spyOn(api, "dashboard").mockResolvedValue(dashboard());
     vi.spyOn(api, "systemSummary").mockImplementation(async () => summary);
+    // What waits for a decision: the unconfirmed task due tomorrow and the confirmed one with a duplicate suggestion.
+    queue = [
+      tomorrow,
+      { ...disputed, pending_suggestions: 1, pending_suggestion_kinds: ["possible_duplicate"], review_reasons: ["possible_duplicate"], needs_review: true },
+    ];
+    vi.spyOn(api, "tasks").mockImplementation(async () => ({ items: queue, total: queue.length }));
+    window.localStorage.clear();
   });
 
   afterEach(() => {
@@ -124,12 +132,38 @@ describe("DashboardPage", () => {
     expect(screen.getByRole("link", { name: "查看" })).toHaveAttribute("href", "/tasks?view=all&sample=1");
   });
 
-  it("names both tasks of a possible duplicate and that their deadlines differ", async () => {
+  it("has one entry for every decision: the count, each item with what is to be decided, and the way in", async () => {
     renderDashboard();
-    expect(await screen.findByText("疑似同一件事 · 截止日期不同")).toBeInTheDocument();
-    expect(screen.getByText("「Miete überweisen」")).toBeInTheDocument();
-    expect(screen.getByText("「Mietzahlung Oktober」")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "对比审核" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "2 件事等待你决定" })).toBeInTheDocument();
+    // The possible duplicate names the other task and its (different) deadline.
+    expect(await screen.findByText(/与 「Mietzahlung Oktober」/)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /开始确认/ })).toHaveAttribute("href", "/inbox");
+    // No separate tiles or suggestion list repeating the same numbers.
+    expect(screen.queryByText("需要我处理")).not.toBeInTheDocument();
+    expect(screen.queryByText("待处理建议")).not.toBeInTheDocument();
+  });
+
+  it("names the other task of a suggestion from its details when the summary lacks it", async () => {
+    vi.spyOn(api, "dashboard").mockResolvedValue(
+      dashboard({ suggestions: [makeSuggestion({ task_id: "disputed", related_task_title: null, payload: { other_title: "Mietzahlung Oktober" } })] }),
+    );
+    renderDashboard();
+    expect(await screen.findByText(/与 「Mietzahlung Oktober」/)).toBeInTheDocument();
+    expect(screen.queryByText("「—」")).not.toBeInTheDocument();
+  });
+
+  it("guides a first-time user with one recommended way to start, until it is closed", async () => {
+    vi.spyOn(api, "dashboard").mockResolvedValue(
+      dashboard({ counts: { ...dashboard().counts, ever_confirmed: false, candidates: 0 } }),
+    );
+    renderDashboard();
+    expect(await screen.findByRole("heading", { name: "开始使用 TaskRadar" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "导入文件" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "关闭使用入门" }));
+    expect(screen.queryByRole("heading", { name: "开始使用 TaskRadar" })).not.toBeInTheDocument();
+    // It can be opened again.
+    fireEvent.click(screen.getByRole("button", { name: "使用入门" }));
+    expect(screen.getByRole("heading", { name: "开始使用 TaskRadar" })).toBeInTheDocument();
   });
 
   it("explains runtime problems in plain words with a way to fix them", async () => {
@@ -148,6 +182,8 @@ describe("DashboardPage", () => {
 
   it("says when everything is running", async () => {
     renderDashboard();
-    expect(await screen.findByText("一切正常")).toBeInTheDocument();
+    // A quiet single line while nothing needs the user.
+    expect(await screen.findByText("系统运行正常")).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "系统状态" })).not.toBeInTheDocument();
   });
 });

@@ -79,42 +79,55 @@ function headline(summary: SystemSummary, t: TFunction): string {
   return t("systemStatus.ok");
 }
 
-/** Dashboard card: is everything running? If not, the few things to do, in plain words. */
+/**
+ * Dashboard: one quiet line while everything runs; when something needs the user, a card with the few
+ * things to do, in plain words, each with the place to fix it.
+ */
 export function SystemStatusCard() {
   const { t } = useTranslation();
   const { data, isLoading, error } = useSystemSummary();
-  const ok = data?.overall === "ok";
   const notable = data?.items.filter((i) => i.level !== "info") ?? [];
+  const details = (
+    <Button variant="ghost" size="xs" asChild className="ml-auto">
+      <Link to="/insights">
+        {t("systemStatus.details")} <ArrowRight />
+      </Link>
+    </Button>
+  );
+  if (isLoading) return <LoadingRows rows={1} />;
+  if (error || !data) {
+    return (
+      <p className="flex items-center gap-2 rounded-lg border bg-card px-4 py-2 text-[13px] text-muted-foreground">
+        {t("systemStatus.unavailable")}
+        {details}
+      </p>
+    );
+  }
+  if (notable.length === 0) {
+    return (
+      <p className="flex items-center gap-2 rounded-lg border bg-card px-4 py-2 text-sm">
+        <CircleCheck className="size-4 shrink-0 text-success" aria-hidden />
+        <span>{t("systemStatus.okLine")}</span>
+        {details}
+      </p>
+    );
+  }
   return (
     <section className="grid gap-2">
       <div className="flex min-h-7 items-center justify-between gap-2">
         <h2 className="text-section font-semibold">{t("systemStatus.title")}</h2>
-        <Button variant="ghost" size="xs" asChild>
-          <Link to="/insights">
-            {t("systemStatus.details")} <ArrowRight />
-          </Link>
-        </Button>
+        {details}
       </div>
       <div className="rounded-lg border bg-card px-4 py-1">
-        {isLoading ? <LoadingRows rows={1} className="py-2" /> : null}
-        {error ? <p className="py-3 text-[13px] text-muted-foreground">{t("systemStatus.unavailable")}</p> : null}
-        {data ? (
-          <>
-            <p className="flex items-center gap-2 py-2.5 text-sm font-medium">
-              {ok ? <CircleCheck className="size-4 text-success" aria-hidden /> : <TriangleAlert className={cn("size-4", data.overall === "problem" ? "text-destructive" : "text-urgent")} aria-hidden />}
-              {headline(data, t)}
-            </p>
-            {ok ? (
-              <p className="-mt-1 pb-2.5 text-[13px] leading-relaxed text-muted-foreground">{t("systemStatus.okHint")}</p>
-            ) : (
-              <ul className="divide-y border-t">
-                {notable.slice(0, 3).map((item) => (
-                  <StatusItemRow key={`${item.code}-${item.area}-${String(item.params.name ?? "")}`} item={item} compact />
-                ))}
-              </ul>
-            )}
-          </>
-        ) : null}
+        <p className="flex items-center gap-2 py-2.5 text-sm font-medium">
+          <TriangleAlert className={cn("size-4", data.overall === "problem" ? "text-destructive" : "text-urgent")} aria-hidden />
+          {headline(data, t)}
+        </p>
+        <ul className="divide-y border-t">
+          {notable.slice(0, 3).map((item) => (
+            <StatusItemRow key={`${item.code}-${item.area}-${String(item.params.name ?? "")}`} item={item} compact />
+          ))}
+        </ul>
       </div>
     </section>
   );

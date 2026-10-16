@@ -90,14 +90,14 @@ function SourceEntry({ entry, timezone, open }: { entry: TaskSourceEntry; timezo
           </Badge>
           <span className="shrink-0 text-xs text-muted-foreground">{when(entry)}</span>
         </summary>
-        <div className="grid gap-3 border-t px-3 py-3">
+        <div className="grid grid-cols-1 gap-3 border-t px-3 py-3">
           <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
             <Badge tone={RELATION_TONE[entry.relation]} className="sm:hidden">
               {t(`relation.${entry.relation}`)}
             </Badge>
             {meta.length ? <span>{meta.join(" · ")}</span> : null}
             {entry.origin_key && entry.origin_key !== "manual" ? (
-              <span className="font-mono text-[11px] opacity-80" title={t("detail.traceId")}>
+              <span className="font-mono text-[11px] [overflow-wrap:anywhere] opacity-80" title={t("detail.traceId")}>
                 {entry.origin_key}
               </span>
             ) : null}
@@ -118,7 +118,7 @@ export function SourceList({ sources, timezone, className, openFirst = true }: {
   const { t } = useTranslation();
   if (sources.length === 0) return <p className="text-sm text-muted-foreground">{t("detail.manualSource")}</p>;
   return (
-    <ul className={cn("grid gap-2", className)}>
+    <ul className={cn("grid grid-cols-1 gap-2", className)}>
       {sources.map((entry, i) => (
         <SourceEntry key={entry.id} entry={entry} timezone={timezone} open={openFirst && i === 0} />
       ))}

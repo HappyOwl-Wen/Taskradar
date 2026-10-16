@@ -36,9 +36,14 @@ export function SaveBar({ dirty, saving, onSave, onReset }: { dirty: boolean; sa
   return (
     <>
       {dirty ? (
-        <Button variant="ghost" size="sm" onClick={onReset} disabled={saving}>
-          {t("common.reset")}
-        </Button>
+        <>
+          <span className="mr-auto text-[13px] font-medium text-urgent" role="status">
+            {t("settings.unsavedBadge")}
+          </span>
+          <Button variant="ghost" size="sm" onClick={onReset} disabled={saving}>
+            {t("common.reset")}
+          </Button>
+        </>
       ) : null}
       <Button size="sm" onClick={onSave} disabled={!dirty || saving}>
         {saving ? t("common.saving") : t("common.save")}

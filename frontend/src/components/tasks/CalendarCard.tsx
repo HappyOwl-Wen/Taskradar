@@ -131,6 +131,8 @@ export function CalendarCard({ task }: { task: TaskDetail }) {
     success: t("calendar.removed"),
     onSuccess: () => setRemoveOpen(false),
   });
+  // Unknown until the status has loaded: no "not connected" notice before that.
+  const known = status !== undefined;
   const connected = Boolean(status?.google.calendar_connected);
   const confirmed = ["confirmed", "in_progress", "waiting_for_reply"].includes(task.status);
   const link = task.calendar;
@@ -167,7 +169,7 @@ export function CalendarCard({ task }: { task: TaskDetail }) {
   } else {
     body = (
       <div className="grid gap-3">
-        {!connected ? (
+        {known && !connected ? (
           <div className="grid gap-2 rounded-md border border-dashed p-3">
             <p className="flex items-center gap-2 text-sm font-medium">
               <CalendarX className="size-4 text-muted-foreground" /> {t("calendar.notConnected")}
@@ -204,7 +206,12 @@ export function CalendarCard({ task }: { task: TaskDetail }) {
           </div>
         ) : null}
         <div className="flex flex-wrap gap-2">
-          <Button variant={link && !removed && !outdated && link.status === "synced" ? "outline" : "default"} size="sm" onClick={() => setOpen(true)}>
+          <Button
+            variant={link && !removed && !outdated && link.status === "synced" ? "outline" : "default"}
+            size="sm"
+            onClick={() => setOpen(true)}
+            disabled={!known}
+          >
             {link && !removed ? <RefreshCw /> : <CalendarPlus />}
             {link && !removed ? t("calendar.update") : removed ? t("calendar.reAdd") : t("calendar.preview")}
           </Button>

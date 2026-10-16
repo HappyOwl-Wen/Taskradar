@@ -1,7 +1,8 @@
-import { CalendarClock, CalendarX2, CircleDashed, FlaskConical, type LucideIcon } from "lucide-react";
+import { Ban, CalendarClock, CalendarX, CalendarX2, CircleCheck, CircleDashed, Copy, FlaskConical, Hourglass, type LucideIcon } from "lucide-react";
 import type { TFunction } from "i18next";
 import type { BadgeTone } from "@/components/ui/variants";
 import type { Issue, IssueKind } from "@/lib/review";
+import type { Suggestion } from "@/lib/types";
 import { ISSUE_ICON } from "./meta";
 
 /** Problems that can change what the task is or when it is due are orange; doubts about quality stay neutral. */
@@ -53,4 +54,34 @@ export function conflictState(t: TFunction): KeyState {
 
 export function dateChangedState(t: TFunction): KeyState {
   return { key: "date_changed", tone: "urgent", label: t("issue.date_changed.label"), icon: CalendarClock, hint: t("issue.date_changed.hint") };
+}
+
+/** A calendar event that needs the user (out of date or not written); a synced event is not a state. */
+export function calendarState(status: string | null, t: TFunction): KeyState | null {
+  if (status === "out_of_sync") {
+    return { key: "calendar", tone: "urgent", label: t("taskItem.calendar.out_of_sync"), icon: CalendarClock, hint: t("taskItem.calendarHint.out_of_sync") };
+  }
+  if (status === "failed") {
+    return { key: "calendar", tone: "destructive", label: t("taskItem.calendar.failed"), icon: CalendarX, hint: t("taskItem.calendarHint.failed") };
+  }
+  return null;
+}
+
+const SUGGESTION_STATE: Record<Suggestion["kind"], { tone: BadgeTone; icon: LucideIcon }> = {
+  update_due: { tone: "urgent", icon: CalendarClock },
+  possible_duplicate: { tone: "urgent", icon: Copy },
+  mark_completed: { tone: "normal", icon: CircleCheck },
+  mark_dismissed: { tone: "normal", icon: Ban },
+  mark_waiting: { tone: "normal", icon: Hourglass },
+};
+
+/** An open suggestion as a state ("截止日期可能有变", "可能已完成"), so one queue can hold every decision. */
+export function suggestionStates(kinds: Suggestion["kind"][] | undefined, t: TFunction): KeyState[] {
+  return (kinds ?? []).map((kind) => ({
+    key: `suggestion:${kind}`,
+    tone: SUGGESTION_STATE[kind].tone,
+    icon: SUGGESTION_STATE[kind].icon,
+    label: t(`taskItem.suggestion.${kind}.label`),
+    hint: t(`taskItem.suggestion.${kind}.hint`),
+  }));
 }

@@ -57,6 +57,7 @@ export function GeneralSection({ settings }: { settings: Settings }) {
           />
         </Field>
       </div>
+      <p className="-mt-2 text-xs text-muted-foreground">{t("settings.general.instantHint")}</p>
       <Field label={t("settings.general.timezone")} hint={t("settings.general.timezoneHint")} htmlFor="set-tz">
         <Input id="set-tz" value={section.value.timezone} onChange={(e) => section.set("timezone", e.target.value)} className="max-w-72 font-mono" />
       </Field>

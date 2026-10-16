@@ -60,21 +60,21 @@ mail or document and quotes the sentence it came from. Details: [ARCHITECTURE.md
 
 | Area | What it does | Status |
 | --- | --- | --- |
-| Your own to-dos | "New to-do" on every page; one-line quick entry in zh/de/en ("周五前交房租", "Freitag 10 Uhr Zahnarzt", "submit report by Oct 20 5pm"): title, date, time and kind are recognised locally and shown for review before saving; reminders and calendar like any other task | implemented, tested, verified in a browser |
+| Your own to-dos | "Add to-do" on every page: one sentence in zh/de/en ("周五前交房租", "Freitag 10 Uhr Zahnarzt", "submit report by Oct 20 5pm"); the date and time are recognised locally and shown in editable fields before saving, category, priority and notes wait under "More options". Your own to-dos are active right away (no extra review), get reminders and calendar entries like any other task, and are briefly highlighted in the list after adding | implemented, tested, verified in a browser |
 | Uploads & folders | PDF, PNG, JPG, WebP, `.eml`; drag & drop; only folders you add are watched; originals are never modified | implemented, tested |
-| Parsing | text-first PDF extraction, OCR fallback per page (Tesseract, `chi_sim+eng`, `deu+eng`), MIME/HTML mail, quoted-reply stripping; files imported before OCR was installed can be read again from the Sources page | implemented, tested (real OCR in tests) |
+| Parsing | text-first PDF extraction, OCR fallback per page (Tesseract, `chi_sim+eng`, `deu+eng`), MIME/HTML mail, quoted-reply stripping; files imported before OCR was installed can be read again from the Add content page | implemented, tested (real OCR in tests) |
 | Extraction | tasks with title, action, category, priority, deadline (date-only stays date-only), confidence, evidence; marketing/newsletters ignored; prompt-injection text treated as data | implemented, tested, evaluated |
 | Dates | absolute, relative and ambiguous dates in zh/de/en; relative dates resolved from the *source* date; unresolvable dates are flagged, never invented | implemented, tested |
 | Deduplication | same source / same thread, normalised similarity across languages, optional LLM judge; grey zone becomes a suggestion that you review side by side ("merge / keep separate / not now"); **a different deadline is never merged silently** (also not a reminder in the same thread): unless the new source explicitly says the deadline changed, both tasks stay and the pair is shown as "deadlines disagree" until you choose the date that stays; every decision is undoable | implemented, tested, evaluated |
 | Lifecycle | Candidate → Confirmed → In progress / Waiting for reply → Completed / Dismissed; completion evidence; an explicitly announced deadline change is applied, marked "deadline changed" with a notification, and you keep the new date or undo it | implemented, tested, verified in a browser with synthetic mails |
-| Test data | demo mailbox mails and files imported as test data are kept apart from your own data: not counted on the dashboard or in Insights, no reminders, never written to Google Calendar, never merged with real tasks, listed after real candidates; any task can be marked or unmarked as test data (undoable), and test data can be deleted as a whole from Sources | implemented, tested, verified in a browser with synthetic data |
-| System status | the dashboard and Insights explain runtime problems in plain words with where to fix them (Gmail authorization expired or sync failing, mails or files that could not be read, an unavailable folder, calendar write failures, failing reminder checks, AI fallbacks, background jobs not running, OCR missing); no log reading needed | implemented, tested; in a browser only the "background jobs not running" state was seen (the others are covered by tests) |
-| Re-check | All tasks → "Re-check with current rules": the current rules are run again, read-only and locally, over the sources of open tasks; it lists tasks they would no longer find, tasks merged from many unrelated mails and tasks they would flag. You choose what to dismiss (undoable); nothing is deleted | implemented, tested, verified in a browser with synthetic data |
+| Test data | demo mailbox mails and files imported as test data are kept apart from your own data: not counted on the dashboard or in the activity figures, no reminders, never written to Google Calendar, never merged with real tasks, listed after real candidates; any task can be marked or unmarked as test data (undoable), and test data can be deleted as a whole from Add content | implemented, tested, verified in a browser with synthetic data |
+| System status | the dashboard (a single line while everything works) and Settings → Activity and diagnostics explain runtime problems in plain words with where to fix them (Gmail authorization expired or sync failing, mails or files that could not be read, an unavailable folder, calendar write failures, failing reminder checks, AI fallbacks, background jobs not running, OCR missing); no log reading needed | implemented, tested; in a browser only the "background jobs not running" state was seen (the others are covered by tests) |
+| Re-check | My tasks → More tools → "Re-check with current rules": the current rules are run again, read-only and locally, over the sources of open tasks; it lists tasks they would no longer find, tasks merged from many unrelated mails and tasks they would flag. You choose what to dismiss (undoable); nothing is deleted | implemented, tested, verified in a browser with synthetic data |
 | Reminders | Overdue / 24 h / 3 days / 7 days (configurable), date-only deadlines count until the end of the day, DST-safe, deduplicated, stop after completion | implemented, tested |
 | Gmail | OAuth (installed-app flow with PKCE), `gmail.readonly` only, last 30 days, incremental history sync, request pacing, retries with backoff, attachments | implemented, tested with a fake Gmail; **verified with one real account**: initial and incremental sync, attachments, automatic recovery from Google's rate limit (request pacing was added afterwards and is tested with fakes only) |
 | Google Calendar | separate OAuth (`calendar.app.created`), preview → confirm → write into a dedicated "TaskRadar" calendar, idempotent event IDs, no invitations | implemented, tested with a fake Calendar; **verified with one real account**: calendar created, all-day deadline written, updated in place after a date change (same event, no duplicate), unchanged re-write skipped; a disabled Calendar API is explained with Google's enable link. Events can be removed again (button, or automatically when a task is dismissed, merged or deleted - a setting, on by default); only TaskRadar's own events are ever deleted. Removal with the button verified with the real account; the automatic removal is tested with a fake Calendar |
 | LLM extraction | OpenAI structured outputs or OpenAI-compatible endpoint, strict schema validation, bounded retries, rules fallback, data minimisation, consent required | implemented, tested with a mocked provider; **real API not verified** (needs your key) |
-| User interface | Dashboard (what needs attention, grouped by overdue / due today / tomorrow / within 7 days, then changed or disputed deadlines; unconfirmed tasks always marked; pending suggestions name both tasks and their deadlines; system status), Review inbox (list + detail, sorted by what needs handling first, problems in plain language, keyboard navigation), All tasks, Task detail (deadline, open questions, quotes per source, calendar, history), Sources (connected sources + processing records with reasons), Insights (system status, processing figures with their basis), Settings (one category at a time); undo after every decision; one scroll area, layouts from 390 px phones to desktops; dark/light; zh/en | implemented, unit-tested, verified in a browser at 1440 / 1024 / 768 / 390 px, light and dark, Chinese and English |
+| User interface | Four places named by what you do there. **Today**: what needs attention (overdue / due today / tomorrow / within 7 days, then changed or disputed deadlines; unconfirmed tasks always marked), the next decisions with one "N things waiting for your decision" entry, system status in one line while it is fine; a three-step guide until your first confirmation (can be reopened). **To confirm**: one queue for new tasks, deadline updates and possible duplicates, list + detail with "n of N", problems in plain language whose fix buttons open the field concerned with the original wording; "Edit & confirm" saves and confirms in one step ("Save only" is the secondary choice). **My tasks**: open / to confirm / completed / dismissed / all; complete in one click (fades out, with undo), other statuses behind "…", "Select several" for batch actions, one search, "Showing 300 of N" with "Show more". **Add content**: import files with the last result kept ("found N things → go to confirm", each file's outcome, retry or another file when one failed), connected sources and processing records. **Settings** one category at a time, unsaved changes protected on any navigation, Gmail connected step by step, Activity and diagnostics. Undo after every decision; rows show title, date and at most two states (more behind "N more"); 44 px touch targets on touch screens; reduced motion respected; layouts from 360 px phones to desktops; dark/light; zh/en | implemented, unit-tested, verified in a browser at 1920 / 1440 / 1024 / 768 / 390 / 360 px, light and dark, Chinese and English; not yet tested with users or on a real phone |
 | Background | scheduled Gmail sync, folder scans, reminder checks, automatic retries, restart recovery, optional Windows autostart (only after confirmation) | implemented, tested |
 | Data control | export as JSON, delete single items, delete everything (typed confirmation) | implemented, tested |
 
@@ -95,7 +95,7 @@ Requirements: **Python 3.12+**, **Node.js 20+** (only to build the web UI) and, 
 
 ### Try it without any account
 
-* **Sources → Demo mailbox → Create**: 11 synthetic mails (Chinese, German, English) with a fee request and
+* **Add content → Demo mailbox → Create**: 11 synthetic mails (Chinese, German, English) with a fee request and
   its reminder, a deadline extension, an appointment, marketing, a newsletter and a prompt-injection attempt.
   "Deliver follow-up mail" sends a payment confirmation to show automatic completion and undo; the
   failure-mode selector simulates rate limits, server errors, expired authorization and network outages.
@@ -154,14 +154,14 @@ See [SECURITY.md](SECURITY.md) for the threat model.
 
 ```powershell
 cd backend
-.venv\Scripts\python.exe -m pytest            # 280 tests, about 40 s, includes real OCR
+.venv\Scripts\python.exe -m pytest            # 283 tests, about 40 s, includes real OCR
 .venv\Scripts\python.exe -m ruff check .
 .venv\Scripts\python.exe -m ruff format --check .
 .venv\Scripts\python.exe -m mypy
 .venv\Scripts\python.exe -m taskradar eval    # extraction / dedup evaluation on the labelled dataset
 
 cd ..\frontend
-npm run lint; npm run typecheck; npm test      # 75 tests
+npm run lint; npm run typecheck; npm test      # 104 tests
 ```
 
 The workflow in `.github/workflows/ci.yml` runs the same checks on Ubuntu, with Tesseract and the same pinned
@@ -248,14 +248,15 @@ TaskRadar.cmd       double-click launcher       Setup.cmd   one-time setup
 2. 双击 `Setup.cmd` 完成一次性安装（无需管理员权限）。安装过程中会询问是否下载 OCR 引擎（约 110 MB，会校验 SHA-256），
    也可以之后运行 `powershell -ExecutionPolicy Bypass -File scripts\install-tesseract.ps1`。
 3. 双击 `TaskRadar.cmd` 启动，浏览器打开 <http://127.0.0.1:8000>。关闭窗口即停止。
-4. 不连接任何账号也能体验：「来源 → 演示邮箱 → 创建」，或把 `backend/src/taskradar/demo/samples/` 中的示例文件拖进窗口。
-   如果在安装 OCR 之前就已导入截图或扫描件，装好 OCR 后在「来源」页点「立即识别」即可补识别，无需重启。
+4. 不连接任何账号也能体验：「添加内容 → 演示邮箱 → 创建」，或把 `backend/src/taskradar/demo/samples/` 中的示例文件拖进窗口。
+   如果在安装 OCR 之前就已导入截图或扫描件，装好 OCR 后在「添加内容」页点「立即识别」即可补识别，无需重启。
 5. 连接 Gmail / Google 日历需要你本人在 Google Cloud Console 创建“桌面应用”OAuth 客户端并登录授权，并在
    「API 和服务 → 库」中启用 Gmail API；要写入日历，还需启用 Google Calendar API。步骤见上文
    [Connecting Gmail and Google Calendar](#connecting-gmail-and-google-calendar)。Gmail 只申请只读权限。
 6. 默认使用本地规则引擎，不会把内容发给任何云服务；启用 OpenAI 前需要在设置中明确同意数据发送说明。
-7. 自己的待办：任意页面右上角「新建待办」，在「快速输入」里写一句话即可，例如“周五前交房租”“明天下午3点开组会”，
-   日期和时间会自动识别并显示出来，确认后再保存。自己的待办同样有提醒，也可以写入或移出日历。
+7. 自己的待办：任意页面右上角「添加待办」，写一句话即可，例如“周五前交房租”“明天下午3点开组会”，
+   日期和时间会自动识别并填好，可以直接修改；类别、优先级和说明在「更多选项」里。自己添加的待办直接生效，
+   同样有提醒，也可以写入或移出日历。
 
 ## License
 

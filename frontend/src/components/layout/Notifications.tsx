@@ -27,6 +27,13 @@ export function NotificationsMenu() {
   const markRead = useAction((id: number | undefined) => api.markRead(id));
   const unread = data?.unread ?? 0;
   const items = data?.items ?? [];
+  const unreadLevels = new Set(items.filter((i) => !i.read).map((i) => i.level));
+  const badgeTone =
+    unreadLevels.has("overdue") || unreadLevels.has("error")
+      ? "bg-overdue text-white"
+      : unreadLevels.has("urgent") || unreadLevels.has("high")
+        ? "bg-urgent text-white"
+        : "bg-muted-foreground text-card";
 
   const openItem = (item: NotificationItem) => {
     if (!item.read) markRead.mutate(item.id);
@@ -39,10 +46,10 @@ export function NotificationsMenu() {
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
-        <Button variant="ghost" size="icon" className="relative" aria-label={`${t("topbar.notifications")} (${unread})`}>
+        <Button variant="ghost" size="icon" className="touch-target relative" aria-label={`${t("topbar.notifications")} (${unread})`}>
           <Bell />
           {unread > 0 ? (
-            <span className="absolute top-1 right-1 grid min-w-4 place-items-center rounded-full bg-overdue px-1 text-[10px] leading-4 font-semibold text-white tabular-nums">
+            <span className={cn("absolute top-1 right-1 grid min-w-4 place-items-center rounded-full px-1 text-[10px] leading-4 font-semibold tabular-nums", badgeTone)}>
               {unread > 99 ? "99+" : unread}
             </span>
           ) : null}

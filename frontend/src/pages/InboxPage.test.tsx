@@ -38,11 +38,11 @@ describe("InboxPage", () => {
   });
 
   beforeEach(() => {
-    // A wide window: list and detail side by side.
+    // A wide window (from 1280 px): list and detail side by side.
     vi.stubGlobal(
       "matchMedia",
       (query: string) =>
-        ({ matches: query.includes("min-width: 1024px"), addEventListener: () => undefined, removeEventListener: () => undefined }) as unknown as MediaQueryList,
+        ({ matches: query.includes("min-width: 1280px"), addEventListener: () => undefined, removeEventListener: () => undefined }) as unknown as MediaQueryList,
     );
     candidates = [later, unclear, overdue];
     vi.spyOn(api, "tasks").mockImplementation(async () => ({ items: candidates, total: candidates.length }));
@@ -61,7 +61,7 @@ describe("InboxPage", () => {
 
   it("orders candidates by handling priority and shows the first one next to the list", async () => {
     renderInbox();
-    const list = await screen.findByRole("list", { name: "候选任务" });
+    const list = await screen.findByRole("list", { name: "等待你决定的事项" });
     await waitFor(() => expect(within(list).getAllByRole("button", { name: /./ }).length).toBeGreaterThan(0));
     const titles = within(list)
       .getAllByRole("button")
@@ -76,7 +76,7 @@ describe("InboxPage", () => {
     const sample = makeTask({ id: "sample", title: "测试：提交报名表", ...day("2026-10-09"), urgency: "overdue", sample: true });
     candidates = [sample, later, overdue];
     renderInbox();
-    const list = await screen.findByRole("list", { name: "候选任务" });
+    const list = await screen.findByRole("list", { name: "等待你决定的事项" });
     await waitFor(() => expect(within(list).getAllByRole("button").length).toBeGreaterThan(2));
     const titles = within(list)
       .getAllByRole("button")
@@ -87,8 +87,8 @@ describe("InboxPage", () => {
     expect(within(list).getByText("测试数据（不计入统计）")).toBeInTheDocument();
     // The heading already says it: the row does not repeat "测试数据".
     expect(within(list).queryByText("测试数据")).not.toBeInTheDocument();
-    // Only the real candidates are counted in the tab.
-    expect(screen.getByRole("tab", { name: /候选任务/ })).toHaveTextContent("候选任务 2");
+    // Only the real candidates are counted.
+    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("待确认 2");
   });
 
   it("says that a possible duplicate has another deadline instead of offering a plain merge", async () => {
@@ -119,6 +119,46 @@ describe("InboxPage", () => {
     );
     renderInbox();
     expect(await screen.findByText(/但截止日期不同（这里是 11月1日.*，那边是 10月30日.*）。系统不会自动合并/)).toBeInTheDocument();
+  });
+
+  it("holds changes to confirmed tasks in the same queue, named by what is to be decided", async () => {
+    const changed = makeTask({
+      id: "changed",
+      title: "Miete überweisen",
+      status: "confirmed",
+      ...day("2026-10-30"),
+      urgency: "normal",
+      pending_suggestions: 1,
+      pending_suggestion_kinds: ["update_due"],
+    });
+    candidates = [later, changed];
+    renderInbox();
+    const list = await screen.findByRole("list", { name: "等待你决定的事项" });
+    expect(await within(list).findByRole("button", { name: "Miete überweisen" })).toBeInTheDocument();
+    expect(within(list).getByText("截止日期可能有变")).toBeInTheDocument();
+    // There is one list, not a separate tab for suggestions.
+    expect(screen.queryByRole("tab")).not.toBeInTheDocument();
+  });
+
+  it("shows the position in the queue and moves on without a keyboard", async () => {
+    renderInbox();
+    expect(await screen.findByText("第 1 / 3 项")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "下一项" }));
+    expect(await screen.findByRole("heading", { level: 2, name: "Register for only" })).toBeInTheDocument();
+    expect(screen.getByText("第 2 / 3 项")).toBeInTheDocument();
+  });
+
+  it("below 1280 px shows the list first and the task on its own, with the way back", async () => {
+    vi.stubGlobal(
+      "matchMedia",
+      () => ({ matches: false, addEventListener: () => undefined, removeEventListener: () => undefined }) as unknown as MediaQueryList,
+    );
+    renderInbox();
+    const item = await screen.findByRole("button", { name: "Bücher zurückgeben" });
+    expect(screen.queryByRole("heading", { level: 2 })).not.toBeInTheDocument();
+    fireEvent.click(item);
+    expect(await screen.findByRole("heading", { level: 2, name: "Bücher zurückgeben" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "返回列表" })).toBeInTheDocument();
   });
 
   it("moves through the list with the arrow keys", async () => {

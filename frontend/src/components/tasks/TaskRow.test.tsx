@@ -1,9 +1,11 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen } from "@testing-library/react";
+import { act, render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router";
-import { beforeAll, describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it, vi } from "vitest";
 import { TooltipProvider } from "@/components/ui/menu";
 import i18n from "@/i18n";
+import { markJustAdded } from "@/lib/justAdded";
 import type { TaskSummary } from "@/lib/types";
 import { TaskListItem } from "./TaskRow";
 
@@ -66,7 +68,10 @@ describe("TaskListItem", () => {
     expect(screen.getByText("日期需确认")).toBeInTheDocument();
     expect(screen.queryByText("72%")).not.toBeInTheDocument();
     expect(screen.queryByText(/置信度/)).not.toBeInTheDocument();
-    expect(screen.getByLabelText("日期需要确认")).toBeInTheDocument();
+    // The date is rendered for narrow and wide lists (CSS shows one of them).
+    expect(screen.getAllByLabelText("日期需要确认").length).toBeGreaterThan(0);
+    // Category and sources live in the task itself, not in every row.
+    expect(screen.queryByText("行政事务")).not.toBeInTheDocument();
   });
 
   it("shows a date-only deadline without inventing a time", () => {
@@ -99,20 +104,39 @@ describe("TaskListItem", () => {
         urgency: "no_deadline",
       },
     });
-    expect(screen.getByText("无截止日期")).toBeInTheDocument();
+    expect(screen.getAllByText("无截止日期").length).toBeGreaterThan(0);
     expect(screen.queryByText("日期需确认")).not.toBeInTheDocument();
   });
 
-  it("shows at most two key states and names the rest on hover", () => {
+  it("shows at most two key states; the rest opens with a click, not only on hover", async () => {
     renderRow({
       task: { ...task, sample: true, review_reasons: ["possible_duplicate", "title_incomplete"], due_needs_confirmation: false },
       showUnconfirmed: true,
     });
-    // Unconfirmed and test data come first; the two problems are summed up as "+2".
+    // Unconfirmed and test data come first; the two problems are summed up.
     expect(screen.getByText("待确认")).toBeInTheDocument();
     expect(screen.getByText("测试数据")).toBeInTheDocument();
     expect(screen.queryByText("疑似重复")).not.toBeInTheDocument();
-    expect(screen.getByText("+2")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "另有 2 项" }));
+    expect(await screen.findByText("疑似重复")).toBeInTheDocument();
+    expect(screen.getByText("内容待核实")).toBeInTheDocument();
+  });
+
+  it("names an open suggestion, so new tasks and changes can share one queue", () => {
+    renderRow({ task: { ...task, status: "confirmed", needs_review: false, due_needs_confirmation: false, pending_suggestions: 1, pending_suggestion_kinds: ["update_due"] } });
+    expect(screen.getByText("截止日期可能有变")).toBeInTheDocument();
+  });
+
+  it("names a possible duplicate once, even when it is both a doubt and a suggestion", () => {
+    renderRow({
+      task: { ...task, review_reasons: ["possible_duplicate"], due_needs_confirmation: false, pending_suggestions: 1, pending_suggestion_kinds: ["possible_duplicate"] },
+    });
+    expect(screen.getAllByText("疑似重复")).toHaveLength(1);
+  });
+
+  it("shows a calendar event that needs the user as a state", () => {
+    renderRow({ task: { ...task, status: "confirmed", needs_review: false, due_needs_confirmation: false, calendar_status: "failed" } });
+    expect(screen.getByText("日历写入失败")).toBeInTheDocument();
   });
 
   it("does not repeat a problem that the context already names", () => {
@@ -131,5 +155,19 @@ describe("TaskListItem", () => {
     expect(button).toHaveAttribute("aria-current", "true");
     button.click();
     expect(opened).toBe(1);
+  });
+
+  it("marks a task the user has just added, for a moment", () => {
+    vi.useFakeTimers();
+    try {
+      markJustAdded(task.id, 1000);
+      const { container } = renderRow();
+      const row = container.firstElementChild as HTMLElement;
+      expect(row.className).toContain("animate-[just-added");
+      act(() => vi.advanceTimersByTime(1000));
+      expect(row.className).not.toContain("animate-[just-added");
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

@@ -1,12 +1,20 @@
-import { Check, Languages, LoaderCircle, Menu, Monitor, Moon, Plus, Search, Sun, Upload } from "lucide-react";
+import { Check, Ellipsis, Languages, LoaderCircle, Menu, Monitor, Moon, Plus, Search, Sun, Upload } from "lucide-react";
 import { useRef, useState, type FormEvent } from "react";
-import { useNavigate } from "react-router";
+import { Link, useLocation, useNavigate } from "react-router";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/form";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger, Tip } from "@/components/ui/menu";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+  Tip,
+} from "@/components/ui/menu";
 import { LANGUAGES, rememberLanguage, type Language } from "@/i18n";
 import { api } from "@/lib/api";
 import { errorMessage } from "@/lib/errors";
@@ -26,10 +34,11 @@ function persist(changes: { language?: Language; theme?: Theme }) {
   api.updateSettings({ general: changes }).catch((error: unknown) => toast.error(errorMessage(error)));
 }
 
-export function UploadButton({ variant = "default" }: { variant?: "default" | "outline" }) {
+export function UploadButton({ variant = "outline", compact = true }: { variant?: "default" | "outline"; compact?: boolean }) {
   const { t } = useTranslation();
   const input = useRef<HTMLInputElement>(null);
   const upload = useUpload();
+  const label = upload.isPending ? t("topbar.uploading") : t("topbar.upload");
   return (
     <>
       <input
@@ -44,9 +53,10 @@ export function UploadButton({ variant = "default" }: { variant?: "default" | "o
           if (files.length) upload.mutate(files);
         }}
       />
-      <Button variant={variant} size="sm" onClick={() => input.current?.click()} disabled={upload.isPending}>
+      {/* The label stays the accessible name when only the icon is shown (phones). */}
+      <Button variant={variant} size="sm" className="touch-target relative" onClick={() => input.current?.click()} disabled={upload.isPending} aria-label={label}>
         {upload.isPending ? <LoaderCircle className="animate-spin" /> : <Upload />}
-        <span className="hidden sm:inline">{upload.isPending ? t("topbar.uploading") : t("topbar.upload")}</span>
+        <span className={compact ? "hidden sm:inline" : undefined}>{label}</span>
       </Button>
     </>
   );
@@ -58,9 +68,9 @@ function NewTodoButton() {
   const [open, setOpen] = useState(false);
   return (
     <>
-      <Button variant="outline" size="sm" onClick={() => setOpen(true)} aria-label={t("newTask.button")}>
+      <Button variant="outline" size="sm" className="touch-target relative" onClick={() => setOpen(true)}>
         <Plus />
-        <span className="hidden sm:inline">{t("newTask.button")}</span>
+        {t("newTask.button")}
       </Button>
       <TaskEditDialog open={open} onOpenChange={setOpen} />
     </>
@@ -70,6 +80,9 @@ function NewTodoButton() {
 export function TopBar() {
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
+  const { pathname } = useLocation();
+  // The task list has its own search (one search per screen); elsewhere this one searches all tasks.
+  const onTasks = pathname === "/tasks";
   const [theme, setTheme] = useTheme();
   const [query, setQuery] = useState("");
   const [menuOpen, setMenuOpen] = useState(false);
@@ -79,6 +92,7 @@ export function TopBar() {
     e.preventDefault();
     const q = query.trim();
     navigate(q ? `/tasks?view=all&q=${encodeURIComponent(q)}` : "/tasks");
+    setQuery("");
   };
 
   const changeLanguage = (lang: Language) => {
@@ -94,7 +108,7 @@ export function TopBar() {
 
   return (
     <header className="z-30 flex h-14 shrink-0 items-center gap-2 border-b bg-card px-4 sm:px-6">
-      <Button variant="ghost" size="icon" className="lg:hidden" onClick={() => setMenuOpen(true)} aria-label={t("topbar.openMenu")}>
+      <Button variant="ghost" size="icon" className="touch-target relative lg:hidden" onClick={() => setMenuOpen(true)} aria-label={t("topbar.openMenu")}>
         <Menu />
       </Button>
       <Dialog open={menuOpen} onOpenChange={setMenuOpen}>
@@ -106,25 +120,64 @@ export function TopBar() {
         </DialogContent>
       </Dialog>
 
-      <form onSubmit={search} className="relative max-w-md flex-1" role="search">
-        <Search className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
-        <Input
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder={t("topbar.search")}
-          aria-label={t("topbar.search")}
-          className="h-8 bg-muted/50 pl-8"
-        />
-      </form>
+      {onTasks ? (
+        <div className="flex-1" />
+      ) : (
+        <>
+          <form onSubmit={search} className="relative hidden max-w-md flex-1 sm:block" role="search">
+            <Search className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder={t("topbar.search")}
+              aria-label={t("topbar.search")}
+              className="h-8 bg-muted/50 pl-8"
+            />
+          </form>
+          {/* Phones: the search lives on the task list; this opens it. */}
+          <Button variant="ghost" size="icon" className="touch-target relative sm:hidden" asChild>
+            <Link to="/tasks?view=all&search=1" aria-label={t("topbar.search")}>
+              <Search />
+            </Link>
+          </Button>
+          <div className="flex-1 sm:hidden" />
+        </>
+      )}
 
       <div className="ml-auto flex items-center gap-1">
         <NewTodoButton />
         <UploadButton />
         <NotificationsMenu />
+        {/* Phones: theme and language are rarely changed, so they share one menu. */}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" size="icon" className="touch-target relative sm:hidden" aria-label={t("topbar.more")}>
+              <Ellipsis />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuLabel>{t("topbar.theme")}</DropdownMenuLabel>
+            {THEMES.map(({ value, icon: Icon, key }) => (
+              <DropdownMenuItem key={value} onSelect={() => changeTheme(value)}>
+                <Icon />
+                <span className="flex-1">{t(`topbar.${key}`)}</span>
+                {theme === value ? <Check className="text-foreground!" /> : null}
+              </DropdownMenuItem>
+            ))}
+            <DropdownMenuSeparator />
+            <DropdownMenuLabel>{t("topbar.language")}</DropdownMenuLabel>
+            {LANGUAGES.map(({ value, label }) => (
+              <DropdownMenuItem key={value} onSelect={() => changeLanguage(value)}>
+                <span className="flex-1">{label}</span>
+                {i18n.language === value ? <Check className="text-foreground!" /> : null}
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
         <DropdownMenu>
           <Tip content={t("topbar.theme")}>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" aria-label={t("topbar.theme")}>
+              <Button variant="ghost" size="icon" aria-label={t("topbar.theme")} className="hidden sm:inline-flex">
                 <ThemeIcon />
               </Button>
             </DropdownMenuTrigger>
@@ -143,7 +196,7 @@ export function TopBar() {
         <DropdownMenu>
           <Tip content={t("topbar.language")}>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" aria-label={t("topbar.language")}>
+              <Button variant="ghost" size="icon" aria-label={t("topbar.language")} className="hidden sm:inline-flex">
                 <Languages />
               </Button>
             </DropdownMenuTrigger>

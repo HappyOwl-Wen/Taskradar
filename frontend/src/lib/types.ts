@@ -44,6 +44,8 @@ export interface TaskSummary {
   source_count: number;
   source_kinds: string[];
   pending_suggestions: number;
+  /** What the open suggestions are about (absent on servers from before this field existed). */
+  pending_suggestion_kinds?: Suggestion["kind"][];
   calendar_status: string | null;
   detected_at: string | null;
   source_published_at: string | null;
@@ -259,6 +261,8 @@ export interface Dashboard {
     conflicts?: number;
     /** Open demo/test tasks, which are not counted anywhere on the dashboard. */
     sample_open?: number;
+    /** Whether the user has ever confirmed or completed a task (the first-run guide stays until then). */
+    ever_confirmed?: boolean;
   };
   /** What needs attention now, most pressing first. */
   attention?: AttentionTask[];
@@ -338,6 +342,18 @@ export interface ImportResult {
   suggestions_created: number;
   completions_applied: number;
   tasks_updated: number;
+  content_type: string | null;
+}
+
+/** What processing a mail again produced (tasks created, merged, suggested...). */
+export interface IngestOutcome {
+  tasks_created: number;
+  tasks_updated: number;
+  duplicates_merged: number;
+  suggestions_created: number;
+  completions_applied: number;
+  skipped: boolean;
+  skip_reason: string | null;
   content_type: string | null;
 }
 

@@ -196,7 +196,8 @@ managed by Alembic; migrations run automatically on start-up and with `python -m
 ## API
 
 All routes live under `/api` (OpenAPI docs at `/api/docs`). Main groups: dashboard and tasks
-(`/tasks`, `/tasks/{id}/status`, `/tasks/batch`, `/tasks/{id}/merge`, `/events/{id}/undo`,
+(`/tasks`, with `needs_decision=true` for the "To confirm" queue: candidates and tasks with a pending
+suggestion; `/tasks/{id}/status`, `/tasks/batch`, `/tasks/{id}/merge`, `/events/{id}/undo`,
 `/suggestions/{id}/accept|reject`, `/tasks/{id}/calendar/preview`, `/tasks/{id}/calendar`,
 `/tasks/{id}/calendar/remove`, `/tasks/quick-parse` for one-line to-dos, `/tasks/{id}/sample`,
 `/tasks/{id}/review/resolve`, `/review/recheck`), sources
@@ -209,8 +210,14 @@ All routes live under `/api` (OpenAPI docs at `/api/docs`). Main groups: dashboa
 "Undo"; `/dashboard` returns an `attention` list ordered by time (overdue, due today, due tomorrow, due within
 7 days, then changed or disputed deadlines; confirmed before unconfirmed within a group) with `attention_flags`
 (unconfirmed, conflict, date_changed), `attention_counts`, non-overlapping counts (`needs_action`, `due_soon`,
-`due_soon_candidates`, `overdue_candidates`, `sample_open`) and suggestions that name both tasks with their
-status and deadline (`deadlines_differ`).
+`due_soon_candidates`, `overdue_candidates`, `sample_open`, and `ever_confirmed`, which ends the first-run
+guide) and suggestions that name both tasks with their status and deadline (`deadlines_differ`). Task summaries
+list the kinds of their pending suggestions (`pending_suggestion_kinds`), so a list can show "possible
+duplicate" or "deadline update" without loading each task. An unclear date keeps the specific reason next to
+`ambiguous_date` (`weekday_mismatch`, `day_month_order_ambiguous`, `next_weekday_ambiguous`,
+`this_week_day_already_passed`, `weekday_equals_source_day`, `approximate_date`,
+`period_starts_at_unknown_event`), so the UI can say why instead of listing every possible cause. A failed
+file is kept and can be processed again (`/documents/{id}/reprocess`, `/messages/{id}/reprocess`).
 
 ## Frontend
 
@@ -220,24 +227,44 @@ the server restarted) and maps the error envelope; `src/lib/queries.ts` wraps ev
 surface as toasts (with "Undo" when the response names an undo event) and visible data is refreshed. Sources
 poll quickly while a sync runs, and a watcher refreshes the screen whenever a sync job starts or finishes.
 
-Layout: a fixed frame (sidebar, top bar) with one scroll container for the page; the Review inbox is a
-full-height route whose list and detail scroll separately, and below 1024 px they take turns. Shared pieces:
+Navigation is named by what the user does: Today (dashboard), To confirm (one queue for new tasks, deadline
+updates and possible duplicates), My tasks, Add content (imports and sources) and Settings, which also leads to
+Activity and diagnostics (`/insights`). One way to add a to-do ("Add to-do" in the top bar) and one search per
+screen (the task list has its own; elsewhere the top bar's opens it).
+
+Layout: a fixed frame (sidebar, top bar) with one scroll container for the page; To confirm is a full-height
+route whose list and detail scroll separately from 1280 px and take turns below, so the detail keeps enough
+width next to the sidebar. Long words and titles wrap inside their column (`min-w-0`, single-column grids,
+`overflow-wrap: anywhere`) instead of widening the page. Shared pieces:
 `lib/review.ts` turns internal review codes into a few plain-language issues and computes the inbox order
 (overdue, due within three days, conflicts and open suggestions, due within a week, other doubts, later, no
-deadline - never by the extractor's score); `TaskListItem` (status, title, issues, category, sources and
-deadline always in the same place), `DeadlineIndicator`, `TaskDetailView` (deadline and main actions, open
-questions, quotes per source, then calendar, history and collapsed technical details), `DuplicateCompare` and
-`DueChoicePicker` (side-by-side review of a possible duplicate with the required date choice), `KeyStates`
-(at most two coloured states per row: unconfirmed, test data or the most important problem; the rest on hover),
-`SystemStatus` (plain-language status card and list), `RecheckDialog`, `StatusMenu`,
-`TechnicalDetails` (scores, rule signals and IDs, labelled as uncalibrated debugging aids) and
-`lib/records.ts` (mails and files as one processing list, attachments under their mail, every outcome with a
-reason). Settings show one category at a time (`?section=`) and warn before unsaved edits are dropped.
+deadline - never by the extractor's score); `TaskListItem` (title, deadline and at most two states; category
+and sources live in the task; in a narrow list the date moves under the title, decided by the list's own width
+through container queries), `DeadlineIndicator`, `TaskDetailView` (deadline and main actions, open questions
+whose fix buttons open the field concerned with the original wording, quotes per source, then calendar,
+history; technical details in a dialog from the "…" menu), `TaskEditDialog` (adding: one sentence, the
+recognised date in editable fields, the rest under "More options"; editing with an intent, so "Edit & confirm"
+saves and confirms while "Save only" stays possible), `DuplicateCompare` and `DueChoicePicker` (side-by-side
+review of a possible duplicate with the required date choice), `KeyStates` (at most two coloured states per
+row; "N more" opens the rest, also by touch), `StatusMenu` and `CompleteToggle` (one-step completion with undo;
+other statuses behind "…"), `SystemStatus` (one line while everything works, otherwise the problems with where
+to fix them), `LastImportCard` with `lib/upload.ts` (the last import's result stays for the session: what was
+found with the way to confirm it, and each file's outcome with "retry" for failures that may pass or "another
+file" otherwise), `RecheckDialog`, `TechnicalDetails` (scores, rule signals and IDs, labelled as uncalibrated
+debugging aids) and `lib/records.ts` (mails and files as one processing list, attachments under their mail,
+every outcome with a reason). Settings show one category at a time (`?section=`); unsaved edits are protected
+on every way out (another category, the sidebar, links, back/forward via `useBlocker`, closing the window via
+`beforeunload`), and appearance and language say that they apply at once. Gmail is connected step by step, with
+the technical details folded away. On touch screens `.touch-target` gives small controls a tap area of at
+least 44 px without changing their drawn size, and the buttons that finish a dialog or a decision are 44 px
+tall on phones. A task the user just added is highlighted for a moment in whichever list shows it;
+`prefers-reduced-motion` switches off non-essential motion.
 Colours and sizes come from tokens in `src/index.css`: page background `#F8FAFC`, white cards with `#E2E8F0`
 borders, one light-blue selection colour (`--selected`) for the sidebar, tabs and lists, and fixed meanings for
 colour (brand blue for actions, violet for unconfirmed, orange for warnings and disputed dates, red for overdue,
 green for done, grey for everything descriptive); `text-page` / `text-section` set the heading scale.
-Pages: Dashboard, Review, All tasks, Task detail, Sources, Insights, Settings. `npm run build` writes the
+Pages: Today, To confirm, My tasks, Task detail, Add content, Settings, Activity and diagnostics.
+`npm run build` writes the
 bundle into `backend/src/taskradar/static`, which the backend serves (no external CDN; strict CSP).
 
 ## Decisions and trade-offs
@@ -265,5 +292,8 @@ bundle into `backend/src/taskradar/static`, which the backend serves (no externa
   translation completeness and components, including the review flows: issue mapping and inbox order,
   keyboard navigation and moving on after a decision, undo toasts, the duplicate comparison (date choice
   required, correct API call) and the processing records (grouping, reasons, failures first), the dashboard
-  (time groups, conflict and unconfirmed marks, suggestion texts, test data note, system status), at most two
-  states per row and test data listed after real candidates.
+  (time groups, conflict and unconfirmed marks, suggestion texts, test data note, system status, decision card,
+  first-run guide), at most two states per row and test data listed after real candidates; the edit dialog
+  (edit & confirm by default from that entry, save only, add with one sentence), the settings guard on every
+  navigation, Gmail status while unknown, accessible names in the top bar, one-step completion, import results
+  with retries, and the highlight of a just-added task.

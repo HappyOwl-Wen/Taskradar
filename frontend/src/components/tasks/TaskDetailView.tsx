@@ -6,6 +6,7 @@ import {
   CircleCheck,
   Columns2,
   Ellipsis,
+  FileCode2,
   FlaskConical,
   GitMerge,
   Lock,
@@ -21,14 +22,14 @@ import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { ConfirmDialog } from "@/components/ui/dialog";
+import { ConfirmDialog, Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger, Tip } from "@/components/ui/menu";
 import { EmptyState, ErrorState, LoadingRows } from "@/components/ui/states";
 import { api, ApiError } from "@/lib/api";
 import { formatDate, formatDateTime, formatDue, listSeparator } from "@/lib/format";
 import { useTimezone } from "@/lib/hooks";
 import { useAction, useTask } from "@/lib/queries";
-import { taskIssues, type Issue } from "@/lib/review";
+import { dateDetail, taskIssues, type Issue } from "@/lib/review";
 import type { Suggestion, TaskDetail, TaskEvent, TaskSourceEntry, TaskStatus } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { CategoryBadge, StatusBadge } from "./badges";
@@ -42,8 +43,8 @@ import { SourceList } from "./SourceList";
 import { sourceTitle, useSourceWhen } from "./sourceMeta";
 import { StatusMenu } from "./StatusMenu";
 import { SuggestionCard } from "./SuggestionCard";
-import { TaskEditDialog } from "./TaskEditDialog";
-import { TechnicalDetails } from "./TechnicalDetails";
+import { TaskEditDialog, type EditFocus, type EditIntent } from "./TaskEditDialog";
+import { TechnicalRows } from "./TechnicalDetails";
 import { Timeline } from "./Timeline";
 import { useRelativeDueText } from "./useRelativeDueText";
 
@@ -51,7 +52,7 @@ const OPEN_STATUSES: TaskStatus[] = ["confirmed", "in_progress", "waiting_for_re
 
 function Section({ title, aside, children, className }: { title: string; aside?: ReactNode; children: ReactNode; className?: string }) {
   return (
-    <section className={cn("grid gap-2.5", className)}>
+    <section className={cn("grid min-w-0 grid-cols-1 gap-2.5", className)}>
       <div className="flex min-h-6 items-center justify-between gap-2">
         <h3 className="text-sm font-semibold">{title}</h3>
         {aside}
@@ -109,7 +110,7 @@ function DueLine({ task }: { task: TaskDetail }) {
   );
 }
 
-function PrimaryActions({ task, onEdit, onDone }: { task: TaskDetail; onEdit: () => void; onDone?: () => void }) {
+function PrimaryActions({ task, onEditConfirm, onDone }: { task: TaskDetail; onEditConfirm: () => void; onDone?: () => void }) {
   const { t } = useTranslation();
   const change = useAction((status: TaskStatus) => api.setStatus(task.id, status), {
     success: (r) => t(`detail.statusDone.${r.status}`, { title: r.title }),
@@ -125,7 +126,7 @@ function PrimaryActions({ task, onEdit, onDone }: { task: TaskDetail; onEdit: ()
           <Button size="sm" onClick={go("confirmed")} disabled={busy}>
             <Check /> {t("statusAction.confirm")}
           </Button>
-          <Button variant="outline" size="sm" onClick={onEdit} disabled={busy}>
+          <Button variant="outline" size="sm" onClick={onEditConfirm} disabled={busy}>
             <Pencil /> {t("inbox.editAndConfirm")}
           </Button>
           <Tip content={t("detail.dismissHint")}>
@@ -182,11 +183,11 @@ function DateChangedActions({ task }: { task: TaskDetail }) {
   const busy = keep.isPending || undo.isPending;
   return (
     <div className="flex flex-wrap gap-2">
-      <Button variant="outline" size="xs" onClick={() => keep.mutate(undefined)} disabled={busy}>
+      <Button variant="outline" size="sm" onClick={() => keep.mutate(undefined)} disabled={busy}>
         <Check /> {t("issue.keepNewDate")}
       </Button>
       {change ? (
-        <Button variant="ghost" size="xs" onClick={() => undo.mutate(change.id)} disabled={busy}>
+        <Button variant="ghost" size="sm" onClick={() => undo.mutate(change.id)} disabled={busy}>
           <Undo2 /> {t("issue.undoChange")}
         </Button>
       ) : null}
@@ -194,7 +195,24 @@ function DateChangedActions({ task }: { task: TaskDetail }) {
   );
 }
 
-function IssueRow({ issue, task, duplicate, onEdit, onCompare }: { issue: Issue; task: TaskDetail; duplicate?: Suggestion; onEdit: () => void; onCompare: () => void }) {
+/** The sentence the task was taken from (shown when the title is being fixed). */
+function actionQuote(task: TaskDetail): string | null {
+  return task.sources[0]?.evidence.find((e) => e.kind === "action")?.quote ?? null;
+}
+
+function IssueRow({
+  issue,
+  task,
+  duplicate,
+  onEdit,
+  onCompare,
+}: {
+  issue: Issue;
+  task: TaskDetail;
+  duplicate?: Suggestion;
+  onEdit: (focus: EditFocus, context: string | null) => void;
+  onCompare: () => void;
+}) {
   const { t, i18n } = useTranslation();
   const Icon = ISSUE_ICON[issue.kind];
   const other = duplicate ? (typeof duplicate.payload.other_title === "string" ? duplicate.payload.other_title : duplicate.related_task_title) : null;
@@ -209,7 +227,7 @@ function IssueRow({ issue, task, duplicate, onEdit, onCompare }: { issue: Issue;
         ? t("issue.duplicate.withDates", { title: other ?? "—", own: ours, other: theirs })
         : t("issue.duplicate.withTitle", { title: other ?? "—" });
     action = (
-      <Button variant="outline" size="xs" onClick={onCompare}>
+      <Button variant="outline" size="sm" onClick={onCompare}>
         <Columns2 /> {t("compare.viewDiff")}
       </Button>
     );
@@ -226,28 +244,36 @@ function IssueRow({ issue, task, duplicate, onEdit, onCompare }: { issue: Issue;
     }
     action = <DateChangedActions task={task} />;
   } else if (issue.kind === "date_unclear" || issue.kind === "date_conflict") {
-    if (task.due_text) text = `${text} ${t("issue.originalWording", { text: task.due_text })}`;
+    if (issue.kind === "date_unclear") {
+      const due = formatDue(task, i18n.language, new Date().getFullYear()) ?? "—";
+      text = t(`issue.dateDetail.${dateDetail(issue.reasons, task.due_text)}`, { text: task.due_text ?? "", date: due });
+    } else if (task.due_text) {
+      text = `${text} ${t("issue.originalWording", { text: task.due_text })}`;
+    }
     action = (
-      <Button variant="outline" size="xs" onClick={onEdit}>
+      <Button variant="outline" size="sm" onClick={() => onEdit("date", task.due_text)}>
         <Pencil /> {t("issue.fixDate")}
       </Button>
     );
   } else if (issue.kind === "content_unclear") {
     action = (
-      <Button variant="outline" size="xs" onClick={onEdit}>
+      <Button variant="outline" size="sm" onClick={() => onEdit("title", actionQuote(task))}>
         <Pencil /> {t("issue.fixTitle")}
       </Button>
     );
   }
   const tone = ISSUE_TONE[issue.kind];
   return (
-    <li className="flex flex-wrap items-start gap-x-3 gap-y-2 py-2.5 first:pt-0 last:pb-0">
+    <li className="flex min-w-0 items-start gap-3 py-2.5 first:pt-0 last:pb-0">
       <Icon className={cn("mt-0.5 size-4 shrink-0", tone === "destructive" ? "text-destructive" : tone === "urgent" ? "text-urgent" : "text-muted-foreground")} aria-hidden />
-      <div className="grid min-w-0 flex-1 basis-60 gap-0.5">
-        <p className="text-sm font-medium">{t(`issue.${issue.kind}.label`)}</p>
-        <p className="text-[13px] leading-relaxed text-muted-foreground">{text}</p>
+      {/* Text and action share a line when there is room; in a narrow pane the action moves below the text. */}
+      <div className="flex min-w-0 flex-1 flex-wrap items-start gap-x-3 gap-y-2">
+        <div className="grid min-w-0 flex-[1_1_15rem] gap-0.5">
+          <p className="text-sm font-medium">{t(`issue.${issue.kind}.label`)}</p>
+          <p className="text-[13px] leading-relaxed [overflow-wrap:anywhere] text-muted-foreground">{text}</p>
+        </div>
+        {action ? <div className="max-w-full">{action}</div> : null}
       </div>
-      {action ? <div className="shrink-0">{action}</div> : null}
     </li>
   );
 }
@@ -278,7 +304,7 @@ function Basis({ task, timezone }: { task: TaskDetail; timezone: string }) {
     </p>
   );
   return (
-    <div className="grid gap-2.5">
+    <div className="grid grid-cols-1 gap-2.5">
       {!covered || quotes.length === 0 ? <p className="text-sm leading-relaxed whitespace-pre-wrap">{action}</p> : null}
       {quotes.length ? <EvidenceList evidence={quotes} /> : null}
       {source && quotes.length ? caption(source) : null}
@@ -309,7 +335,8 @@ export function TaskDetailView({
   const navigate = useNavigate();
   const timezone = useTimezone();
   const { data: task, error, isLoading, refetch } = useTask(taskId);
-  const [editOpen, setEditOpen] = useState(false);
+  const [edit, setEdit] = useState<{ intent: EditIntent; focus: EditFocus; context: string | null } | null>(null);
+  const [techOpen, setTechOpen] = useState(false);
   const [mergeOpen, setMergeOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [compareOpen, setCompareOpen] = useState(false);
@@ -350,10 +377,7 @@ export function TaskDetailView({
       <Timeline events={task.events} timezone={timezone} />
     </Fold>
   );
-  const technical = (
-    <TechnicalDetails
-      className="border-t pt-3"
-      rows={[
+  const technicalRows: [string, ReactNode][] = [
         [t("detail.detectedAt"), formatDateTime(task.detected_at ?? task.created_at, i18n.language, timezone)],
         [
           t("detail.publishedAt"),
@@ -369,9 +393,7 @@ export function TaskDetailView({
         [t("detail.entities"), task.entities.join(", ") || "—"],
         ...(task.due_anchor ? [[t("due.anchor"), task.due_anchor] as [string, string]] : []),
         [t("tech.taskId"), task.id],
-      ]}
-    />
-  );
+  ];
   const calendar = isOpen ? (
     <CalendarCard task={task} />
   ) : task.status === "candidate" && task.due_date && !task.sample ? (
@@ -383,7 +405,7 @@ export function TaskDetailView({
   ) : null;
 
   const main = (
-    <div className="grid min-w-0 content-start gap-6">
+    <div className="grid min-w-0 grid-cols-1 content-start gap-6">
       {issues.length ? (
         <Section title={t("detail.reviewTitle")}>
           <ul className="divide-y rounded-lg border border-urgent/25 bg-urgent/[0.04] px-3.5 py-3">
@@ -393,19 +415,21 @@ export function TaskDetailView({
                 issue={issue}
                 task={task}
                 duplicate={issue.kind === "duplicate" ? duplicate : undefined}
-                onEdit={() => setEditOpen(true)}
+                onEdit={(focus, context) => setEdit({ intent: "edit", focus, context })}
                 onCompare={() => setCompareOpen(true)}
               />
             ))}
           </ul>
         </Section>
       ) : null}
-      {duplicate && !issues.some((i) => i.kind === "duplicate") ? <SuggestionCard suggestion={{ ...duplicate, task_title: task.title }} showTask={false} /> : null}
+      {duplicate && !issues.some((i) => i.kind === "duplicate") ? (
+        <SuggestionCard suggestion={{ ...duplicate, task_title: task.title }} showTask={false} onDecided={onDecided} />
+      ) : null}
       {otherSuggestions.length ? (
         <Section title={t("detail.suggestions")}>
-          <div className="grid gap-2">
+          <div className="grid grid-cols-1 gap-2">
             {otherSuggestions.map((s) => (
-              <SuggestionCard key={s.id} suggestion={{ ...s, task_title: task.title }} showTask={false} />
+              <SuggestionCard key={s.id} suggestion={{ ...s, task_title: task.title }} showTask={false} onDecided={onDecided} />
             ))}
           </div>
         </Section>
@@ -431,16 +455,15 @@ export function TaskDetailView({
   );
 
   const side = (
-    <div className="grid content-start gap-3">
+    <div className="grid min-w-0 grid-cols-1 content-start gap-3">
       {calendar}
       {history}
-      {technical}
     </div>
   );
 
   return (
-    <div className={cn("grid gap-6", embedded && "@container")}>
-      <header className="grid gap-3">
+    <div className={cn("grid min-w-0 grid-cols-[minmax(0,1fr)] gap-6", embedded && "@container")}>
+      <header className="grid min-w-0 grid-cols-1 gap-3">
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
           <StatusBadge status={task.status} />
           {task.sample ? (
@@ -465,7 +488,7 @@ export function TaskDetailView({
           ) : null}
         </div>
         <div className="flex items-start gap-2">
-          <Heading className={cn("min-w-0 flex-1 font-semibold tracking-tight break-words", embedded ? "text-xl leading-snug" : "text-page sm:text-2xl sm:leading-snug")}>
+          <Heading className={cn("min-w-0 flex-1 font-semibold tracking-tight [overflow-wrap:anywhere]", embedded ? "text-xl leading-snug" : "text-page sm:text-2xl sm:leading-snug")}>
             {task.title}
           </Heading>
           <DropdownMenu>
@@ -475,7 +498,7 @@ export function TaskDetailView({
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuItem onSelect={() => setEditOpen(true)}>
+              <DropdownMenuItem onSelect={() => setEdit({ intent: "edit", focus: "title", context: null })}>
                 <Pencil /> {t("detail.edit")}
               </DropdownMenuItem>
               <DropdownMenuItem onSelect={() => setMergeOpen(true)}>
@@ -489,6 +512,9 @@ export function TaskDetailView({
                   <ChevronRight /> {t("detail.openFullPage")}
                 </DropdownMenuItem>
               ) : null}
+              <DropdownMenuItem onSelect={() => setTechOpen(true)}>
+                <FileCode2 /> {t("tech.title")}
+              </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem destructive onSelect={() => setDeleteOpen(true)}>
                 <Trash2 /> {t("detail.delete")}
@@ -504,35 +530,53 @@ export function TaskDetailView({
         ) : null}
         {!decisionBar ? (
           <div className="flex flex-wrap items-center gap-2">
-            <PrimaryActions task={task} onEdit={() => setEditOpen(true)} onDone={onDecided} />
+            <PrimaryActions task={task} onEditConfirm={() => setEdit({ intent: "confirm", focus: "title", context: null })} onDone={onDecided} />
           </div>
         ) : null}
       </header>
 
       {embedded ? (
-        <div className="grid gap-6 @4xl:grid-cols-[minmax(0,1fr)_17rem] @4xl:gap-8">
+        <div className="grid grid-cols-[minmax(0,1fr)] gap-6 @4xl:grid-cols-[minmax(0,1fr)_17rem] @4xl:gap-8">
           {main}
           {side}
         </div>
       ) : (
-        <div className="grid gap-8 xl:grid-cols-[minmax(0,1fr)_20rem]">
+        <div className="grid grid-cols-[minmax(0,1fr)] gap-8 xl:grid-cols-[minmax(0,1fr)_20rem]">
           {main}
-          <aside className="grid content-start gap-3">
+          <aside className="grid min-w-0 grid-cols-1 content-start gap-3">
             {calendar}
             {history}
-            {technical}
           </aside>
         </div>
       )}
 
       {decisionBar ? (
-        <div className="sticky bottom-0 z-10 -mx-4 -mb-5 flex flex-wrap items-center gap-2 border-t bg-card/95 px-4 py-3 backdrop-blur-sm sm:-mx-8 sm:px-8">
-          <PrimaryActions task={task} onEdit={() => setEditOpen(true)} onDone={onDecided} />
+        <div className="sticky bottom-0 z-10 -mx-4 -mb-4 flex flex-wrap items-center gap-2 border-t bg-card/95 px-4 py-3 backdrop-blur-sm max-sm:[&_button]:h-11 sm:-mx-8 sm:-mb-5 sm:px-8">
+          <PrimaryActions task={task} onEditConfirm={() => setEdit({ intent: "confirm", focus: "title", context: null })} onDone={onDecided} />
           <span className="ml-auto hidden text-xs text-muted-foreground xl:inline">{t("inbox.decisionHint")}</span>
         </div>
       ) : null}
 
-      <TaskEditDialog open={editOpen} onOpenChange={setEditOpen} task={task} offerConfirm={task.status === "candidate"} />
+      <TaskEditDialog
+        open={edit !== null}
+        onOpenChange={(o) => !o && setEdit(null)}
+        task={task}
+        intent={edit?.intent}
+        focus={edit?.focus}
+        context={edit?.context}
+        onSaved={(saved) => {
+          if (edit?.intent === "confirm" && saved.status !== "candidate") onDecided?.();
+        }}
+      />
+      <Dialog open={techOpen} onOpenChange={setTechOpen}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>{t("tech.title")}</DialogTitle>
+            <DialogDescription>{t("tech.description")}</DialogDescription>
+          </DialogHeader>
+          <TechnicalRows rows={technicalRows} />
+        </DialogContent>
+      </Dialog>
       <MergeDialog task={task} open={mergeOpen} onOpenChange={setMergeOpen} />
       {duplicate ? (
         <DuplicateCompare suggestion={{ ...duplicate, task_title: task.title }} open={compareOpen} onOpenChange={setCompareOpen} onMerged={onDecided} />

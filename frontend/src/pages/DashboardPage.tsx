@@ -1,49 +1,22 @@
-import {
-  ArrowRight,
-  CalendarRange,
-  CircleCheck,
-  CircleCheckBig,
-  Columns2,
-  FlaskConical,
-  FolderPlus,
-  Inbox,
-  Mail,
-  RefreshCw,
-  TriangleAlert,
-  type LucideIcon,
-} from "lucide-react";
+import { ArrowRight, BellRing, CircleCheckBig, FlaskConical, FolderPlus, ListChecks, Mail, PenLine, RefreshCw, Upload, X, type LucideIcon } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import { Link, useNavigate } from "react-router";
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
 import { UploadButton } from "@/components/layout/TopBar";
 import { SystemStatusCard } from "@/components/layout/SystemStatus";
+import { LastImportCard } from "@/components/sources/LastImport";
 import { conflictState, dateChangedState, unconfirmedState, type KeyState } from "@/components/tasks/keyStates";
-import { DuplicateCompare } from "@/components/tasks/DuplicateCompare";
+import { TaskEditDialog } from "@/components/tasks/TaskEditDialog";
 import { TaskListItem } from "@/components/tasks/TaskRow";
 import { Button } from "@/components/ui/button";
 import { EmptyState, ErrorState, LoadingRows } from "@/components/ui/states";
 import { api } from "@/lib/api";
 import { formatDate, formatDue } from "@/lib/format";
-import { expectSourceActivity, useAction, useDashboard } from "@/lib/queries";
+import { expectSourceActivity, useAction, useDashboard, useDecisionQueue } from "@/lib/queries";
+import { suggestionPayload } from "@/lib/review";
 import type { AttentionReason, AttentionTask, Dashboard, Suggestion } from "@/lib/types";
 import { cn } from "@/lib/utils";
-
-function MetricTile({ label, value, sub, icon: Icon, tone, to }: { label: string; value: number; sub?: string; icon: LucideIcon; tone: string; to: string }) {
-  return (
-    <Link
-      to={to}
-      className="group grid gap-1 rounded-lg border bg-card px-4 py-3 transition-colors outline-none hover:border-input hover:bg-accent/60 focus-visible:ring-[3px] focus-visible:ring-ring/40"
-    >
-      <span className="flex items-center justify-between gap-2 text-[13px] text-muted-foreground">
-        {label}
-        <Icon className={cn("size-4", value > 0 ? tone : "text-muted-foreground/60")} aria-hidden />
-      </span>
-      <span className={cn("text-2xl leading-tight font-semibold tabular-nums", value > 0 && tone)}>{value}</span>
-      <span className="min-h-4 text-xs text-muted-foreground">{sub}</span>
-    </Link>
-  );
-}
 
 /** The time group decides the order; conflicts and changed dates only get their own group when not due soon. */
 const GROUPS: AttentionReason[] = ["overdue", "due_today", "due_tomorrow", "due_soon", "date_changed", "conflict"];
@@ -55,6 +28,7 @@ const GROUP_TONE: Record<AttentionReason, string> = {
   date_changed: "text-urgent",
   conflict: "text-urgent",
 };
+const GUIDE_DISMISSED = "taskradar.firstStepsDismissed";
 
 function groupOf(task: AttentionTask): AttentionReason {
   // A server that has not been restarted yet still sends the old reasons.
@@ -104,101 +78,95 @@ function shortDue(date: string | null | undefined, time: string | null | undefin
   return date ? formatDue({ due_date: date, due_time: time ?? null }, language, new Date().getFullYear()) : null;
 }
 
-/** A pending suggestion with what it is about: both task titles, their deadlines and the reason. */
-function SuggestionItem({ suggestion, onCompare }: { suggestion: Suggestion; onCompare: (s: Suggestion) => void }) {
+/** "and «other task» (date)" for a possible duplicate, so the decision can be judged from here. */
+function DuplicateNote({ suggestion }: { suggestion: Suggestion }) {
   const { t, i18n } = useTranslation();
-  const s = suggestion;
-  const taskDue = shortDue(s.task_due_date, s.task_due_time, i18n.language);
-  const relatedDue = shortDue(s.related_due_date, s.related_due_time, i18n.language);
-  const title = s.task_title ?? "—";
-  const taskLink = s.task_status === "candidate" ? `/inbox?task=${s.task_id}` : `/tasks/${s.task_id}`;
-  let heading: string = t(`suggestionCard.${s.kind}.title`);
-  let detail: ReactNode;
-  if (s.kind === "possible_duplicate") {
-    heading = s.deadlines_differ ? t("dashboard.suggestion.duplicateDates") : t("dashboard.suggestion.duplicate");
-    detail = (
-      <>
-        <p className="text-[13px] leading-snug break-words">
-          <span className="font-medium">{t("dashboard.suggestion.quoted", { title })}</span>
-          {taskDue ? <span className={cn("ml-1.5 whitespace-nowrap tabular-nums", s.deadlines_differ ? "text-urgent" : "text-muted-foreground")}>{taskDue}</span> : null}
-        </p>
-        <p className="text-[13px] leading-snug break-words text-muted-foreground">
-          {t("dashboard.suggestion.and")} <span className="text-foreground">{t("dashboard.suggestion.quoted", { title: s.related_task_title ?? "—" })}</span>
-          {relatedDue ? <span className={cn("ml-1.5 whitespace-nowrap tabular-nums", s.deadlines_differ && "text-urgent")}>{relatedDue}</span> : null}
-        </p>
-      </>
-    );
-  } else if (s.kind === "update_due") {
-    const to = shortDue(
-      typeof s.payload.due_date === "string" ? s.payload.due_date : null,
-      typeof s.payload.due_time === "string" ? s.payload.due_time : null,
-      i18n.language,
-    );
-    detail = (
-      <p className="text-[13px] leading-snug break-words">
-        <span className="font-medium">{t("dashboard.suggestion.quoted", { title })}</span>{" "}
-        <span className="whitespace-nowrap text-muted-foreground tabular-nums">
-          {taskDue ?? t("due.none")} → <span className="text-urgent">{to ?? "—"}</span>
-        </span>
-      </p>
-    );
-  } else {
-    detail = (
-      <p className="text-[13px] leading-snug break-words">
-        <span className="font-medium">{t("dashboard.suggestion.quoted", { title })}</span>
-      </p>
-    );
-  }
-  const review =
-    s.kind === "possible_duplicate" ? (
-      <Button variant="outline" size="xs" onClick={() => onCompare(s)}>
-        <Columns2 /> {t("dashboard.suggestion.compare")}
-      </Button>
-    ) : (
-      <Button variant="outline" size="xs" asChild>
-        <Link to={taskLink}>{t("dashboard.suggestion.review")}</Link>
-      </Button>
-    );
+  // The other task's current title; older servers send it only inside the payload. Never a bare dash.
+  const other = suggestion.related_task_title ?? suggestionPayload(suggestion).otherTitle ?? t("dashboard.suggestion.otherTask");
+  const due = shortDue(suggestion.related_due_date, suggestion.related_due_time, i18n.language);
   return (
-    <li className="grid gap-1 px-4 py-3">
-      <div className="flex items-start justify-between gap-3">
-        <p className="pt-0.5 text-xs font-semibold text-muted-foreground">{heading}</p>
-        {review}
-      </div>
-      {detail}
-    </li>
+    <>
+      {t("dashboard.suggestion.and")} {t("dashboard.suggestion.quoted", { title: other })}
+      {due ? <span className={cn("ml-1.5 whitespace-nowrap tabular-nums", suggestion.deadlines_differ && "text-urgent")}>{due}</span> : null}
+    </>
   );
 }
 
-function Suggestions({ data }: { data: Dashboard }) {
+/**
+ * One entry for everything that waits for the user: "N things to decide", the first few with what is to
+ * be decided about each, and one way in. New tasks, changed dates and possible duplicates are not
+ * separate lists with their own numbers.
+ */
+function DecisionCard({ data }: { data: Dashboard }) {
   const { t } = useTranslation();
-  const [comparing, setComparing] = useState<Suggestion | null>(null);
-  if (!data.suggestions.length) return null;
+  const { items, isLoading } = useDecisionQueue();
+  const real = items.filter((task) => !task.sample);
+  const count = data.counts.needs_action ?? real.length;
+  if (count === 0 && !isLoading) return null;
+  const byTask = new Map(data.suggestions.map((s) => [s.task_id, s]));
+  const top = real.slice(0, 3);
   return (
     <section className="grid gap-2">
       <div className="flex min-h-7 items-center justify-between gap-2">
-        <h2 className="text-section font-semibold">
-          {t("dashboard.suggestions")} <span className="font-normal text-muted-foreground tabular-nums">{data.counts.pending_suggestions}</span>
-        </h2>
-        <Button variant="ghost" size="xs" asChild>
-          <Link to="/inbox?tab=suggestions">
-            {t("common.viewAll")} <ArrowRight />
-          </Link>
-        </Button>
+        <h2 className="text-section font-semibold">{t("dashboard.decide.title", { count })}</h2>
       </div>
-      <ul className="divide-y rounded-lg border bg-card">
-        {data.suggestions.slice(0, 4).map((s) => (
-          <SuggestionItem key={s.id} suggestion={s} onCompare={setComparing} />
-        ))}
-      </ul>
-      {comparing ? <DuplicateCompare suggestion={comparing} open onOpenChange={(open) => !open && setComparing(null)} /> : null}
+      <div className="overflow-hidden rounded-lg border bg-card">
+        {isLoading && top.length === 0 ? <LoadingRows rows={2} className="p-3" /> : null}
+        <ul className="grid gap-px p-1">
+          {top.map((task) => {
+            const suggestion = byTask.get(task.id);
+            const disputed = suggestion && (suggestion.deadlines_differ || suggestion.kind === "update_due");
+            return (
+              <li key={task.id}>
+                <TaskListItem
+                  task={task}
+                  to={`/inbox?task=${task.id}`}
+                  states={disputed ? [conflictState(t)] : []}
+                  note={suggestion?.kind === "possible_duplicate" ? <DuplicateNote suggestion={suggestion} /> : undefined}
+                />
+              </li>
+            );
+          })}
+        </ul>
+        <div className="flex flex-wrap items-center justify-between gap-2 border-t px-4 py-2.5">
+          <p className="text-xs text-muted-foreground">{count > top.length ? t("dashboard.decide.more", { count: count - top.length }) : t("dashboard.decide.hint")}</p>
+          <Button size="sm" asChild>
+            <Link to="/inbox">
+              {t("dashboard.decide.start")} <ArrowRight />
+            </Link>
+          </Button>
+        </div>
+      </div>
     </section>
   );
 }
 
-function Onboarding() {
+function rememberGuide(dismissed: boolean) {
+  try {
+    if (dismissed) window.localStorage.setItem(GUIDE_DISMISSED, "1");
+    else window.localStorage.removeItem(GUIDE_DISMISSED);
+  } catch {
+    // Storage may be unavailable (private window); the guide then simply shows again next time.
+  }
+}
+
+function guideDismissed(): boolean {
+  try {
+    return window.localStorage.getItem(GUIDE_DISMISSED) === "1";
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * First steps: what TaskRadar does in three steps and one recommended way to start (import a file);
+ * the other ways are one click further. Shown until the first task has been confirmed, and from
+ * "Getting started" at any time.
+ */
+function FirstSteps({ candidates, onClose }: { candidates: number; onClose: () => void }) {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const [addOpen, setAddOpen] = useState(false);
   const demo = useAction(
     async () => {
       const source = await api.createDemoMailbox();
@@ -209,76 +177,113 @@ function Onboarding() {
       success: t("onboarding.demoCreated"),
       onSuccess: () => {
         expectSourceActivity();
-        navigate("/sources");
+        navigate("/inbox");
       },
     },
   );
-  const steps: { icon: LucideIcon; title: string; hint: string; action: ReactNode }[] = [
-    {
-      icon: FlaskConical,
-      title: t("onboarding.demo"),
-      hint: t("onboarding.demoHint"),
-      action: (
-        <Button variant="outline" size="sm" onClick={() => demo.mutate(undefined)} disabled={demo.isPending}>
-          {demo.isPending ? <RefreshCw className="animate-spin" /> : <FlaskConical />} {t("onboarding.demo")}
-        </Button>
-      ),
-    },
+  const steps: { icon: LucideIcon; title: string; hint: string }[] = [
+    { icon: Upload, title: t("onboarding.step1"), hint: t("onboarding.step1Hint") },
+    { icon: ListChecks, title: t("onboarding.step2"), hint: t("onboarding.step2Hint") },
+    { icon: BellRing, title: t("onboarding.step3"), hint: t("onboarding.step3Hint") },
+  ];
+  const others: { icon: LucideIcon; label: string; action: ReactNode }[] = [
     {
       icon: Mail,
-      title: t("onboarding.gmail"),
-      hint: t("onboarding.gmailHint"),
+      label: t("onboarding.gmailHint"),
       action: (
-        <Button variant="outline" size="sm" asChild>
-          <Link to="/settings?section=gmail">
-            <Mail /> {t("onboarding.gmail")}
-          </Link>
+        <Button variant="outline" size="xs" asChild>
+          <Link to="/settings?section=gmail">{t("onboarding.gmail")}</Link>
         </Button>
       ),
     },
     {
       icon: FolderPlus,
-      title: t("onboarding.folder"),
-      hint: t("onboarding.folderHint"),
+      label: t("onboarding.folderHint"),
       action: (
-        <Button variant="outline" size="sm" asChild>
-          <Link to="/sources#folders">
-            <FolderPlus /> {t("onboarding.folder")}
-          </Link>
+        <Button variant="outline" size="xs" asChild>
+          <Link to="/sources#folders">{t("onboarding.folder")}</Link>
+        </Button>
+      ),
+    },
+    {
+      icon: FlaskConical,
+      label: t("onboarding.demoHint"),
+      action: (
+        <Button variant="outline" size="xs" onClick={() => demo.mutate(undefined)} disabled={demo.isPending}>
+          {demo.isPending ? <RefreshCw className="animate-spin" /> : null} {t("onboarding.demo")}
         </Button>
       ),
     },
   ];
   return (
-    <section className="grid gap-4 rounded-lg border bg-card p-5">
-      <div className="grid gap-1">
-        <h2 className="text-section font-semibold">{t("onboarding.title")}</h2>
+    <section className="relative grid gap-5 rounded-lg border bg-card p-5" aria-labelledby="first-steps">
+      <Button variant="ghost" size="icon-sm" className="absolute top-3 right-3 text-muted-foreground" onClick={onClose} aria-label={t("onboarding.close")}>
+        <X />
+      </Button>
+      <div className="grid gap-1 pr-10">
+        <h2 id="first-steps" className="text-section font-semibold">
+          {t("onboarding.title")}
+        </h2>
         <p className="max-w-2xl text-sm leading-relaxed text-muted-foreground">{t("onboarding.description")}</p>
       </div>
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <div className="grid content-between gap-3 rounded-md border p-3.5">
-          <div className="grid gap-1">
-            <p className="text-sm font-medium">{t("onboarding.upload")}</p>
-            <p className="text-xs leading-relaxed text-muted-foreground">{t("onboarding.uploadHint")}</p>
-          </div>
-          <UploadButton variant="outline" />
+      <ol className="grid gap-3 sm:grid-cols-3">
+        {steps.map((s, i) => {
+          const Icon = s.icon;
+          const current = i === (candidates > 0 ? 1 : 0);
+          return (
+            <li key={s.title} className={cn("flex items-start gap-3 rounded-md border p-3", current && "border-primary/40 bg-selected/60")}>
+              <span className={cn("grid size-7 shrink-0 place-items-center rounded-full text-xs font-semibold", current ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground")}>
+                {i + 1}
+              </span>
+              <div className="grid min-w-0 gap-0.5">
+                <p className="flex items-center gap-1.5 text-sm font-medium">
+                  <Icon className="size-4 text-muted-foreground" aria-hidden /> {s.title}
+                </p>
+                <p className="text-xs leading-relaxed text-muted-foreground">{s.hint}</p>
+              </div>
+            </li>
+          );
+        })}
+      </ol>
+      {candidates > 0 ? (
+        <div className="flex flex-wrap items-center gap-3">
+          <Button asChild>
+            <Link to="/inbox">
+              {t("onboarding.review", { count: candidates })} <ArrowRight />
+            </Link>
+          </Button>
+          <p className="text-[13px] text-muted-foreground">{t("onboarding.reviewHint")}</p>
         </div>
-        {steps.map((s) => (
-          <div key={s.title} className="grid content-between gap-3 rounded-md border p-3.5">
-            <div className="grid gap-1">
-              <p className="text-sm font-medium">{s.title}</p>
-              <p className="text-xs leading-relaxed text-muted-foreground">{s.hint}</p>
-            </div>
-            <div>{s.action}</div>
-          </div>
-        ))}
-      </div>
+      ) : (
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+          <UploadButton variant="default" compact={false} />
+          <span className="text-[13px] text-muted-foreground">{t("onboarding.uploadHint")}</span>
+          <Button variant="link" size="sm" className="px-0" onClick={() => setAddOpen(true)}>
+            <PenLine /> {t("onboarding.orWrite")}
+          </Button>
+        </div>
+      )}
+      <details className="group/others">
+        <summary className="w-fit cursor-pointer list-none text-sm font-medium text-muted-foreground outline-none select-none hover:text-foreground focus-visible:underline [&::-webkit-details-marker]:hidden">
+          <ArrowRight className="mr-1 inline size-3.5 transition-transform group-open/others:rotate-90" aria-hidden />
+          {t("onboarding.otherWays")}
+        </summary>
+        <ul className="mt-3 grid gap-2">
+          {others.map((o) => {
+            const Icon = o.icon;
+            return (
+              <li key={o.label} className="flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-md border px-3 py-2">
+                <Icon className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+                <span className="min-w-0 flex-1 basis-48 text-[13px] leading-relaxed text-muted-foreground">{o.label}</span>
+                {o.action}
+              </li>
+            );
+          })}
+        </ul>
+      </details>
+      <TaskEditDialog open={addOpen} onOpenChange={setAddOpen} />
     </section>
   );
-}
-
-function isEmptyWorkspace(d: Dashboard): boolean {
-  return d.counts.active + d.counts.candidates + d.counts.completed_7d === 0 && d.recent_jobs.length === 0;
 }
 
 /** One sentence: how many tasks need attention, by how soon, and how many of them are unconfirmed. */
@@ -306,42 +311,33 @@ function summaryLine(data: Dashboard, t: TFunction): string {
 export default function DashboardPage() {
   const { t, i18n } = useTranslation();
   const { data, error, isLoading, refetch } = useDashboard();
+  // null: follow the default (shown until the first confirmation); true/false: the user opened or closed it.
+  const [guide, setGuide] = useState<boolean | null>(null);
 
   if (isLoading) return <LoadingRows rows={6} />;
   if (error || !data) return <ErrorState error={error} onRetry={() => void refetch()} />;
 
   const counts = data.counts;
-  const c = {
-    ...counts,
-    needs_action: counts.needs_action ?? counts.candidates + counts.pending_suggestions,
-    due_soon: counts.due_soon ?? counts.upcoming_7d,
-    due_soon_candidates: counts.due_soon_candidates ?? 0,
-    overdue_candidates: counts.overdue_candidates ?? 0,
-    sample_open: counts.sample_open ?? 0,
-  };
+  const sampleOpen = counts.sample_open ?? 0;
   const attention = data.attention ?? [];
   const shown = attention.length;
   const attentionTotal = data.attention_total ?? shown;
+  const everConfirmed = counts.ever_confirmed ?? counts.active + counts.completed_7d > 0;
+  const showGuide = guide ?? (!everConfirmed && !guideDismissed());
+  const closeGuide = () => {
+    rememberGuide(true);
+    setGuide(false);
+  };
 
   return (
     <div className="grid gap-6">
       <header className="grid gap-1">
         <h1 className="text-page font-semibold">{t("dashboard.greeting", { date: formatDate(data.today, i18n.language) })}</h1>
-        <p className="text-sm text-muted-foreground">
-          {summaryLine(data, t)}
-          {c.needs_action ? (
-            <>
-              {t("dashboard.summaryJoin")}
-              <Link to="/inbox" className="font-medium text-violet hover:underline">
-                {t("dashboard.summaryNeedsAction", { count: c.needs_action })}
-              </Link>
-            </>
-          ) : null}
-        </p>
-        {c.sample_open ? (
+        <p className="text-sm text-muted-foreground">{summaryLine(data, t)}</p>
+        {sampleOpen ? (
           <p className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
             <FlaskConical className="size-3.5" aria-hidden />
-            {t("sample.dashboardNote", { count: c.sample_open })}
+            {t("sample.dashboardNote", { count: sampleOpen })}
             <Link to="/tasks?view=all&sample=1" className="font-medium text-foreground/80 hover:underline">
               {t("sample.showThem")}
             </Link>
@@ -349,44 +345,17 @@ export default function DashboardPage() {
         ) : null}
       </header>
 
-      {isEmptyWorkspace(data) ? <Onboarding /> : null}
+      {/* What the last import found stays here for a while, with the way to confirm it. */}
+      <LastImportCard maxAgeMinutes={60} />
+      {showGuide ? <FirstSteps candidates={counts.candidates} onClose={closeGuide} /> : null}
 
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <MetricTile
-          label={t("dashboard.metric.needsAction")}
-          value={c.needs_action}
-          sub={
-            c.needs_action
-              ? [c.candidates ? t("dashboard.metric.candidates", { count: c.candidates }) : null, c.pending_suggestions ? t("dashboard.metric.suggestions", { count: c.pending_suggestions }) : null]
-                  .filter(Boolean)
-                  .join(" · ")
-              : t("dashboard.metric.nothingToDecide")
-          }
-          icon={Inbox}
-          tone="text-violet"
-          to="/inbox"
-        />
-        <MetricTile
-          label={t("dashboard.metric.dueSoon")}
-          value={c.due_soon}
-          sub={c.due_soon_candidates ? t("dashboard.metric.plusUnconfirmed", { count: c.due_soon_candidates }) : t("dashboard.metric.confirmedOnly")}
-          icon={CalendarRange}
-          tone="text-primary"
-          to="/tasks?view=active&urgency=urgent&urgency=high&urgency=upcoming"
-        />
-        <MetricTile
-          label={t("dashboard.metric.overdue")}
-          value={c.overdue}
-          sub={c.overdue_candidates ? t("dashboard.metric.plusUnconfirmed", { count: c.overdue_candidates }) : undefined}
-          icon={TriangleAlert}
-          tone="text-overdue"
-          to="/tasks?view=active&urgency=overdue"
-        />
-        <MetricTile label={t("dashboard.metric.completed")} value={c.completed_7d} icon={CircleCheck} tone="text-success" to="/tasks?view=completed" />
-      </div>
-
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_24rem] 2xl:grid-cols-[minmax(0,1fr)_28rem]">
-        <section className="grid min-w-0 content-start gap-2">
+      {/* One element each, placed by the grid: on phones the decision comes right after the summary, on wide
+          screens it stands beside the list with the system status under it. */}
+      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_24rem] xl:grid-rows-[auto_1fr] 2xl:grid-cols-[minmax(0,1fr)_28rem]">
+        <div className="min-w-0 xl:col-start-2 xl:row-start-1">
+          <DecisionCard data={data} />
+        </div>
+        <section className="grid min-w-0 content-start gap-2 xl:col-start-1 xl:row-span-2 xl:row-start-1">
           <div className="flex min-h-7 items-center justify-between gap-2">
             <h2 className="text-section font-semibold">{t("dashboard.attention")}</h2>
             {attentionTotal > shown ? (
@@ -402,20 +371,25 @@ export default function DashboardPage() {
           ) : (
             <AttentionList items={attention} />
           )}
-          {c.due_soon === 0 && c.due_soon_candidates ? (
-            <p className="flex flex-wrap items-center gap-x-2 gap-y-1 px-1 text-[13px] text-muted-foreground">
-              {t("dashboard.noConfirmedDueSoon")}
-              <Link to="/inbox?sort=due" className="inline-flex items-center gap-1 font-medium text-violet hover:underline">
-                {t("dashboard.unconfirmedDueSoon", { count: c.due_soon_candidates })} <ArrowRight className="size-3.5" />
+          <p className="flex flex-wrap items-center gap-x-4 gap-y-1 px-1 pt-1 text-[13px] text-muted-foreground">
+            <Link to="/tasks" className="inline-flex items-center gap-1 hover:text-foreground hover:underline">
+              {t("dashboard.allOpen", { count: counts.active })} <ArrowRight className="size-3.5" />
+            </Link>
+            {counts.completed_7d ? (
+              <Link to="/tasks?view=completed" className="hover:text-foreground hover:underline">
+                {t("dashboard.completedWeek", { count: counts.completed_7d })}
               </Link>
-            </p>
-          ) : null}
+            ) : null}
+            {!showGuide ? (
+              <button type="button" className="hover:text-foreground hover:underline" onClick={() => setGuide(true)}>
+                {t("onboarding.reopen")}
+              </button>
+            ) : null}
+          </p>
         </section>
-
-        <aside className="grid min-w-0 content-start gap-6">
-          <Suggestions data={data} />
+        <div className="min-w-0 self-start xl:col-start-2 xl:row-start-2">
           <SystemStatusCard />
-        </aside>
+        </div>
       </div>
     </div>
   );

@@ -1,6 +1,6 @@
-import { Bell, Bot, Calendar, Database, Mail, Settings2, SlidersHorizontal, Wrench, type LucideIcon } from "lucide-react";
+import { Activity, ArrowUpRight, Bell, Bot, Calendar, Database, Mail, Settings2, SlidersHorizontal, Wrench, type LucideIcon } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useLocation, useNavigate, useSearchParams } from "react-router";
+import { Link, useBlocker, useLocation, useNavigate, useSearchParams } from "react-router";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { AiSection, GeneralSection } from "@/components/settings/GeneralAndAi";
@@ -57,7 +57,8 @@ function SectionBody({ section, settings }: { section: SectionKey; settings: Set
 
 /**
  * One settings category at a time: picking a category shows exactly that content, so nothing
- * unrelated has to be scrolled past. Unsaved edits are never dropped silently.
+ * unrelated has to be scrolled past. Unsaved edits are never dropped silently, whichever way the user
+ * leaves: another category, the sidebar, the search, the browser's back button or closing the window.
  */
 export default function SettingsPage() {
   const { t } = useTranslation();
@@ -66,7 +67,6 @@ export default function SettingsPage() {
   const [params, setParams] = useSearchParams();
   const { data: settings, error, isLoading, refetch } = useSettings();
   const [dirty, setDirty] = useState<Set<string>>(new Set());
-  const [pending, setPending] = useState<SectionKey | null>(null);
   const handledOAuth = useRef<string | null>(null);
 
   const legacy = location.hash.slice(1);
@@ -108,11 +108,14 @@ export default function SettingsPage() {
     return () => window.removeEventListener("beforeunload", warn);
   }, [dirty.size]);
 
-  const go = (next: SectionKey) => setParams({ section: next }, { replace: false });
+  // Every in-app navigation away from the current drafts (another category or another page) asks first.
+  const blocker = useBlocker(
+    ({ currentLocation, nextLocation }) =>
+      dirty.size > 0 && (currentLocation.pathname !== nextLocation.pathname || currentLocation.search !== nextLocation.search),
+  );
+
   const select = (next: SectionKey) => {
-    if (next === section) return;
-    if (dirty.size > 0) setPending(next);
-    else go(next);
+    if (next !== section) setParams({ section: next }, { replace: false });
   };
 
   return (
@@ -123,6 +126,9 @@ export default function SettingsPage() {
       </header>
 
       {/* Phones: a select (eight categories do not fit in one row); tablets: tabs; desktop: side navigation. */}
+      <Link to="/insights" className="w-fit text-[13px] text-muted-foreground hover:text-foreground hover:underline lg:hidden">
+        {t("settings.insightsLink")} →
+      </Link>
       <SimpleSelect
         className="sm:hidden"
         value={section}
@@ -160,6 +166,14 @@ export default function SettingsPage() {
               </button>
             );
           })}
+          <Link
+            to="/insights"
+            className="mt-2 flex items-center gap-2.5 rounded-md border-t px-2.5 pt-3 pb-1.5 text-left text-sm text-muted-foreground transition-colors outline-none hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/40"
+          >
+            <Activity className="size-4" />
+            <span className="flex-1">{t("settings.insightsLink")}</span>
+            <ArrowUpRight className="size-3.5" aria-hidden />
+          </Link>
         </nav>
         <div className="grid min-w-0 content-start gap-6">
           {isLoading ? <LoadingRows rows={6} /> : null}
@@ -173,17 +187,14 @@ export default function SettingsPage() {
       </div>
 
       <ConfirmDialog
-        open={pending !== null}
-        onOpenChange={(o) => !o && setPending(null)}
+        open={blocker.state === "blocked"}
+        onOpenChange={(o) => !o && blocker.reset?.()}
         title={t("settings.unsavedTitle")}
         description={t("settings.unsavedDescription")}
         confirmLabel={t("settings.discard")}
         cancelLabel={t("settings.keepEditing")}
         destructive
-        onConfirm={() => {
-          if (pending) go(pending);
-          setPending(null);
-        }}
+        onConfirm={() => blocker.proceed?.()}
       />
     </div>
   );

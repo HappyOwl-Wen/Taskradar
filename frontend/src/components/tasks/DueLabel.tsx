@@ -57,9 +57,9 @@ export function DeadlineIndicator({
         </span>
         {rel ? (
           layout === "stack" ? (
-            <span className="text-xs">{rel}</span>
+            <span className="text-[13px]">{rel}</span>
           ) : (
-            <span className="text-xs">
+            <span className="text-[13px]">
               <span className="text-muted-foreground" aria-hidden>
                 ·{" "}
               </span>

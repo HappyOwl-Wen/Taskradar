@@ -18,7 +18,7 @@ export function EvidenceList({ evidence, className }: { evidence: Evidence[]; cl
     return <p className={cn("text-xs text-muted-foreground", className)}>{t("detail.noEvidence")}</p>;
   }
   return (
-    <ul className={cn("grid gap-2", className)}>
+    <ul className={cn("grid grid-cols-1 gap-2", className)}>
       {evidence.map((e, i) => (
         <li key={`${e.kind}-${e.start ?? i}-${i}`} className={cn("rounded-md border border-l-[3px] bg-muted/40 px-3 py-2", KIND_STYLE[e.kind])}>
           <div className="mb-1 flex items-center gap-2 text-[11px] font-medium tracking-wide text-muted-foreground uppercase">

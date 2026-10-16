@@ -15,14 +15,20 @@ export function TechnicalDetails({ rows, className, title }: { rows: [string, Re
         <ChevronRight className="size-3.5 transition-transform group-open/tech:rotate-90" aria-hidden />
         {title ?? t("tech.title")}
       </summary>
-      <dl className="mt-2 grid grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-1 rounded-md border border-dashed px-3 py-2">
-        {rows.map(([label, value]) => (
-          <div key={label} className="contents">
-            <dt>{label}</dt>
-            <dd className="font-mono text-[11px] break-words text-foreground/80">{value}</dd>
-          </div>
-        ))}
-      </dl>
+      <TechnicalRows rows={rows} className="mt-2" />
     </details>
+  );
+}
+
+export function TechnicalRows({ rows, className }: { rows: [string, ReactNode][]; className?: string }) {
+  return (
+    <dl className={cn("grid grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-1 rounded-md border border-dashed px-3 py-2 text-xs text-muted-foreground", className)}>
+      {rows.map(([label, value]) => (
+        <div key={label} className="contents">
+          <dt>{label}</dt>
+          <dd className="font-mono text-[11px] [overflow-wrap:anywhere] text-foreground/80">{value}</dd>
+        </div>
+      ))}
+    </dl>
   );
 }

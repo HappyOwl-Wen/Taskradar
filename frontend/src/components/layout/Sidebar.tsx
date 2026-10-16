@@ -1,16 +1,17 @@
-import { ChartColumn, FolderSync, Inbox, LayoutDashboard, ListTodo, Radar, Settings, ShieldCheck, Sparkles } from "lucide-react";
-import { NavLink } from "react-router";
+import { FilePlus2, Inbox, LayoutDashboard, ListTodo, Radar, Settings, ShieldCheck, Sparkles } from "lucide-react";
+import { NavLink, useLocation } from "react-router";
 import { useTranslation } from "react-i18next";
 import { Tip } from "@/components/ui/menu";
 import { useDashboard } from "@/lib/queries";
 import { cn } from "@/lib/utils";
 
+// What the user does, in that order: see today, decide, work through the list, add something.
+// Diagnostics (run history, processing figures) are reached from Settings and the system status.
 const NAV = [
   { to: "/", key: "dashboard", icon: LayoutDashboard, end: true },
   { to: "/inbox", key: "inbox", icon: Inbox, end: false },
   { to: "/tasks", key: "tasks", icon: ListTodo, end: false },
-  { to: "/sources", key: "sources", icon: FolderSync, end: false },
-  { to: "/insights", key: "insights", icon: ChartColumn, end: false },
+  { to: "/sources", key: "sources", icon: FilePlus2, end: false },
   { to: "/settings", key: "settings", icon: Settings, end: false },
 ] as const;
 
@@ -31,6 +32,7 @@ export function Brand() {
 
 export function SidebarNav({ onNavigate }: { onNavigate?: () => void }) {
   const { t } = useTranslation();
+  const { pathname } = useLocation();
   const { data } = useDashboard();
   // Distinct tasks waiting for a decision (a candidate with an open suggestion counts once).
   const inboxCount = data ? (data.counts.needs_action ?? data.counts.candidates + data.counts.pending_suggestions) : 0;
@@ -46,7 +48,8 @@ export function SidebarNav({ onNavigate }: { onNavigate?: () => void }) {
           className={({ isActive }) =>
             cn(
               "flex h-9 items-center gap-2.5 rounded-md px-2.5 text-sm font-medium text-muted-foreground transition-colors outline-none hover:bg-accent hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/40",
-              isActive && "bg-selected text-selected-foreground hover:bg-selected hover:text-selected-foreground",
+              (isActive || (key === "settings" && pathname.startsWith("/insights"))) &&
+                "bg-selected text-selected-foreground hover:bg-selected hover:text-selected-foreground",
             )
           }
         >
