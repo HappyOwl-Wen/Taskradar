@@ -59,7 +59,7 @@ function SystemHealth() {
   const ocrName = status.ocr.version ? (/tesseract/i.test(status.ocr.version) ? status.ocr.version : `Tesseract ${status.ocr.version}`) : "Tesseract";
   const folderErrors = folders.filter((f) => f.status === "error").length;
   return (
-    <ul className="divide-y rounded-lg border bg-card">
+    <ul className="divide-y border-y">
       <HealthRow
         state={!gmailConnected ? "off" : gmail?.status === "ok" ? "ok" : gmail?.status === "auth_required" ? "warn" : gmail?.status === "error" ? "error" : "off"}
         title="Gmail"
@@ -134,7 +134,7 @@ function Processing({ m }: { m: Metrics }) {
   const stillOpen = status(m.feedback.by_status, "candidate");
   return (
     <div className="grid gap-4">
-      <dl className="grid divide-y rounded-lg border bg-card sm:grid-cols-2 sm:divide-y-0 lg:grid-cols-4 lg:divide-x">
+      <dl className="grid divide-y divide-border/70 rounded-lg bg-subtle sm:grid-cols-2 sm:divide-y-0 lg:grid-cols-4 lg:divide-x">
         <Figure
           label={t("insights.read")}
           value={t("insights.readValue", { messages: m.messages.total, documents: m.documents.total })}
@@ -155,7 +155,7 @@ function Processing({ m }: { m: Metrics }) {
           hint={t("insights.keptShareHint", { accepted: m.feedback.accepted, decided })}
         />
       </dl>
-      <dl className="grid divide-y rounded-lg border bg-card sm:grid-cols-2 sm:divide-y-0 lg:grid-cols-4 lg:divide-x">
+      <dl className="grid divide-y divide-border/70 rounded-lg bg-subtle sm:grid-cols-2 sm:divide-y-0 lg:grid-cols-4 lg:divide-x">
         <Figure label={t("insights.merged")} value={m.dedup.duplicates_merged} hint={t("insights.mergedHint", { undone: m.dedup.merges_undone })} />
         <Figure
           label={t("insights.autoChanges")}
@@ -166,7 +166,7 @@ function Processing({ m }: { m: Metrics }) {
         <Figure label={t("insights.avgLatency")} value={formatMs(m.agent.avg_latency_ms)} hint={t("insights.avgLatencyHint", { runs: m.agent.runs })} />
       </dl>
       {m.agent.llm_runs > 0 ? (
-        <dl className="grid divide-y rounded-lg border bg-card sm:grid-cols-3 sm:divide-x sm:divide-y-0">
+        <dl className="grid divide-y divide-border/70 rounded-lg bg-subtle sm:grid-cols-3 sm:divide-x sm:divide-y-0">
           <Figure label={t("insights.llmRuns")} value={m.agent.llm_runs} hint={t("insights.fallbacksHint", { count: m.agent.llm_fallbacks })} />
           <Figure label={t("insights.tokens")} value={`${m.agent.input_tokens} / ${m.agent.output_tokens}`} />
           <Figure label={t("insights.cost")} value={`$${m.agent.estimated_cost_usd.toFixed(4)}`} hint={t("insights.costHint")} />
@@ -188,9 +188,9 @@ function FailureReasons() {
     reasons.set(code, (reasons.get(code) ?? 0) + 1);
   }
   const total = data.documents.length + data.messages.length;
-  if (total === 0 && data.jobs.length === 0) return <p className="rounded-lg border border-dashed px-4 py-3 text-[13px] text-muted-foreground">{t("insights.noFailures")}</p>;
+  if (total === 0 && data.jobs.length === 0) return <p className="rounded-lg bg-subtle px-4 py-3 text-[13px] text-muted-foreground">{t("insights.noFailures")}</p>;
   return (
-    <ul className="divide-y rounded-lg border bg-card">
+    <ul className="divide-y border-y">
       {[...reasons.entries()]
         .sort((a, b) => b[1] - a[1])
         .map(([code, count]) => (
@@ -229,7 +229,7 @@ function RunHistory() {
       {jobs.error ? <ErrorState error={jobs.error} onRetry={() => void jobs.refetch()} /> : null}
       {jobs.data && items.length === 0 ? <EmptyState compact icon={History} title={t("sources.jobs.empty")} /> : null}
       {items.length ? (
-        <div className="grid divide-y rounded-lg border bg-card px-3">
+        <div className="grid divide-y border-y px-1">
           {items.slice(0, shown).map((job) => (
             <JobItem key={job.id} job={job} timezone={timezone} compact />
           ))}

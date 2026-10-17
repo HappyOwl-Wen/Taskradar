@@ -1,0 +1,87 @@
+<!doctype html>
+<!-- The installer window of TaskRadar-Setup.exe (see installer.py); local page, no network access. --><html><head><meta charset="utf-8"><title>TaskRadar</title>
+<style>
+:root{--frame:#f2f3f5;--bg:#fff;--fg:#1d2129;--muted:#5d6470;--border:#e3e5e9;--primary:#4f46e5;--primary-hover:#4338ca;
+--subtle:#f7f8fa;--danger:#d92d20;--ring:#4f46e5}
+@media (prefers-color-scheme: dark){:root{--frame:#1d1e22;--bg:#25262b;--fg:#ebecef;--muted:#a6abb5;--border:#36383f;
+--primary:#8b8ff5;--primary-hover:#a1a4f8;--subtle:#2a2b31;--danger:#ff7b72;--ring:#8b8ff5}}
+*{box-sizing:border-box}html,body{margin:0;height:100%}
+body{background:var(--frame);color:var(--fg);font:14px/20px "Segoe UI Variable Text","Segoe UI","Microsoft YaHei UI",
+"Microsoft YaHei",sans-serif;-webkit-user-select:none;user-select:none;cursor:default;display:flex;flex-direction:column}
+main{flex:1;margin:0 12px;background:var(--bg);border:1px solid var(--border);border-bottom:0;border-radius:12px 12px 0 0;
+padding:24px 28px;display:flex;flex-direction:column;gap:14px;overflow:auto}
+.head{display:flex;gap:14px;align-items:center}
+h1{font:600 20px/28px "Segoe UI Variable Display","Segoe UI","Microsoft YaHei UI",sans-serif;margin:0}
+p{margin:0}.muted{color:var(--muted)}.small{font-size:12px;line-height:18px}
+.box{background:var(--subtle);border-radius:8px;padding:12px 14px;display:grid;gap:4px}
+code{font:12px/18px "Cascadia Mono",Consolas,monospace;word-break:break-all;-webkit-user-select:text;user-select:text}
+label{display:flex;gap:10px;align-items:center;width:fit-content}
+input[type=checkbox]{width:16px;height:16px;accent-color:var(--primary);margin:0}
+footer{display:flex;justify-content:flex-end;gap:8px;padding:14px 24px;background:var(--bg);margin:0 12px;
+border:1px solid var(--border);border-top-color:var(--border);border-radius:0 0 12px 12px;margin-bottom:12px}
+button{font:inherit;font-weight:500;height:32px;padding:0 16px;border-radius:6px;border:1px solid var(--border);
+background:var(--bg);color:var(--fg);transition:background-color 120ms,opacity 120ms}
+button:hover{background:color-mix(in oklab,var(--bg),var(--fg) 5%)}
+button:active{background:color-mix(in oklab,var(--bg),var(--fg) 9%)}
+button.primary{background:var(--primary);border-color:var(--primary);color:#fff}
+@media (prefers-color-scheme: dark){button.primary{color:#16171b}}
+button.primary:hover{background:var(--primary-hover);border-color:var(--primary-hover)}
+button:focus-visible,input:focus-visible{outline:2px solid var(--ring);outline-offset:2px}
+button:disabled{opacity:.45;pointer-events:none}
+.bar{height:4px;border-radius:4px;background:var(--border);overflow:hidden}
+.bar>div{height:100%;width:0;background:var(--primary);border-radius:4px;transition:width 160ms cubic-bezier(.1,.9,.2,1)}
+.error{color:var(--danger)}
+section{display:flex;flex-direction:column;gap:14px;animation:in 200ms cubic-bezier(.1,.9,.2,1)}
+section[hidden]{display:none}
+@keyframes in{from{opacity:0;transform:translateY(6px)}}
+@media (prefers-reduced-motion: reduce){section{animation:none}.bar>div{transition:none}}
+</style></head><body>
+<main>
+  <div class="head"><svg width="40" height="40" viewBox="0 0 32 32" fill="none" aria-hidden="true"><rect width="32" height="32" rx="8" fill="#4f46e5"/><circle cx="16" cy="16" r="9" stroke="#fff" stroke-opacity=".45" stroke-width="2"/><circle cx="16" cy="16" r="4.5" stroke="#fff" stroke-opacity=".75" stroke-width="2"/><path d="M16 16 L23.5 9.5" stroke="#fff" stroke-width="2.2" stroke-linecap="round"/><circle cx="16" cy="16" r="1.8" fill="#fff"/><circle cx="21.5" cy="20" r="1.6" fill="#fbbf24"/></svg><div><h1 id="title"></h1><p class="muted small" id="tagline"></p></div></div>
+  <section id="welcome">
+    <div class="box"><p class="small muted" id="location"></p><code id="dir"></code><p class="small muted" id="per-user"></p></div>
+    <p id="update" class="small" hidden></p>
+    <label><input type="checkbox" id="desktop" checked><span id="desktop-label"></span></label>
+    <p class="small muted" id="data"></p>
+  </section>
+  <section id="progress" hidden>
+    <p id="installing"></p><div class="bar"><div id="fill"></div></div><p class="small muted" id="count"></p>
+  </section>
+  <section id="done" hidden><h1 id="done-title"></h1><p class="muted" id="done-body"></p></section>
+  <section id="failed" hidden><h1 id="failed-title"></h1><p class="error" id="failed-body"></p></section>
+</main>
+<footer>
+  <button id="secondary"></button><button id="primary" class="primary" autofocus></button>
+</footer>
+<script>
+let T = {}, state = "welcome";
+const $ = (id) => document.getElementById(id);
+function show(name){ for (const s of ["welcome","progress","done","failed"]) $(s).hidden = s !== name; state = name; }
+function buttons(primary, secondary){ $("primary").textContent = primary || ""; $("primary").hidden = !primary;
+  $("secondary").textContent = secondary || ""; $("secondary").hidden = !secondary; }
+window.setupProgress = (done, total) => { $("fill").style.width = Math.round(done * 100 / Math.max(total, 1)) + "%";
+  $("count").textContent = T.files.replace("{done}", done).replace("{total}", total); };
+window.setupDone = (desktop) => { $("done-title").textContent = T.done_title;
+  $("done-body").textContent = T.done_body.replace("{desktop}", desktop ? T.done_desktop : "");
+  show("done"); buttons(T.open, T.finish); $("primary").disabled = false; $("primary").focus(); };
+window.setupFailed = (message) => { $("failed-title").textContent = T.failed_title; $("failed-body").textContent = message;
+  show("failed"); buttons(T.retry, T.close); $("primary").disabled = false; $("primary").focus(); };
+async function start(){
+  const info = await window.pywebview.api.info(); T = info.texts;
+  document.documentElement.lang = T.title.startsWith("安装") ? "zh-CN" : "en";
+  $("title").textContent = "TaskRadar " + info.version; $("tagline").textContent = T.tagline;
+  $("location").textContent = T.location; $("dir").textContent = info.programDir; $("per-user").textContent = T.per_user;
+  $("desktop-label").textContent = T.desktop; $("data").textContent = T.data.replace("{data}", info.dataDir);
+  if (info.installed){ $("update").hidden = false; $("update").textContent = T.update.replace("{old}", info.installed).replace("{new}", info.version); }
+  buttons(info.installed ? T.update_button : T.install, T.cancel);
+}
+$("primary").addEventListener("click", () => {
+  if (state === "welcome" || state === "failed"){ show("progress"); $("installing").textContent = T.installing;
+    buttons(T.install, null); $("primary").disabled = true; window.setupProgress(0, 1);
+    window.pywebview.api.install($("desktop").checked); }
+  else if (state === "done"){ window.pywebview.api.open_app(); }
+});
+$("secondary").addEventListener("click", () => window.pywebview.api.close());
+document.addEventListener("keydown", (e) => { if (e.key === "Escape" && state !== "progress") window.pywebview.api.close(); });
+window.addEventListener("pywebviewready", start);
+</script></body></html>

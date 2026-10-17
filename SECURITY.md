@@ -47,6 +47,26 @@ database and the Credential Manager), and the security of Google's and the LLM p
   API. The web UI loads no third-party resources.
 * A file lock prevents two TaskRadar servers from using the same data folder.
 
+### Desktop window and installer
+
+* The window loads only TaskRadar's own local address. Other `http`, `https` and `mailto` links open in your
+  default browser; anything else is blocked. The Google sign-in also happens in your default browser, never inside
+  the window.
+* The page has no JavaScript bridge into Python (pywebview's bridge needs `eval`, which the CSP forbids). It
+  reports unsaved changes, theme and language through `PUT /api/desktop/state`, which is CSRF-protected like every
+  other change and does not exist in the browser version.
+* The context menu offers only editing commands; the WebView2 developer tools and their debugging port are off.
+  The port opens only when `TASKRADAR_WEBVIEW_DEBUG_PORT` is set, for automated checks; with it any local program
+  could control the page, so never set it for daily use. WebView2's profile (local storage) is kept in
+  `%LOCALAPPDATA%\TaskRadar\webview`, with the other data.
+* The installer needs no administrator rights and writes only to `%LOCALAPPDATA%\Programs\TaskRadar`, the Start
+  menu and (if ticked) desktop shortcut and its entry under `HKCU\…\Uninstall`. It refuses a non-empty folder it
+  did not create and an archive whose paths would leave the program folder; its page reaches only four actions
+  (information, install, open, close). Uninstalling removes only what the installer created (shortcuts that point
+  into the program folder, its own registry entry, TaskRadar's own autostart entry) and keeps your data and
+  secrets.
+* The programs are not code-signed: use an installer you built yourself or got from a source you trust.
+
 ### Permissions (least privilege)
 
 * Gmail: `https://www.googleapis.com/auth/gmail.readonly` only. TaskRadar cannot send, delete, label or mark

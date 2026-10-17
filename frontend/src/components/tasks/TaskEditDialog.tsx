@@ -8,6 +8,7 @@ import { ConfirmDialog, Dialog, DialogActions, DialogContent, DialogDescription,
 import { Field, Input, Textarea } from "@/components/ui/form";
 import { SimpleSelect } from "@/components/ui/select";
 import { api } from "@/lib/api";
+import { useUnsavedChanges } from "@/lib/desktop";
 import { formatDate } from "@/lib/format";
 import { markJustAdded } from "@/lib/justAdded";
 import { useAction } from "@/lib/queries";
@@ -47,6 +48,8 @@ export function TaskEditDialog({
 }) {
   const { t } = useTranslation();
   const [dirty, setDirty] = useState(false);
+  // Closing the window with a half-written to-do or unsaved edits asks first.
+  useUnsavedChanges(open && dirty);
   const [confirmDiscard, setConfirmDiscard] = useState(false);
   // Escape, the close button, a click outside and "Cancel" all ask first when something was typed.
   const requestClose = () => (dirty ? setConfirmDiscard(true) : onOpenChange(false));

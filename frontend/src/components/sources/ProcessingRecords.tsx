@@ -236,8 +236,8 @@ export function ProcessingRecords({ timezone }: { timezone: string }) {
         </div>
       </div>
 
-      <div className="overflow-hidden rounded-lg border bg-card">
-        <div className={cn(GRID, "hidden border-b bg-muted/30 px-3 py-2 text-xs font-medium text-muted-foreground md:grid")}>
+      <div className="border-b">
+        <div className={cn(GRID, "hidden border-b px-3 py-2 text-xs font-medium text-muted-foreground md:grid")}>
           <span>{t("records.colItem")}</span>
           <span>{t("records.colResult")}</span>
           <span>{t("records.colTime")}</span>

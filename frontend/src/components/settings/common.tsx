@@ -1,7 +1,6 @@
 import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Field, Input } from "@/components/ui/form";
 
 export function SettingsCard({
@@ -17,17 +16,18 @@ export function SettingsCard({
   children: ReactNode;
   footer?: ReactNode;
 }) {
+  // A group of settings on a quiet panel (no box in a box): title, the fields, and its own Save at the bottom.
   return (
-    <Card id={id} className="scroll-mt-20">
-      <CardHeader className="pb-4">
-        <div className="grid gap-1">
-          <CardTitle>{title}</CardTitle>
-          {description ? <CardDescription className="max-w-2xl leading-relaxed">{description}</CardDescription> : null}
-        </div>
-      </CardHeader>
-      <CardContent className="grid gap-5">{children}</CardContent>
-      {footer ? <CardFooter className="justify-end">{footer}</CardFooter> : null}
-    </Card>
+    <section id={id} className="grid scroll-mt-20 rounded-lg bg-subtle" aria-labelledby={`${id}-title`}>
+      <header className="grid gap-1 px-5 pt-4 pb-4">
+        <h2 id={`${id}-title`} className="text-section font-semibold">
+          {title}
+        </h2>
+        {description ? <p className="max-w-2xl text-sm leading-relaxed text-muted-foreground">{description}</p> : null}
+      </header>
+      <div className="grid gap-5 px-5 pb-5">{children}</div>
+      {footer ? <div className="flex items-center justify-end gap-2 border-t border-border/70 px-5 py-3">{footer}</div> : null}
+    </section>
   );
 }
 

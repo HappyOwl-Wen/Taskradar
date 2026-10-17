@@ -46,7 +46,7 @@ export function JobItem({ job, timezone, compact = false }: { job: SyncJob; time
     job.tasks_updated ? t("sources.jobs.updated", { count: job.tasks_updated }) : null,
   ].filter(Boolean);
   return (
-    <div className={cn("flex items-start gap-3", compact ? "py-2" : "rounded-lg border bg-card px-3 py-2.5")}>
+    <div className={cn("flex items-start gap-3", compact ? "py-2" : "rounded-lg bg-subtle px-3 py-2.5")}>
       <span className="mt-0.5 grid size-7 shrink-0 place-items-center rounded-md bg-muted text-muted-foreground">
         <Icon className="size-3.5" />
       </span>

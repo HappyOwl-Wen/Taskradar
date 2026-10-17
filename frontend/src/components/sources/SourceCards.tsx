@@ -153,7 +153,7 @@ export function GmailRow({ sources, timezone }: { sources: Source[]; timezone: s
           </>
         }
         actions={
-          <Button size="xs" asChild>
+          <Button variant="outline" size="xs" asChild>
             <Link to="/settings?section=gmail">
               <Mail /> {t("sources.gmail.connect")}
             </Link>
@@ -350,7 +350,7 @@ export function AddFolderForm({ onDone }: { onDone: () => void }) {
     if (path.trim()) add.mutate(undefined);
   };
   return (
-    <li id="folders" className="grid scroll-mt-4 gap-2 bg-muted/30 px-4 py-3">
+    <li id="folders" className="grid scroll-mt-4 gap-2 bg-subtle px-4 py-3">
       <form onSubmit={submit} className="grid gap-2">
         <Label htmlFor="add-folder" className="text-[13px]">
           {t("sources.folders.add")}

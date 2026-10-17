@@ -1,19 +1,23 @@
 <#
 .SYNOPSIS
-    Build TaskRadar.exe: TaskRadar as one program that runs without Python or Node.js.
+    Build the TaskRadar desktop app: TaskRadar.exe and its installer, running without Python or Node.js.
 
 .DESCRIPTION
     1. Builds the web UI (frontend -> backend\src\taskradar\static).
-    2. Packages backend, web UI, database migrations and the synthetic demo files with PyInstaller
-       (installed into backend\.venv if it is missing).
-    3. Puts Install-OCR.cmd, the OCR installer script and a short read-me next to the program and zips it.
+    2. Packages backend, web UI, the window (pywebview on Microsoft Edge WebView2), database migrations and the
+       synthetic demo files with PyInstaller (installed into backend\.venv if it is missing) as a windowed program.
+    3. Puts Install-OCR.cmd, the OCR installer script and a short read-me next to the program and zips the folder
+       (the portable version, which runs without installing).
+    4. Builds the installer around that archive: dist\TaskRadar-Setup-<version>.exe installs TaskRadar for the
+       current user (no administrator rights) with a Start menu entry, an optional desktop shortcut and an entry in
+       Settings -> Apps to uninstall it again.
 
-    Result (default): dist\TaskRadar\TaskRadar.exe with its _internal folder, and
-    dist\TaskRadar-<version>-windows-x64.zip. With -OneFile: dist\onefile\TaskRadar.exe, a single file that
-    unpacks itself into the temp folder on every start (slower start).
+    Result: dist\TaskRadar-Setup-<version>.exe, dist\TaskRadar-<version>-windows-x64.zip and the folder
+    dist\TaskRadar. With -OneFile: only dist\onefile\TaskRadar.exe, a single file that unpacks itself into the temp
+    folder on every start (slower start, no installer).
 
     Nothing personal is packed: data stays in %LOCALAPPDATA%\TaskRadar, secrets in the Windows Credential
-    Manager. The program is not code-signed, so Windows SmartScreen may ask before the first start.
+    Manager. The programs are not code-signed, so Windows SmartScreen may ask before the first start.
 
 .EXAMPLE
     powershell -ExecutionPolicy Bypass -File scripts\build-exe.ps1
@@ -22,7 +26,8 @@
 [CmdletBinding()]
 param(
     [switch]$OneFile,
-    [switch]$SkipWebBuild
+    [switch]$SkipWebBuild,
+    [switch]$SkipInstaller
 )
 
 $ErrorActionPreference = "Stop"
@@ -47,17 +52,20 @@ if (-not $SkipWebBuild) {
     } finally { Pop-Location }
 }
 
-& $Python -c "import PyInstaller" 2>$null
+& $Python -c "import PyInstaller, webview" 2>$null
 if ($LASTEXITCODE) {
-    Invoke-Step "Installing PyInstaller into backend\.venv" { & $Python -m pip install --quiet "pyinstaller>=6.11" }
+    Invoke-Step "Installing PyInstaller and pywebview into backend\.venv" {
+        & $Python -m pip install --quiet "pyinstaller>=6.11" "pywebview>=6.1"
+    }
 }
 
 $Dist = Join-Path $Root $(if ($OneFile) { "dist\onefile" } else { "dist" })
+$Work = Join-Path $Root "build\pyinstaller"
 $env:TASKRADAR_ONEFILE = $(if ($OneFile) { "1" } else { "0" })
 try {
-    Invoke-Step "Packaging with PyInstaller" {
+    Invoke-Step "Packaging TaskRadar.exe with PyInstaller" {
         & $Python -m PyInstaller --noconfirm --clean --log-level WARN `
-            --distpath $Dist --workpath (Join-Path $Root "build\pyinstaller") (Join-Path $Root "packaging\taskradar.spec")
+            --distpath $Dist --workpath $Work (Join-Path $Root "packaging\taskradar.spec")
     }
 } finally { Remove-Item Env:\TASKRADAR_ONEFILE -ErrorAction SilentlyContinue }
 
@@ -67,22 +75,32 @@ Copy-Item (Join-Path $Root "packaging\Install-OCR.cmd") $Target -Force
 Copy-Item (Join-Path $Root "scripts\install-tesseract.ps1") $Target -Force
 $Version = (& $Python -c "import taskradar; print(taskradar.__version__)").Trim()
 $Readme = (Get-Content (Join-Path $Root "packaging\README.txt") -Raw -Encoding UTF8).Replace("{version}", $Version)
-if ($OneFile) {
-    $Readme = $Readme.Replace("{keep-together-zh}", "").Replace("{keep-together-en}", "")
-} else {
-    $Readme = $Readme.Replace("{keep-together-zh}", "  请让整个文件夹保持在一起：TaskRadar.exe 需要旁边的 _internal 文件夹。`n")
-    $Readme = $Readme.Replace("{keep-together-en}", "Keep the folder together (TaskRadar.exe needs its _internal folder). ")
-}
+# Lines marked [folder] are about the folder build only.
+$Readme = $(if ($OneFile) { $Readme -replace "(?m)^\[folder\].*\n", "" } else { $Readme -replace "(?m)^\[folder\]", "" })
 Set-Content (Join-Path $Target "README.txt") $Readme -Encoding UTF8
 
 $Exe = Join-Path $Target "TaskRadar.exe"
 $SizeMB = [math]::Round(((Get-ChildItem $Target -Recurse -File | Measure-Object Length -Sum).Sum) / 1MB, 1)
 Write-Host ""
 Write-Host "Built $Exe ($SizeMB MB in $Target)" -ForegroundColor Green
+if ($OneFile) { exit 0 }
 
-if (-not $OneFile) {
-    $Zip = Join-Path $Dist "TaskRadar-$Version-windows-x64.zip"
-    if (Test-Path $Zip) { Remove-Item $Zip -Force }
-    Invoke-Step "Zipping" { Compress-Archive -Path $Target -DestinationPath $Zip -CompressionLevel Optimal }
-    Write-Host "Zipped to $Zip ($([math]::Round((Get-Item $Zip).Length / 1MB, 1)) MB)" -ForegroundColor Green
-}
+# The portable version, which is also what the installer unpacks.
+$Zip = Join-Path $Dist "TaskRadar-$Version-windows-x64.zip"
+if (Test-Path $Zip) { Remove-Item $Zip -Force }
+Invoke-Step "Zipping the program folder" { Compress-Archive -Path $Target -DestinationPath $Zip -CompressionLevel Optimal }
+Write-Host "Zipped to $Zip ($([math]::Round((Get-Item $Zip).Length / 1MB, 1)) MB)" -ForegroundColor Green
+if ($SkipInstaller) { exit 0 }
+
+$PayloadDir = Join-Path $Root "build\payload"
+New-Item -ItemType Directory -Force $PayloadDir | Out-Null
+Copy-Item $Zip (Join-Path $PayloadDir "TaskRadar.zip") -Force
+$env:TASKRADAR_PAYLOAD = Join-Path $PayloadDir "TaskRadar.zip"
+try {
+    Invoke-Step "Building the installer" {
+        & $Python -m PyInstaller --noconfirm --clean --log-level WARN `
+            --distpath $Dist --workpath (Join-Path $Root "build\pyinstaller-setup") (Join-Path $Root "packaging\installer.spec")
+    }
+} finally { Remove-Item Env:\TASKRADAR_PAYLOAD -ErrorAction SilentlyContinue }
+$Setup = Join-Path $Dist "TaskRadar-Setup-$Version.exe"
+Write-Host "Built $Setup ($([math]::Round((Get-Item $Setup).Length / 1MB, 1)) MB)" -ForegroundColor Green

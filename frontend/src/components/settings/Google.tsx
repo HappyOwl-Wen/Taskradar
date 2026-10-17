@@ -1,24 +1,78 @@
-import { CalendarCheck, Check, ChevronRight, FileJson, Link2, Mail, Unplug } from "lucide-react";
-import { useRef, useState, type ReactNode } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { CalendarCheck, Check, ChevronRight, ExternalLink, FileJson, Link2, LoaderCircle, Mail, Unplug } from "lucide-react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
+import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/dialog";
 import { Checkbox, Field, Input, Label, SwitchRow } from "@/components/ui/form";
+import { translateKey } from "@/i18n";
 import { api } from "@/lib/api";
-import { useAction, useGoogle } from "@/lib/queries";
+import { isDesktopApp, openExternal } from "@/lib/desktop";
+import { qk, refreshAll, useAction, useGoogle } from "@/lib/queries";
 import { useSection } from "@/lib/settings";
 import { CATEGORIES, type Settings } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { InfoRow, NumberField, SaveBar, SettingsCard } from "./common";
 
+/**
+ * Connecting a Google service. The consent page is Google's own; after approval Google redirects to the local
+ * callback, which stores the token in the Windows Credential Manager. In a browser tab the tab goes there and
+ * comes back to the settings page. The desktop window opens it in the system browser instead (where the user is
+ * signed in to Google; Google does not allow signing in inside embedded windows) and waits here for the result.
+ */
 function useConnect(service: "gmail" | "calendar") {
-  // The consent page is Google's own; after approval Google redirects to the local callback,
-  // which stores the token in the Windows Credential Manager and returns to the settings page.
-  return useAction(() => api.connectGoogle(service), {
+  const { t } = useTranslation();
+  const queryClient = useQueryClient();
+  const { data: google } = useGoogle();
+  // The number of the last authorization result when the browser was opened; null when not waiting.
+  const [waitingSince, setWaitingSince] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (waitingSince === null) return;
+    const timer = setInterval(async () => {
+      const status = await queryClient.fetchQuery({ queryKey: qk.google, queryFn: api.google, staleTime: 0 }).catch(() => null);
+      const last = status?.last_authorization;
+      if (!last || last.seq <= waitingSince) return;
+      setWaitingSince(null);
+      if (last.ok) toast.success(t(`settings.oauthConnected.${last.service ?? service}`));
+      else toast.error(t("settings.oauthError", { code: translateKey(`errors.${last.error}`, last.error ?? "") }), { duration: 10000 });
+      void refreshAll(queryClient);
+    }, 1500);
+    return () => clearInterval(timer);
+  }, [waitingSince, queryClient, service, t]);
+
+  const action = useAction(() => api.connectGoogle(service), {
     invalidate: false,
-    onSuccess: ({ auth_url }) => window.location.assign(auth_url),
+    onSuccess: ({ auth_url }) => {
+      if (isDesktopApp()) {
+        setWaitingSince(google?.last_authorization?.seq ?? 0);
+        openExternal(auth_url);
+      } else {
+        window.location.assign(auth_url);
+      }
+    },
   });
+  return { mutate: action.mutate, isPending: action.isPending, waiting: waitingSince !== null, stopWaiting: () => setWaitingSince(null) };
+}
+
+/** Shown while Google's page is open in the browser (desktop app): what to do, and a way to stop waiting. */
+function BrowserWait({ connect }: { connect: ReturnType<typeof useConnect> }) {
+  const { t } = useTranslation();
+  if (!connect.waiting) return null;
+  return (
+    <div role="status" className="flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-md bg-selected px-3 py-2 text-[13px] text-selected-foreground">
+      <LoaderCircle className="size-4 shrink-0 animate-spin" aria-hidden />
+      <span className="min-w-0 flex-1 basis-56">
+        <ExternalLink className="mr-1 inline size-3.5 align-[-2px]" aria-hidden />
+        {t("settings.gmail.waitingBrowser")}
+      </span>
+      <Button variant="ghost" size="xs" onClick={connect.stopWaiting}>
+        {t("settings.gmail.stopWaiting")}
+      </Button>
+    </div>
+  );
 }
 
 function Disconnect({ service, label }: { service: "gmail" | "calendar"; label: string }) {
@@ -82,7 +136,7 @@ function ClientConfig() {
   const remove = useAction(() => api.deleteClientConfig(), { onSuccess: () => setRemoveOpen(false) });
   const client = google?.client;
   return (
-    <div className="grid gap-2 rounded-lg border p-4">
+    <div className="grid gap-2 rounded-lg bg-card p-4">
       <p className="text-sm font-semibold">{t("settings.gmail.clientTitle")}</p>
       <p className="text-[13px] leading-relaxed text-muted-foreground">{t("settings.gmail.clientHint")}</p>
       <p className="text-sm">
@@ -201,11 +255,12 @@ export function GmailSection({ settings }: { settings: Settings }) {
             <span className="text-[13px] text-muted-foreground">{t("settings.gmail.readonlyNote")}</span>
           </div>
           <div className="flex flex-wrap gap-2">
-            <Button variant="outline" size="sm" onClick={() => connect.mutate(undefined)} disabled={!clientReady || connect.isPending}>
+            <Button variant="outline" size="sm" onClick={() => connect.mutate(undefined)} disabled={!clientReady || connect.waiting} loading={connect.isPending}>
               <Link2 /> {t("settings.gmail.reconnect")}
             </Button>
             <Disconnect service="gmail" label={t("settings.gmail.disconnect")} />
           </div>
+          <BrowserWait connect={connect} />
         </div>
       ) : google ? (
         <ol className="grid gap-2" aria-label={t("settings.gmail.steps.title")}>
@@ -223,10 +278,11 @@ export function GmailSection({ settings }: { settings: Settings }) {
             title={authProblem ? t("settings.gmail.steps.reauth") : t("settings.gmail.steps.authorize")}
             hint={authProblem ? t("settings.gmail.steps.reauthHint") : t("settings.gmail.authHint")}
           >
-            <div>
-              <Button size="sm" onClick={() => connect.mutate(undefined)} disabled={!clientReady || connect.isPending}>
+            <div className="grid justify-items-start gap-2">
+              <Button size="sm" onClick={() => connect.mutate(undefined)} disabled={!clientReady || connect.waiting} loading={connect.isPending}>
                 <Link2 /> {authProblem ? t("settings.gmail.reconnect") : t("settings.gmail.connect")}
               </Button>
+              <BrowserWait connect={connect} />
             </div>
           </Step>
           <Step index={3} state="todo" title={t("settings.gmail.steps.sync")} hint={t("settings.gmail.steps.syncHint", { days: v.lookback_days })} />
@@ -294,11 +350,12 @@ export function CalendarSection({ settings }: { settings: Settings }) {
         ) : null}
         {!google?.client.configured ? <p className="text-[13px] text-muted-foreground">{t("errors.client_not_configured")}</p> : null}
         <div className="flex flex-wrap gap-2">
-          <Button size="sm" onClick={() => connect.mutate(undefined)} disabled={!google?.client.configured || connect.isPending}>
+          <Button size="sm" onClick={() => connect.mutate(undefined)} disabled={!google?.client.configured || connect.waiting} loading={connect.isPending}>
             <Link2 /> {connected ? t("settings.gmail.reconnect") : t("settings.calendar.connect")}
           </Button>
           {connected ? <Disconnect service="calendar" label={t("settings.calendar.disconnect")} /> : null}
         </div>
+        <BrowserWait connect={connect} />
       </div>
       <div className="grid gap-4 border-t pt-4">
         <div className="grid gap-4 sm:grid-cols-2">

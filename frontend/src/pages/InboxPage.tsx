@@ -9,10 +9,11 @@ import { Checkbox, Label, Switch } from "@/components/ui/form";
 import { SimpleSelect } from "@/components/ui/select";
 import { EmptyState, ErrorState, LoadingRows } from "@/components/ui/states";
 import { api } from "@/lib/api";
-import { useMediaQuery } from "@/lib/hooks";
+import { useMediaQuery, useWidthAtLeast } from "@/lib/hooks";
 import { useAction, useDecisionQueue } from "@/lib/queries";
 import { taskIssues, type InboxSort } from "@/lib/review";
 import type { TaskSummary } from "@/lib/types";
+import { useFoldAway } from "@/lib/foldAway";
 import { cn } from "@/lib/utils";
 
 const SORTS: InboxSort[] = ["priority", "due", "detected"];
@@ -25,14 +26,17 @@ function itemControlId(id: string): string {
 
 /**
  * The review queue: new tasks to confirm, and confirmed tasks with an open suggestion (a changed date,
- * a possible duplicate, "possibly done") in one list, each with what needs deciding. On wide screens the
- * list and the selected task stand side by side; below 1280 px they take turns, so the task keeps enough
- * room for its evidence and actions.
+ * a possible duplicate, "possibly done") in one list, each with what needs deciding. When the page has room
+ * (about 880 px, which the desktop window has at its usual size), the list and the selected task stand side by
+ * side; otherwise they take turns, so the task keeps enough room for its evidence and actions.
  */
 export default function InboxPage() {
   const { t } = useTranslation();
   const [params, setParams] = useSearchParams();
-  const wide = useMediaQuery("(min-width: 1280px)");
+  // The page's own width decides (the navigation pane takes part of the window); without a measurement, the window's.
+  const [measure, roomy] = useWidthAtLeast(880);
+  const wideWindow = useMediaQuery("(min-width: 1280px)");
+  const wide = roomy ?? wideWindow;
   const [selecting, setSelecting] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [limit, setLimit] = useState(PAGE);
@@ -122,6 +126,9 @@ export default function InboxPage() {
     });
   const allChecked = selectable.length > 0 && chosen.length === selectable.length ? true : chosen.length > 0 ? "indeterminate" : false;
 
+  // A decided task folds away from the list instead of the rows below jumping up.
+  const rows = useFoldAway(items, `${onlyIssues}|${sort}`);
+
   const onKeyDown = (event: KeyboardEvent<HTMLElement>, index: number) => {
     if (!NAV_KEYS.has(event.key) || event.altKey || event.ctrlKey || event.metaKey) return;
     event.preventDefault();
@@ -133,7 +140,7 @@ export default function InboxPage() {
   };
 
   const list = (
-    <div className={cn("flex min-h-0 flex-col border-r bg-card xl:w-[380px] 2xl:w-[420px]", showDetail && !wide ? "hidden" : "flex-1 xl:flex-none")}>
+    <div className={cn("flex min-h-0 flex-col border-r bg-card", wide ? "w-[360px] flex-none 2xl:w-[420px]" : showDetail ? "hidden" : "flex-1")}>
       <div className="flex min-h-11 shrink-0 flex-wrap items-center gap-x-3 gap-y-2 border-b px-3 py-1.5">
         {selecting ? (
           <>
@@ -199,12 +206,14 @@ export default function InboxPage() {
                 </Button>
               }
             />
-          ) : (
+          ) : wide && !onlyIssues ? null /* the pane beside the list says so, once */ : (
             <EmptyState compact icon={Inbox} title={t("inbox.empty")} description={t("inbox.emptyHint")} className="m-1.5" />
           )
         ) : null}
         <ul className="grid gap-0.5" aria-label={t("inbox.listLabel")}>
-          {items.map((task, index) => (
+          {rows.map(({ item: task, leaving: gone }) => {
+            const index = gone ? -1 : items.indexOf(task);
+            return (
             <Fragment key={task.id}>
               {index === firstSample ? (
                 <li role="presentation" className="mt-2 flex items-center gap-1.5 border-t px-3 pt-3 pb-1 text-xs font-semibold text-muted-foreground">
@@ -212,20 +221,24 @@ export default function InboxPage() {
                   <span className="font-normal tabular-nums">{sampleCount}</span>
                 </li>
               ) : null}
-              <li>
+              <li className={gone ? "motion-row-out" : undefined} aria-hidden={gone || undefined} inert={gone}>
+                <div>
                 <TaskListItem
                   task={task}
-                  controlId={itemControlId(task.id)}
-                  active={task.id === activeId && showDetail}
+                  controlId={gone ? undefined : itemControlId(task.id)}
+                  active={!gone && task.id === activeId && showDetail}
                   selected={selecting ? selected.has(task.id) : undefined}
                   onSelectedChange={selecting && task.status === "candidate" ? (on) => toggle(task.id, on) : undefined}
                   onSelect={() => open(task.id)}
                   onKeyDown={(e) => onKeyDown(e, index)}
+                  leaving={gone}
                   hideSample
                 />
+                </div>
               </li>
             </Fragment>
-          ))}
+            );
+          })}
         </ul>
         {total > loaded ? (
           <div className="grid justify-items-center gap-2 px-3 py-3 text-xs text-muted-foreground">
@@ -236,7 +249,7 @@ export default function InboxPage() {
           </div>
         ) : null}
       </div>
-      {items.length > 1 ? <p className="hidden shrink-0 border-t px-3 py-1.5 text-[11px] text-muted-foreground xl:block">{t("inbox.keyboardHint")}</p> : null}
+      {items.length > 1 && wide ? <p className="shrink-0 border-t px-3 py-1.5 text-[11px] text-muted-foreground">{t("inbox.keyboardHint")}</p> : null}
     </div>
   );
 
@@ -287,8 +300,8 @@ export default function InboxPage() {
         </div>
       </div>
     ) : wide ? (
-      <div className="hidden flex-1 items-center justify-center p-6 xl:flex">
-        {!isLoading && items.length === 0 && !onlyIssues ? (
+      <div className="flex flex-1 items-center justify-center p-6">
+        {!isLoading && !error && items.length === 0 && !onlyIssues ? (
           <EmptyState
             icon={CircleCheckBig}
             title={t("inbox.allDone")}
@@ -305,7 +318,7 @@ export default function InboxPage() {
     ) : null;
 
   return (
-    <div className="flex h-full min-h-0 flex-col">
+    <div ref={measure} className="flex h-full min-h-0 flex-col">
       <div className="shrink-0 border-b px-4 py-3 sm:px-6">
         <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
           <h1 className="text-page font-semibold">

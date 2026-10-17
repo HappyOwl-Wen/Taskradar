@@ -88,6 +88,10 @@ class GoogleOAuthManager:
         self.clock = clock
         self._pending: dict[str, _Pending] = {}
         self._lock = threading.Lock()
+        # How the last authorization ended, for a page that waits while the user signs in elsewhere (the desktop
+        # app opens Google in the system browser). ``seq`` grows with every result.
+        self.last_result: dict[str, Any] | None = None
+        self._results = 0
 
     # -- client configuration ----------------------------------------------------------------
 
@@ -153,6 +157,11 @@ class GoogleOAuthManager:
             raise OAuthError("scope_not_granted", "The required permission was not granted")
         self.secrets.set(token_key, creds.to_json())
         return pending.service
+
+    def record_result(self, service: str | None, error: str | None) -> None:
+        with self._lock:
+            self._results += 1
+            self.last_result = {"seq": self._results, "service": service, "ok": error is None, "error": error}
 
     # -- credentials ---------------------------------------------------------------------------
 

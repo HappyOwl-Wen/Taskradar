@@ -55,18 +55,18 @@ function AttentionList({ items }: { items: AttentionTask[] }) {
   const { t } = useTranslation();
   const groups = GROUPS.map((g) => ({ group: g, tasks: items.filter((task) => groupOf(task) === g) })).filter((g) => g.tasks.length);
   return (
-    <div className="overflow-hidden rounded-lg border bg-card">
+    <div className="grid gap-4">
       {groups.map(({ group, tasks }) => {
         // Listed once: what already waits in "things to decide" is pointed to here, not repeated.
         const queued = QUEUE_GROUPS.has(group) ? tasks.filter(inQueue) : [];
         const listed = tasks.filter((task) => !queued.includes(task));
         return (
-          <section key={group} aria-label={t(`dashboard.group.${group}`)} className="border-b last:border-b-0">
-            <h3 className={cn("flex items-center gap-2 bg-muted/50 px-4 py-1.5 text-xs font-semibold", GROUP_TONE[group])}>
+          <section key={group} aria-label={t(`dashboard.group.${group}`)} className="grid gap-0.5">
+            <h3 className={cn("flex items-center gap-2 border-b px-3 pb-1.5 text-xs font-semibold", GROUP_TONE[group])}>
               {t(`dashboard.group.${group}`)}
               <span className="font-normal text-muted-foreground tabular-nums">{tasks.length}</span>
             </h3>
-            <ul className="grid gap-px p-1">
+            <ul className="grid gap-px">
               {listed.map((task) => (
                 <li key={task.id}>
                   <TaskListItem
@@ -80,7 +80,7 @@ function AttentionList({ items }: { items: AttentionTask[] }) {
                 <li>
                   <Link
                     to={`/inbox?task=${queued[0].id}`}
-                    className="flex min-h-11 items-center gap-2 rounded-md px-3 py-2 text-[13px] text-muted-foreground hover:bg-accent hover:text-foreground"
+                    className="flex min-h-10 items-center gap-2 rounded-md px-3 py-2 text-[13px] text-muted-foreground transition-colors duration-(--duration-fast) hover:bg-accent hover:text-foreground active:bg-accent-strong"
                   >
                     <span className="min-w-0 flex-1">{t("dashboard.inQueue", { count: queued.length })}</span>
                     <ArrowRight className="size-4 shrink-0" aria-hidden />
@@ -118,7 +118,7 @@ function DuplicateNote({ suggestion }: { suggestion: Suggestion }) {
  * be decided about each, and one way in. New tasks, changed dates and possible duplicates are not
  * separate lists with their own numbers.
  */
-function DecisionCard({ data }: { data: Dashboard }) {
+function DecisionCard({ data, primary }: { data: Dashboard; primary: boolean }) {
   const { t } = useTranslation();
   const { items, isLoading } = useDecisionQueue();
   const real = items.filter((task) => !task.sample);
@@ -128,10 +128,19 @@ function DecisionCard({ data }: { data: Dashboard }) {
   const top = real.slice(0, 3);
   return (
     <section className="grid gap-2">
-      <div className="flex min-h-7 items-center justify-between gap-2">
-        <h2 className="text-section font-semibold">{t("dashboard.decide.title", { count })}</h2>
+      {/* The first thing to do today, so its way in is the page's main button. */}
+      <div className="flex min-h-8 items-center justify-between gap-2">
+        <h2 className="text-section font-semibold">
+          {t("dashboard.decide.title", { count })}
+        </h2>
+        {/* While the first steps are shown, their button is the main one; this one then steps back. */}
+        <Button variant={primary ? "default" : "outline"} asChild>
+          <Link to="/inbox">
+            {t("dashboard.decide.start")} <ArrowRight />
+          </Link>
+        </Button>
       </div>
-      <div className="overflow-hidden rounded-lg border bg-card">
+      <div className="overflow-hidden rounded-lg bg-subtle">
         {isLoading && top.length === 0 ? <LoadingRows rows={2} className="p-3" /> : null}
         <ul className="grid gap-px p-1">
           {top.map((task) => {
@@ -149,14 +158,9 @@ function DecisionCard({ data }: { data: Dashboard }) {
             );
           })}
         </ul>
-        <div className="flex flex-wrap items-center justify-between gap-2 border-t px-4 py-2.5">
-          <p className="text-xs text-muted-foreground">{count > top.length ? t("dashboard.decide.more", { count: count - top.length }) : t("dashboard.decide.hint")}</p>
-          <Button size="sm" asChild>
-            <Link to="/inbox">
-              {t("dashboard.decide.start")} <ArrowRight />
-            </Link>
-          </Button>
-        </div>
+        <p className="border-t border-border/70 px-4 py-2.5 text-xs text-muted-foreground">
+          {count > top.length ? t("dashboard.decide.more", { count: count - top.length }) : t("dashboard.decide.hint")}
+        </p>
       </div>
     </section>
   );
@@ -237,7 +241,7 @@ function FirstSteps({ candidates, onClose }: { candidates: number; onClose: () =
     },
   ];
   return (
-    <section className="relative grid gap-5 rounded-lg border bg-card p-5" aria-labelledby="first-steps">
+    <section className="relative grid gap-5 rounded-lg bg-subtle p-5" aria-labelledby="first-steps">
       <Button variant="ghost" size="icon-sm" className="absolute top-3 right-3 text-muted-foreground" onClick={onClose} aria-label={t("onboarding.close")}>
         <X />
       </Button>
@@ -252,7 +256,7 @@ function FirstSteps({ candidates, onClose }: { candidates: number; onClose: () =
           const Icon = s.icon;
           const current = i === (candidates > 0 ? 1 : 0);
           return (
-            <li key={s.title} className={cn("flex items-start gap-3 rounded-md border p-3", current && "border-primary/40 bg-selected/60")}>
+            <li key={s.title} className={cn("flex items-start gap-3 rounded-md bg-card p-3", current && "bg-selected ring-1 ring-primary/25")}>
               <span className={cn("grid size-7 shrink-0 place-items-center rounded-full text-xs font-semibold", current ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground")}>
                 {i + 1}
               </span>
@@ -293,7 +297,7 @@ function FirstSteps({ candidates, onClose }: { candidates: number; onClose: () =
           {others.map((o) => {
             const Icon = o.icon;
             return (
-              <li key={o.label} className="flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-md border px-3 py-2">
+              <li key={o.label} className="flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-md bg-card px-3 py-2">
                 <Icon className="size-4 shrink-0 text-muted-foreground" aria-hidden />
                 <span className="min-w-0 flex-1 basis-48 text-[13px] leading-relaxed text-muted-foreground">{o.label}</span>
                 {o.action}
@@ -380,10 +384,10 @@ export default function DashboardPage() {
           screens it stands beside the list with the system status under it. */}
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_24rem] xl:grid-rows-[auto_1fr] 2xl:grid-cols-[minmax(0,1fr)_28rem]">
         <div className="min-w-0 xl:col-start-2 xl:row-start-1">
-          <DecisionCard data={data} />
+          <DecisionCard data={data} primary={!showGuide} />
         </div>
         <section className="grid min-w-0 content-start gap-2 xl:col-start-1 xl:row-span-2 xl:row-start-1">
-          <div className="flex min-h-7 items-center justify-between gap-2">
+          <div className="flex min-h-8 items-center justify-between gap-2">
             <h2 className="text-section font-semibold">{t("dashboard.attention")}</h2>
             {attentionTotal > shown ? (
               <Button variant="ghost" size="xs" asChild>

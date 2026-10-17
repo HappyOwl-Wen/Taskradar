@@ -67,9 +67,9 @@ export function SuggestionCard({
   const taskLink = suggestion.task_status === "candidate" ? `/inbox?task=${suggestion.task_id}` : `/tasks/${suggestion.task_id}`;
 
   return (
-    <article className={cn("grid gap-3 rounded-lg border bg-card p-3.5", className)}>
+    <article className={cn("grid gap-3 rounded-lg bg-subtle p-3.5", className)}>
       <header className="flex items-start gap-2.5">
-        <span className={cn("grid size-7 shrink-0 place-items-center rounded-md", kind === "possible_duplicate" ? "bg-high/12 text-high" : "bg-violet/10 text-violet")}>
+        <span className={cn("grid size-7 shrink-0 place-items-center rounded-md", kind === "possible_duplicate" ? "bg-high/12 text-high" : "bg-selected text-selected-foreground")}>
           <Icon className="size-4" />
         </span>
         <div className="grid min-w-0 flex-1 gap-0.5">

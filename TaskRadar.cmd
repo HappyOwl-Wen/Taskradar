@@ -1,6 +1,6 @@
 @echo off
-REM TaskRadar - start the local server (http://127.0.0.1:8000) and open the dashboard.
-REM Close this window to stop TaskRadar.
+REM TaskRadar from source: opens the TaskRadar window (its local service starts and stops with the window).
+REM "TaskRadar.cmd --browser" starts the browser version instead (http://127.0.0.1:8000; close this window to stop).
 setlocal
 cd /d "%~dp0"
 if not exist "backend\.venv\Scripts\python.exe" (
@@ -14,6 +14,12 @@ if not exist "backend\.venv\Scripts\python.exe" (
     exit /b 1
   )
 )
+if /i "%~1"=="--browser" goto browser
+start "" "backend\.venv\Scripts\pythonw.exe" -m taskradar desktop %*
+exit /b 0
+
+:browser
+shift
 title TaskRadar - close this window to stop
-"backend\.venv\Scripts\python.exe" -m taskradar serve %*
+"backend\.venv\Scripts\python.exe" -m taskradar serve %1 %2 %3 %4 %5 %6 %7 %8 %9
 if errorlevel 1 pause

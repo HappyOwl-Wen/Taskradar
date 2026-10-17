@@ -47,6 +47,8 @@ export interface SessionInfo {
   language: "zh-CN" | "en";
   theme: "system" | "light" | "dark";
   timezone: string;
+  /** Shown in the TaskRadar desktop window rather than a browser tab (older servers leave it out). */
+  desktop?: boolean;
 }
 
 let csrfToken: string | null = null;
@@ -230,6 +232,8 @@ export const api = {
   },
   deleteClientConfig: () => del<GoogleStatus["client"]>("/api/integrations/google/client-config"),
   connectGoogle: (service: "gmail" | "calendar") => post<{ auth_url: string }>(`/api/integrations/google/${service}/connect`),
+  updateDesktopState: (state: { unsaved?: boolean; theme?: "light" | "dark"; language?: "zh-CN" | "en" }) =>
+    put<{ ok: boolean }>("/api/desktop/state", state),
   disconnectGoogle: (service: "gmail" | "calendar") => post<{ connected: boolean }>(`/api/integrations/google/${service}/disconnect`),
 
   notifications: () => get<{ items: NotificationItem[]; unread: number }>("/api/notifications", { limit: 30 }),

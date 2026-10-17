@@ -39,13 +39,12 @@ class AutostartManager:
         )
 
     def command(self) -> str:
-        """The line that starts TaskRadar at login (without opening the browser)."""
+        """The line that starts TaskRadar at login: its window, minimised in the taskbar (closing it stops it)."""
         if is_packaged():
-            # TaskRadar.exe: a minimised window in the taskbar shows that it runs; closing it stops TaskRadar.
-            return f'start "" /min "{self.python_exe}" --no-browser'
+            return f'start "" "{self.python_exe}" --minimized'
         pythonw = Path(self.python_exe).with_name("pythonw.exe")
         exe = pythonw if pythonw.exists() else Path(self.python_exe)
-        return f'start "" "{exe}" -m taskradar --no-browser'
+        return f'start "" "{exe}" -m taskradar desktop --minimized'
 
     def enable(self) -> None:
         if not self.supported or self.path is None:

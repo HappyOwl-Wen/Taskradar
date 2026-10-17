@@ -3,99 +3,133 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 /*
+ * TaskRadar's look: quiet and light. A grey frame (title bar, navigation, top bar) holds the white page; lists are
+ * rows divided by hairlines rather than boxes; colour is kept for what it means.
+ *
  * Colour roles (one meaning each, used everywhere):
- *   primary  brand blue   - confirmed / selected / links / main action
- *   violet               - unconfirmed (待确认) and open suggestions
- *   urgent / high        - warning orange: due very soon, conflicts, things to check
- *   overdue / destructive - red: overdue, errors, deleting
- *   success              - green: done
- *   neutral greys        - categories, sources, "within a week", dismissed, secondary text
- * Text colours keep at least 4.5:1 against cards and the page background.
+ *   primary  brand indigo  - the main action of a screen, the selected item, links, the number of things to decide
+ *   urgent / high  amber   - due very soon, conflicts, things to check
+ *   overdue / destructive  red - overdue, errors, deleting
+ *   success  green         - done
+ *   tentative  neutral, dashed - unconfirmed (待确认): found by TaskRadar, not yet accepted
+ *   neutral greys          - categories, sources, "within a week", dismissed, secondary text
+ * Text colours keep at least 4.5:1 against the page and the frame; control outlines at least 3:1.
+ *
+ * The frame and page colours are also used by the desktop window (title bar, start screen): see
+ * backend/src/taskradar/desktop/splash.py.
  */
 :root {
-  --radius: 0.75rem;
-  --background: oklch(0.984 0.003 247.9); /* #F8FAFC */
-  --foreground: oklch(0.21 0.035 265); /* ≈ slate-900 */
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.21 0.035 265);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.21 0.035 265);
-  --primary: oklch(0.52 0.19 268);
-  --primary-foreground: oklch(0.985 0.003 255);
-  --secondary: oklch(0.968 0.007 247.9); /* #F1F5F9 */
-  --secondary-foreground: oklch(0.28 0.035 262);
-  --muted: oklch(0.968 0.007 247.9); /* #F1F5F9 */
-  --muted-foreground: oklch(0.5 0.035 257); /* ≈ #5A6577, 5.9:1 on white */
-  /* Hover is neutral; a selected item is light blue with brand-blue text (see --selected). */
-  --accent: oklch(0.962 0.008 250);
-  --accent-foreground: oklch(0.24 0.035 265);
-  --selected: oklch(0.955 0.028 268);
-  --selected-foreground: oklch(0.45 0.19 268);
-  --destructive: oklch(0.55 0.21 27);
-  --destructive-foreground: oklch(0.985 0.003 255);
-  --border: oklch(0.929 0.013 255.5); /* #E2E8F0 */
-  /* Outline of form controls (fields, checkboxes, radios, switches): at least 3:1 against cards and the page,
-     because the outline is what identifies them. Card borders stay light (--border). */
-  --input: oklch(0.64 0.03 257); /* 3.4:1 on white */
-  --ring: oklch(0.52 0.19 268);
-  --sidebar: oklch(1 0 0);
+  --radius: 0.5rem; /* 8 px: rounded-md 6 (controls), rounded-lg 8 (menus, panels), rounded-xl 12 (dialogs, page) */
+  --frame: #f2f3f5;
+  --background: #ffffff;
+  --foreground: #1d2129;
+  --card: #ffffff;
+  --card-foreground: #1d2129;
+  --card-hover: color-mix(in oklab, var(--card), var(--foreground) 4.5%);
+  --card-active: color-mix(in oklab, var(--card), var(--foreground) 8%);
+  --popover: #ffffff;
+  --popover-foreground: #1d2129;
+  --primary: #4f46e5;
+  --primary-hover: #4338ca;
+  --primary-foreground: #ffffff;
+  --secondary: #eff0f3;
+  --secondary-foreground: #2a2f38;
+  --subtle: #f7f8fa; /* quiet panels and group headers on the page */
+  --muted: #eff0f3;
+  --muted-foreground: #5d6470; /* 5.9:1 on white, 5.3:1 on the frame */
+  /* Hover and press are translucent, so they read the same on the page and on the frame. */
+  --accent: rgb(15 23 42 / 0.05);
+  --accent-strong: rgb(15 23 42 / 0.085);
+  --accent-foreground: #1d2129;
+  --selected: #eceefe;
+  --selected-foreground: #4338ca;
+  --destructive: #d92d20;
+  --destructive-foreground: #ffffff;
+  --border: #e3e5e9;
+  /* Outline of form controls (fields, checkboxes, radios, switches): at least 3:1 against the page and the frame,
+     because the outline is what identifies them. Dividers stay light (--border). */
+  --input: #868c97;
+  --ring: #4f46e5;
+  --sidebar: var(--frame);
+  --scrollbar: #c3c7cf;
 
-  --overdue: oklch(0.55 0.21 27); /* red, 5.4:1 */
-  --urgent: oklch(0.56 0.18 42); /* warning orange, 4.9:1 */
-  --high: oklch(0.56 0.18 42);
-  --upcoming: oklch(0.42 0.04 257); /* within a week: neutral, slightly stronger than secondary text */
-  --normal: oklch(0.5 0.035 257);
-  --success: oklch(0.52 0.14 150); /* green, 5.0:1 */
-  --violet: oklch(0.52 0.21 295); /* 6.3:1 */
+  --overdue: #d92d20; /* 4.9:1 */
+  --urgent: #b45309; /* amber, 5.0:1 */
+  --high: #b45309;
+  --upcoming: #3f4652; /* within a week: neutral, a little stronger than secondary text */
+  --normal: #5d6470;
+  --success: #15803d; /* 5.0:1 */
+  --success-foreground: #ffffff;
+  --on-status: #ffffff; /* text on a solid status colour (a count on red or amber) */
+  --tentative: #5d6470;
+
+  --ease-out: cubic-bezier(0.1, 0.9, 0.2, 1);
+  --ease-in: cubic-bezier(0.7, 0, 1, 0.5);
+  --ease-move: cubic-bezier(0.4, 0, 0.2, 1);
+  --duration-fast: 120ms;
+  --duration-normal: 160ms;
+  --duration-slow: 200ms;
 }
 
 .dark {
-  --background: oklch(0.17 0.012 265);
-  --foreground: oklch(0.94 0.008 260);
-  --card: oklch(0.205 0.014 265);
-  --card-foreground: oklch(0.94 0.008 260);
-  --popover: oklch(0.22 0.015 265);
-  --popover-foreground: oklch(0.94 0.008 260);
-  --primary: oklch(0.68 0.16 268);
-  --primary-foreground: oklch(0.17 0.012 265);
-  --secondary: oklch(0.26 0.016 265);
-  --secondary-foreground: oklch(0.92 0.008 260);
-  --muted: oklch(0.25 0.014 265);
-  --muted-foreground: oklch(0.72 0.02 262);
-  --accent: oklch(0.27 0.016 265);
-  --accent-foreground: oklch(0.94 0.01 260);
-  --selected: oklch(0.29 0.05 268);
-  --selected-foreground: oklch(0.82 0.1 268);
-  --destructive: oklch(0.66 0.19 25);
-  --destructive-foreground: oklch(0.985 0.003 255);
-  --border: oklch(0.29 0.016 265);
-  --input: oklch(0.54 0.025 262); /* 3.5:1 on dark cards */
-  --ring: oklch(0.68 0.16 268);
-  --sidebar: oklch(0.19 0.013 265);
+  --frame: #1d1e22;
+  --background: #25262b;
+  --foreground: #ebecef;
+  --card: #25262b;
+  --card-foreground: #ebecef;
+  --popover: #2c2d33;
+  --popover-foreground: #ebecef;
+  --primary: #8b8ff5;
+  --primary-hover: #a1a4f8;
+  --primary-foreground: #16171b;
+  --secondary: #303238;
+  --secondary-foreground: #e3e5ea;
+  --subtle: #2a2b31;
+  --muted: #2f3137;
+  --muted-foreground: #a6abb5;
+  --accent: rgb(255 255 255 / 0.06);
+  --accent-strong: rgb(255 255 255 / 0.1);
+  --accent-foreground: #ebecef;
+  --selected: #33355a;
+  --selected-foreground: #c3c5ff;
+  --destructive: #ff7b72;
+  --destructive-foreground: #16171b;
+  --border: #36383f;
+  --input: #7c828e; /* 3.6:1 on the dark page */
+  --ring: #8b8ff5;
+  --scrollbar: #4c4f58;
 
-  --overdue: oklch(0.7 0.18 25);
-  --urgent: oklch(0.76 0.15 55);
-  --high: oklch(0.76 0.15 55);
-  --upcoming: oklch(0.84 0.015 260);
-  --normal: oklch(0.72 0.02 262);
-  --success: oklch(0.74 0.14 155);
-  --violet: oklch(0.74 0.15 300);
+  --overdue: #ff7b72;
+  --urgent: #f0b45e;
+  --high: #f0b45e;
+  --upcoming: #d5d8de;
+  --normal: #a6abb5;
+  --success: #5fd38d;
+  --success-foreground: #16171b;
+  --on-status: #16171b;
+  --tentative: #a6abb5;
 }
 
 @theme inline {
+  --color-frame: var(--frame);
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
   --color-card-foreground: var(--card-foreground);
+  --color-card-hover: var(--card-hover);
+  --color-card-active: var(--card-active);
   --color-popover: var(--popover);
   --color-popover-foreground: var(--popover-foreground);
   --color-primary: var(--primary);
+  --color-primary-hover: var(--primary-hover);
   --color-primary-foreground: var(--primary-foreground);
   --color-secondary: var(--secondary);
   --color-secondary-foreground: var(--secondary-foreground);
+  --color-subtle: var(--subtle);
   --color-muted: var(--muted);
   --color-muted-foreground: var(--muted-foreground);
   --color-accent: var(--accent);
+  --color-accent-strong: var(--accent-strong);
   --color-accent-foreground: var(--accent-foreground);
   --color-selected: var(--selected);
   --color-selected-foreground: var(--selected-foreground);
@@ -111,37 +145,205 @@
   --color-upcoming: var(--upcoming);
   --color-normal: var(--normal);
   --color-success: var(--success);
-  --color-violet: var(--violet);
+  --color-success-foreground: var(--success-foreground);
+  --color-on-status: var(--on-status);
+  --color-tentative: var(--tentative);
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
-  --font-sans: "Inter", "Segoe UI", "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", system-ui, sans-serif;
-  --font-mono: "Cascadia Code", "JetBrains Mono", Consolas, ui-monospace, monospace;
-  /* Type scale: page titles 22px, section titles 16px; body text stays text-sm (14px), secondary 12-13px. */
-  --text-page: 1.375rem;
-  --text-page--line-height: 1.875rem;
-  --text-page--letter-spacing: -0.01em;
-  --text-section: 1rem;
-  --text-section--line-height: 1.5rem;
+  /* Windows: Segoe UI Variable (Windows 11) or Segoe UI for Latin text, Microsoft YaHei UI for Chinese. */
+  --font-sans: "Segoe UI Variable Text", "Segoe UI", "Microsoft YaHei UI", "Microsoft YaHei", "PingFang SC",
+    "Noto Sans CJK SC", system-ui, sans-serif;
+  --font-display: "Segoe UI Variable Display", "Segoe UI", "Microsoft YaHei UI", "Microsoft YaHei", "PingFang SC",
+    "Noto Sans CJK SC", system-ui, sans-serif;
+  --font-mono: "Cascadia Mono", "Cascadia Code", Consolas, ui-monospace, monospace;
+  /* Type scale: page titles 20 px, section titles 15 px, body 14 px (text-sm), secondary 12-13 px. */
+  --text-page: 1.25rem;
+  --text-page--line-height: 1.75rem;
+  --text-page--letter-spacing: -0.005em;
+  --text-section: 0.9375rem;
+  --text-section--line-height: 1.375rem;
 }
 
 @layer base {
   * {
-    @apply border-border outline-ring/50;
+    @apply border-border outline-ring/60;
+    scrollbar-width: thin;
+    scrollbar-color: var(--scrollbar) transparent;
   }
   html {
     color-scheme: light;
+    background: var(--frame);
   }
   html.dark {
     color-scheme: dark;
   }
   body {
-    @apply bg-background text-foreground antialiased;
-    font-feature-settings: "cv11", "ss01";
+    @apply bg-frame text-foreground antialiased;
+  }
+  h1,
+  h2 {
+    font-family: var(--font-display);
   }
   ::selection {
     @apply bg-primary/20;
+  }
+  /* Icons are drawn a little lighter than the text, as in Windows 11. */
+  svg.lucide {
+    stroke-width: 1.75;
+  }
+  /* Keyboard focus is always visible: links, summaries and other plain elements get the same ring as controls. */
+  :focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+  button:not(:disabled),
+  [role="button"]:not([aria-disabled="true"]),
+  summary,
+  label[for] {
+    cursor: default;
+  }
+}
+
+/* ---------------------------------------------------------------------------------------------------------------
+ * Motion. Short fades and small shifts (120-220 ms) that show what changed; nothing bounces, nothing waits. While
+ * something closes it no longer takes clicks, so the next action is never blocked. Users who ask for less motion
+ * (Windows: Settings -> Accessibility -> Visual effects -> Animation effects) get none.
+ * ------------------------------------------------------------------------------------------------------------- */
+@keyframes tr-fade-in {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes tr-fade-out {
+  to {
+    opacity: 0;
+  }
+}
+@keyframes tr-rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.985);
+  }
+}
+@keyframes tr-sink-out {
+  to {
+    opacity: 0;
+    transform: translateY(4px) scale(0.99);
+  }
+}
+@keyframes tr-page-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+@keyframes tr-drop-down {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
+@keyframes tr-drop-up {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+}
+@keyframes tr-drop-left {
+  from {
+    opacity: 0;
+    transform: translateX(4px);
+  }
+}
+@keyframes tr-drop-right {
+  from {
+    opacity: 0;
+    transform: translateX(-4px);
+  }
+}
+@keyframes tr-drawer-in {
+  from {
+    opacity: 0.6;
+    transform: translateX(-16px);
+  }
+}
+@keyframes tr-drawer-out {
+  to {
+    opacity: 0;
+    transform: translateX(-16px);
+  }
+}
+/* A row that leaves a list (ticked off, decided) folds away, so the rows below move up instead of jumping. */
+@keyframes tr-row-out {
+  from {
+    grid-template-rows: 1fr;
+    opacity: 1;
+  }
+  to {
+    grid-template-rows: 0fr;
+    opacity: 0;
+  }
+}
+
+@layer components {
+  /* Dialog backdrop and dialog. */
+  .motion-overlay[data-state="open"] {
+    animation: tr-fade-in var(--duration-slow) var(--ease-out);
+  }
+  .motion-overlay[data-state="closed"] {
+    animation: tr-fade-out var(--duration-fast) var(--ease-in) forwards;
+    pointer-events: none;
+  }
+  .motion-dialog[data-state="open"] {
+    animation: tr-rise-in var(--duration-slow) var(--ease-out);
+  }
+  .motion-dialog[data-state="closed"] {
+    animation: tr-sink-out var(--duration-fast) var(--ease-in) forwards;
+    pointer-events: none;
+  }
+  /* The navigation drawer on narrow windows. */
+  .motion-drawer[data-state="open"] {
+    animation: tr-drawer-in var(--duration-slow) var(--ease-out);
+  }
+  .motion-drawer[data-state="closed"] {
+    animation: tr-drawer-out var(--duration-fast) var(--ease-in) forwards;
+    pointer-events: none;
+  }
+  /* Menus, pop-ups, selects and hints come from the side they open to. */
+  .motion-popover[data-state="open"],
+  .motion-popover[data-state="delayed-open"],
+  .motion-popover[data-state="instant-open"] {
+    animation: tr-drop-down var(--duration-normal) var(--ease-out);
+  }
+  .motion-popover[data-side="top"]:is([data-state="open"], [data-state="delayed-open"], [data-state="instant-open"]) {
+    animation-name: tr-drop-up;
+  }
+  .motion-popover[data-side="left"]:is([data-state="open"], [data-state="delayed-open"], [data-state="instant-open"]) {
+    animation-name: tr-drop-left;
+  }
+  .motion-popover[data-side="right"]:is([data-state="open"], [data-state="delayed-open"], [data-state="instant-open"]) {
+    animation-name: tr-drop-right;
+  }
+  .motion-popover[data-state="closed"] {
+    animation: tr-fade-out var(--duration-fast) var(--ease-in) forwards;
+    pointer-events: none;
+  }
+  /* A page that is opened fades in from slightly below. */
+  .motion-page {
+    animation: tr-page-in var(--duration-slow) var(--ease-out);
+  }
+  .motion-row-out {
+    display: grid;
+    overflow: hidden;
+    animation: tr-row-out var(--duration-slow) var(--ease-move) forwards;
+    pointer-events: none;
+  }
+  /* The row inside a wrapper without padding (the wrapper folds; the row's own padding is clipped). */
+  .motion-row-out > * {
+    min-height: 0;
+    overflow: hidden;
   }
 }
 
@@ -192,8 +394,12 @@
 /*
  * A toast never passes over the action bar at the bottom (see keepToastsClear), where a tap meant for the next
  * decision must not land on "Undo": it rises only a little into place instead of from below its own height,
- * and while arriving or leaving it takes no taps.
+ * and while arriving or leaving it takes no taps. Its movements are as short as everything else's.
  */
+[data-sonner-toast] {
+  transition-duration: 220ms !important;
+  transition-timing-function: var(--ease-out) !important;
+}
 [data-sonner-toast][data-y-position="bottom"]:not([data-mounted="true"]) {
   --y: translateY(16px);
 }

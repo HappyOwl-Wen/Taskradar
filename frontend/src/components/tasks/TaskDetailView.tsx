@@ -425,7 +425,7 @@ export function TaskDetailView({
     <div className="grid min-w-0 grid-cols-1 content-start gap-6">
       {issues.length ? (
         <Section title={t("detail.reviewTitle")}>
-          <ul className="divide-y rounded-lg border border-urgent/25 bg-urgent/[0.04] px-3.5 py-3">
+          <ul className="divide-y divide-urgent/15 rounded-lg bg-urgent/6 px-3.5 py-3">
             {issues.map((issue) => (
               <IssueRow
                 key={issue.kind}

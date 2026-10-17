@@ -37,6 +37,8 @@ def session_info(request: Request, c: Container = Depends(get_container)) -> dic
         "language": general.language,
         "theme": general.theme,
         "timezone": general.timezone,
+        # Shown in the TaskRadar window (not a browser tab): links and the Google sign-in open in the browser.
+        "desktop": getattr(request.app.state, "desktop", None) is not None,
     }
 
 

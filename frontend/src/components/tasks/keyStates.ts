@@ -41,7 +41,7 @@ export function issueStates(issues: Issue[], t: TFunction): KeyState[] {
 }
 
 export function unconfirmedState(t: TFunction): KeyState {
-  return { key: "unconfirmed", tone: "violet", label: t("status.candidate"), icon: CircleDashed, hint: t("taskItem.unconfirmedHint") };
+  return { key: "unconfirmed", tone: "tentative", label: t("status.candidate"), icon: CircleDashed, hint: t("taskItem.unconfirmedHint") };
 }
 
 export function sampleState(t: TFunction): KeyState {

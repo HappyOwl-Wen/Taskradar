@@ -12,7 +12,7 @@ from taskradar.__main__ import _load_env_files
 from taskradar.services.system import MARKER, AutostartManager
 
 
-def test_autostart_from_source_starts_the_module_without_a_window(tmp_path: Path) -> None:
+def test_autostart_from_source_starts_the_desktop_window_minimised(tmp_path: Path) -> None:
     python = tmp_path / "python.exe"
     python.write_bytes(b"")
     (tmp_path / "pythonw.exe").write_bytes(b"")
@@ -21,10 +21,10 @@ def test_autostart_from_source_starts_the_module_without_a_window(tmp_path: Path
     assert manager.path is not None
     content = manager.path.read_text(encoding="utf-8")
     assert MARKER in content
-    assert f'start "" "{tmp_path / "pythonw.exe"}" -m taskradar --no-browser' in content
+    assert f'start "" "{tmp_path / "pythonw.exe"}" -m taskradar desktop --minimized' in content
 
 
-def test_autostart_of_the_exe_starts_it_minimised_and_never_passes_module_arguments(
+def test_autostart_of_the_exe_opens_its_window_minimised_and_never_passes_module_arguments(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setattr(sys, "frozen", True, raising=False)
@@ -33,7 +33,7 @@ def test_autostart_of_the_exe_starts_it_minimised_and_never_passes_module_argume
     manager.enable()
     assert manager.path is not None
     content = manager.path.read_text(encoding="utf-8")
-    assert f'start "" /min "{exe}" --no-browser' in content
+    assert f'start "" "{exe}" --minimized' in content
     assert "-m taskradar" not in content
     assert manager.enabled()
     manager.disable()

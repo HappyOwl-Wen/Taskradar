@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import logging.handlers
+import sys
 from pathlib import Path
 
 from taskradar.security.redact import RedactingFilter
@@ -23,10 +24,12 @@ def configure_logging(logs_dir: Path | None, level: str = "INFO") -> None:
     redactor = RedactingFilter()
     formatter = logging.Formatter(LOG_FORMAT)
 
-    console = logging.StreamHandler()
-    console.setFormatter(formatter)
-    console.addFilter(redactor)
-    handlers: list[logging.Handler] = [console]
+    handlers: list[logging.Handler] = []
+    if sys.stderr is not None:  # the desktop app (windowed TaskRadar.exe) has no console; it logs to the file
+        console = logging.StreamHandler()
+        console.setFormatter(formatter)
+        console.addFilter(redactor)
+        handlers.append(console)
 
     if logs_dir is not None:
         logs_dir.mkdir(parents=True, exist_ok=True)

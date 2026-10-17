@@ -10,7 +10,7 @@ import { translateKey } from "@/i18n";
 import { api } from "@/lib/api";
 import { errorMessage } from "@/lib/errors";
 import { formatRelativeTime } from "@/lib/format";
-import { refreshAll } from "@/lib/queries";
+import { refreshAll, useWaitingCount } from "@/lib/queries";
 import type { ImportResult } from "@/lib/types";
 import { ACCEPTED_FILES, importSummary, importTotals, replaceImportResult, useLastImport, useUpload } from "@/lib/upload";
 import { cn } from "@/lib/utils";
@@ -69,14 +69,16 @@ export function LastImportCard({ maxAgeMinutes, className }: { maxAgeMinutes?: n
     onError: (error) => toast.error(errorMessage(error)),
     onSettled: () => void refreshAll(queryClient),
   });
+  const waiting = useWaitingCount();
   // Age is judged when the page is opened (an old result does not reappear on the dashboard).
   const [openedAt] = useState(() => Date.now());
   if (!last) return null;
   if (maxAgeMinutes !== undefined && openedAt - Date.parse(last.at) > maxAgeMinutes * 60_000) return null;
   const totals = importTotals(last.results);
-  const found = totals.created + totals.suggestions;
+  // Confirming is the next step only while something still waits; once all is decided it would open an empty list.
+  const review = waiting !== 0 && totals.created + totals.suggestions > 0;
   return (
-    <section className={cn("grid gap-3 rounded-lg border bg-card p-4", className)} aria-labelledby="last-import-title">
+    <section className={cn("grid gap-3 rounded-lg bg-subtle p-4", className)} aria-labelledby="last-import-title">
       <div className="flex flex-wrap items-start gap-x-3 gap-y-2">
         <FileCheck2 className="mt-0.5 size-4 shrink-0 text-muted-foreground" aria-hidden />
         <div className="grid min-w-0 flex-1 basis-48 gap-0.5">
@@ -87,7 +89,7 @@ export function LastImportCard({ maxAgeMinutes, className }: { maxAgeMinutes?: n
           <p className="text-[13px] text-muted-foreground">{importSummary(last.results, t)}</p>
         </div>
         <div className="flex items-center gap-1">
-          {found ? (
+          {review ? (
             <Button size="sm" asChild>
               <Link to="/inbox">
                 {t("upload.review")} <ArrowRight />
@@ -99,7 +101,7 @@ export function LastImportCard({ maxAgeMinutes, className }: { maxAgeMinutes?: n
           </Button>
         </div>
       </div>
-      <ul className="grid gap-1.5 border-t pt-3">
+      <ul className="grid gap-1.5 border-t border-border/70 pt-3">
         {last.results.map((r, i) => {
           const failed = r.status === "failed";
           const Icon = failed ? CircleAlert : r.status === "processed" && (r.tasks_created || r.suggestions_created || r.duplicates_merged || r.tasks_updated) ? CircleCheck : CircleMinus;

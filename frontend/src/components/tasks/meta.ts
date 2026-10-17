@@ -82,11 +82,11 @@ export const SOURCE_ICON: Record<string, LucideIcon> = {
 };
 
 /**
- * One colour per lifecycle status, used everywhere a status is shown: unconfirmed violet, the user's own
- * open work brand blue, done green; waiting and dismissed are neutral (nothing to do right now).
+ * One look per lifecycle status, used everywhere a status is shown: unconfirmed is tentative (neutral, dashed),
+ * the user's own open work brand indigo, done green; waiting and dismissed are neutral (nothing to do right now).
  */
 export const STATUS_TONE: Record<TaskStatus, BadgeTone> = {
-  candidate: "violet",
+  candidate: "tentative",
   confirmed: "primary",
   in_progress: "primary",
   waiting_for_reply: "normal",
@@ -111,7 +111,7 @@ export const ISSUE_ICON: Record<IssueKind, LucideIcon> = {
 
 /** Text colour per status (status icons in lists and menus). */
 export const STATUS_TEXT: Record<TaskStatus, string> = {
-  candidate: "text-violet",
+  candidate: "text-tentative",
   confirmed: "text-primary",
   in_progress: "text-primary",
   waiting_for_reply: "text-muted-foreground",

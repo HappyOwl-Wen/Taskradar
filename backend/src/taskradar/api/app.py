@@ -16,8 +16,10 @@ from fastapi.staticfiles import StaticFiles
 from taskradar import __version__
 from taskradar.api.errors import install_error_handlers
 from taskradar.api.middleware import SecurityMiddleware
+from taskradar.api.routes import desktop as desktop_routes
 from taskradar.api.routes import integrations, sources, system, tasks
 from taskradar.container import Container
+from taskradar.desktop.bridge import DesktopBridge
 from taskradar.services.system import AutostartManager
 
 log = logging.getLogger(__name__)
@@ -38,6 +40,7 @@ def create_app(
     autostart: AutostartManager | None = None,
     static_dir: Path | None = None,
     extra_hosts: set[str] | None = None,
+    desktop: DesktopBridge | None = None,
 ) -> FastAPI:
     static_root = static_dir or STATIC_DIR
     scheduler = None
@@ -70,6 +73,8 @@ def create_app(
     app.state.executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix="taskradar-bg")
     app.state.scheduler = scheduler
     app.state.autostart = autostart or AutostartManager()
+    # Set when the server runs inside the desktop window (taskradar.desktop); None for the browser version.
+    app.state.desktop = desktop
 
     port = container.config.port
     hosts = {f"127.0.0.1:{port}", f"localhost:{port}", f"[::1]:{port}", *(extra_hosts or set())}
@@ -83,7 +88,7 @@ def create_app(
     )
     install_error_handlers(app)
 
-    for router in (system.router, tasks.router, sources.router, integrations.router):
+    for router in (system.router, tasks.router, sources.router, integrations.router, desktop_routes.router):
         app.include_router(router)
 
     @app.api_route("/api/{rest:path}", methods=["GET", "POST", "PUT", "PATCH", "DELETE"], include_in_schema=False)

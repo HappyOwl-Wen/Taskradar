@@ -37,12 +37,12 @@ export function EmptyState({
   return (
     <div
       className={cn(
-        "flex flex-col items-center justify-center rounded-xl border border-dashed text-center",
-        compact ? "gap-1.5 px-4 py-6" : "gap-2 px-6 py-12",
+        "flex flex-col items-center justify-center text-center",
+        compact ? "gap-1.5 px-4 py-8" : "gap-2 px-6 py-14",
         className,
       )}
     >
-      <div className={cn("grid place-items-center rounded-full bg-muted text-muted-foreground", compact ? "size-9" : "size-11")}>
+      <div className={cn("grid place-items-center rounded-full bg-subtle text-muted-foreground", compact ? "size-10" : "size-12")}>
         <Icon className={compact ? "size-4" : "size-5"} />
       </div>
       <p className="mt-1 text-sm font-medium">{title}</p>
@@ -57,7 +57,7 @@ export function ErrorState({ error, onRetry, className }: { error: unknown; onRe
   return (
     <div
       role="alert"
-      className={cn("flex flex-col items-center gap-2 rounded-xl border border-destructive/30 bg-destructive/5 px-6 py-8 text-center", className)}
+      className={cn("flex flex-col items-center gap-2 rounded-lg bg-destructive/6 px-6 py-8 text-center", className)}
     >
       <CircleAlert className="size-5 text-destructive" />
       <p className="text-sm font-medium">{t("common.error")}</p>
@@ -85,7 +85,7 @@ export function PageHeader({
   return (
     <div className={cn("flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between", className)}>
       <div className="grid gap-1">
-        <h1 className="text-page font-semibold">{title}</h1>
+        <h1 className="font-display text-page font-semibold">{title}</h1>
         {description ? <p className="max-w-3xl text-sm leading-relaxed text-muted-foreground">{description}</p> : null}
       </div>
       {actions ? <div className="flex flex-wrap items-center gap-2">{actions}</div> : null}

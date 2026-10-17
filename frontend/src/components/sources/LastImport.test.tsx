@@ -5,7 +5,8 @@ import { toast } from "sonner";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import i18n from "@/i18n";
 import { api, ApiError } from "@/lib/api";
-import type { ImportResult } from "@/lib/types";
+import { qk } from "@/lib/queries";
+import type { Dashboard, ImportResult } from "@/lib/types";
 import { importSummary, recordImport, useUpload } from "@/lib/upload";
 import { LastImportCard } from "./LastImport";
 
@@ -28,9 +29,11 @@ function result(overrides: Partial<ImportResult>): ImportResult {
   };
 }
 
-function wrap(children: React.ReactNode) {
+const quietClient = () => new QueryClient({ defaultOptions: { queries: { retry: false, enabled: false } } });
+
+function wrap(children: React.ReactNode, client = quietClient()) {
   return render(
-    <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false, enabled: false } } })}>
+    <QueryClientProvider client={client}>
       <MemoryRouter>{children}</MemoryRouter>
     </QueryClientProvider>,
   );
@@ -65,6 +68,18 @@ describe("LastImportCard", () => {
     expect(reprocess).toHaveBeenCalledWith(7);
     expect(within(scan).queryByRole("button", { name: /重试/ })).not.toBeInTheDocument();
     expect(screen.getByRole("link", { name: /去确认/ })).toHaveAttribute("href", "/inbox");
+  });
+
+  it("leads to confirming only while something still waits", async () => {
+    act(() => recordImport([result({ filename: "a.pdf", tasks_created: 2 })]));
+    const client = quietClient();
+    const waiting = (count: number) => ({ counts: { needs_action: count, candidates: count, pending_suggestions: 0 } }) as unknown as Dashboard;
+    // Both found tasks were confirmed already: the button would open an empty list.
+    client.setQueryData(qk.dashboard, waiting(0));
+    wrap(<LastImportCard />, client);
+    expect(screen.queryByRole("link", { name: /去确认/ })).not.toBeInTheDocument();
+    act(() => void client.setQueryData(qk.dashboard, waiting(1)));
+    expect(await screen.findByRole("link", { name: /去确认/ })).toHaveAttribute("href", "/inbox");
   });
 });
 

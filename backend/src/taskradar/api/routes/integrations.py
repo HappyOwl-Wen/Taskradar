@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 import logging
+from html import escape
 from typing import Any
 from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, File, Request, UploadFile
-from fastapi.responses import RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy import select
 
 from taskradar.api.deps import get_container
@@ -39,6 +40,7 @@ def google_status(c: Container = Depends(get_container)) -> dict[str, Any]:
         "redirect_uri": c.oauth.redirect_uri,
         "gmail": {"connected": c.oauth.connected("gmail"), "scopes": GMAIL_SCOPES, "source": _gmail_source(c)},
         "calendar": {**c.calendar.status(), "scopes": CALENDAR_SCOPES},
+        "last_authorization": c.oauth.last_result,
     }
 
 
@@ -77,18 +79,23 @@ def disconnect(service: str, c: Container = Depends(get_container)) -> dict[str,
     return {"connected": False}
 
 
-@router.get("/oauth/google/callback")
+@router.get("/oauth/google/callback", response_model=None)
 def oauth_callback(
     request: Request,
     state: str | None = None,
     code: str | None = None,
     error: str | None = None,
     c: Container = Depends(get_container),
-) -> RedirectResponse:
+) -> RedirectResponse | HTMLResponse:
+    desktop = getattr(request.app.state, "desktop", None)
     try:
         service = c.oauth.complete(state=state, code=code, error=error)
     except OAuthError as exc:
         log.info("OAuth callback rejected: %s", exc.code)
+        c.oauth.record_result(None, exc.code)
+        if desktop is not None:
+            desktop.activate()
+            return _finished_in_browser(c, service=None, error=exc.code)
         return RedirectResponse(f"/settings?oauth_error={quote(exc.code)}", status_code=303)
     if service == "gmail":
         account = None
@@ -116,4 +123,42 @@ def oauth_callback(
                 log.exception("Initial Gmail sync failed")
 
         request.app.state.executor.submit(initial_sync)
+    c.oauth.record_result(service, None)
+    if desktop is not None:
+        # Signed in in the system browser: the desktop window shows the result; this tab can be closed.
+        desktop.activate()
+        return _finished_in_browser(c, service=service, error=None)
     return RedirectResponse(f"/settings?connected={quote(service)}", status_code=303)
+
+
+_FINISHED = {
+    "zh-CN": {
+        "gmail": "Gmail 已连接",
+        "calendar": "Google 日历已连接",
+        "failed": "授权没有完成",
+        "back": "可以关闭这个浏览器标签页，回到 TaskRadar 窗口。",
+        "retry": "回到 TaskRadar 窗口后可以重试。错误代码：",
+    },
+    "en": {
+        "gmail": "Gmail is connected",
+        "calendar": "Google Calendar is connected",
+        "failed": "The authorization was not completed",
+        "back": "You can close this browser tab and return to the TaskRadar window.",
+        "retry": "You can try again in the TaskRadar window. Error code:",
+    },
+}
+
+
+def _finished_in_browser(c: Container, *, service: str | None, error: str | None) -> HTMLResponse:
+    language = c.settings.get().general.language
+    text = _FINISHED["en" if language == "en" else "zh-CN"]
+    title = text["failed"] if error else text.get(service or "", text["gmail"])
+    detail = f"{text['retry']} <code>{escape(error)}</code>" if error else text["back"]
+    html = f"""<!doctype html><html lang="{escape(language)}"><head><meta charset="utf-8"><title>TaskRadar</title>
+<meta name="color-scheme" content="light dark"></head>
+<body style="margin:0;min-height:100vh;display:grid;place-items:center;background:Canvas;color:CanvasText;
+font:15px/1.6 'Segoe UI Variable Text','Segoe UI','Microsoft YaHei UI',sans-serif">
+<main style="max-width:28rem;padding:24px;text-align:center">
+<h1 style="font-size:20px;line-height:28px;font-weight:600;margin:0 0 8px">{escape(title)}</h1>
+<p style="margin:0;opacity:.75">{detail}</p></main></body></html>"""
+    return HTMLResponse(html, status_code=200 if error is None else 400)

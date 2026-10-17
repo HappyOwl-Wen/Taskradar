@@ -1,9 +1,11 @@
 # TaskRadar architecture
 
 TaskRadar is a single local process: a FastAPI application that serves a JSON API and the built React
-dashboard on `127.0.0.1:8000`, runs a background scheduler, and stores everything in one SQLite database
-under `%LOCALAPPDATA%\TaskRadar`. External services (Gmail, Google Calendar, an optional LLM) are reached only
-through guarded connectors.
+interface on `127.0.0.1`, runs a background scheduler, and stores everything in one SQLite database
+under `%LOCALAPPDATA%\TaskRadar`. Normally that process is the desktop app: a native window (Microsoft Edge
+WebView2) shows the interface and the server runs in a thread of the same process, started and stopped with the
+window; `taskradar serve` runs the same server for a browser instead. External services (Gmail, Google Calendar,
+an optional LLM) are reached only through guarded connectors.
 
 ## Design principles
 
@@ -22,10 +24,10 @@ through guarded connectors.
 
 ```mermaid
 flowchart TB
-    subgraph Browser
-        UI[React dashboard]
+    subgraph Window["TaskRadar window (WebView2) or a browser"]
+        UI[React interface]
     end
-    subgraph Process["python -m taskradar (127.0.0.1:8000)"]
+    subgraph Process["TaskRadar.exe / python -m taskradar desktop|serve (127.0.0.1)"]
         MW[Security middleware<br/>Host allow-list · CSRF · CSP]
         API[FastAPI routes]
         SVC[Services<br/>ingest · tasks · documents · gmail_sync · calendar_sync · notifications]
@@ -204,7 +206,8 @@ suggestion; `/tasks/{id}/status`, `/tasks/batch`, `/tasks/{id}/merge`, `/events/
 (`/sources`, `/sources/{id}/sync`, `/sources/folders`, `/documents/upload`, `/documents`, `/messages`,
 `/sync-jobs`, `/failures`, `/agent-runs`, `/demo/*`), integrations (`/integrations/google/*`,
 `/oauth/google/callback`) and system (`/session`, `/system/status`, `/system/summary`, `/settings`, `/settings/llm-key`,
-`/notifications`, `/metrics`, `/data/export`, `/data/delete-all`, `/system/autostart`). Errors use one envelope:
+`/notifications`, `/metrics`, `/data/export`, `/data/delete-all`, `/system/autostart`, and `/desktop/state` in the
+desktop app). Errors use one envelope:
 `{"error": {"code", "message", "recoverable", "details"}}`; the UI translates codes. Responses to a change
 (status, batch, merge, suggestion decision) carry `undo_event_id` / `undo_event_ids`, which the UI offers as
 "Undo"; `/dashboard` returns an `attention` list ordered by time (overdue, due today, due tomorrow, due within
@@ -255,8 +258,9 @@ found, new tasks and suggestions counted in their own units, with the way to con
 outcome with "retry" for failures that may pass or "another file" otherwise), `RecheckDialog`, `TechnicalDetails` (scores, rule signals and IDs, labelled as uncalibrated
 debugging aids) and `lib/records.ts` (mails and files as one processing list, attachments under their mail,
 every outcome with a reason). Settings show one category at a time (`?section=`); unsaved edits are protected
-on every way out (another category, the sidebar, links, back/forward via `useBlocker`, closing the window via
-`beforeunload`), and appearance and language say that they apply at once. Gmail is connected step by step, with
+on every way out (another category, the sidebar, links, back/forward via `useBlocker`; closing the window via
+`beforeunload` in a browser, and in the desktop app through `useUnsavedChanges`, which tells the window so that
+Windows' own question appears), and appearance and language say that they apply at once. Gmail is connected step by step, with
 the technical details folded away. On touch screens `.touch-target` gives small controls a tap area of at
 least 44 px without changing their drawn size, and the buttons that finish a dialog or a decision are 44 px
 tall on phones (`DialogActions`: the buttons that finish a dialog stay in view at its bottom). In To confirm
@@ -267,25 +271,88 @@ from its start (the pane's scroll is reset; the list keeps its own) and, where t
 its title takes the focus. A fix for a date shows the whole sentence it came from, with the date and a weekday
 written next to it marked. A task the user just added is highlighted for a moment in whichever list shows it;
 `prefers-reduced-motion` switches off non-essential motion.
-Colours and sizes come from tokens in `src/index.css`: page background `#F8FAFC`, white cards with `#E2E8F0`
-borders, one light-blue selection colour (`--selected`) for the sidebar, tabs and lists, and fixed meanings for
-colour (brand blue for actions, violet for unconfirmed, orange for warnings and disputed dates, red for overdue,
-green for done, grey for everything descriptive); `text-page` / `text-section` set the heading scale.
+Colours, type, sizes and motion come from tokens in `src/index.css` (light and `.dark`). Surfaces: a light frame
+(`--frame` `#f2f3f5`; dark `#1d1e22`) holds the sidebar and the top bar, and the page sits on one white work
+surface (`--background`; dark `#25262b`) with a rounded top-left corner; sections are separated by space, thin
+dividers and a subtle tint (`--subtle`) rather than boxed cards. Colour has fixed meanings: indigo (`--primary`
+`#4f46e5`) for the one main action of a page, the selection (`--selected`) and focus; red for overdue and
+destructive actions, amber for warnings and disputed dates, green for done, a dashed grey outline (`--tentative`)
+for unconfirmed, grey for everything descriptive. Type: Segoe UI Variable Text/Display with Microsoft YaHei UI;
+`text-page` (20/28) and `text-section` (15/22) set the heading scale. Radii 6 px (controls), 8 px (menus,
+panels), 12 px (dialogs, the page); controls 32 px (28 / 24 small, 40 large); hover and pressed states are
+translucent overlays, disabled is 45 % opacity, and `Button` has a `loading` state (spinner, keeps its width,
+`aria-busy`). Icons are Lucide at a 1.75 stroke; an icon without an obvious meaning gets a label or a tooltip.
+Motion (`--duration-fast/normal/slow` 120/160/200 ms, `--ease-out`): pages fade in with a small rise
+(`.motion-page`), menus and popovers drop in from their side, dialogs and the drawer rise or slide in and leave
+faster than they came; closing elements take no pointer events, so quick clicks reach what is underneath. A
+ticked-off row folds away (`useFoldAway` keeps an inert ghost of it while its height collapses in 200 ms), so the
+rows below move up instead of jumping. The sidebar collapses to a 76 px rail with labels (remembered; automatic below
+1100 px) and becomes a drawer on phones. `prefers-reduced-motion` (in WebView2: Windows' "Animation effects")
+removes the motion.
 Pages: Today, To confirm, My tasks, Task detail, Add content, Settings, Activity and diagnostics.
 `npm run build` writes the
 bundle into `backend/src/taskradar/static`, which the backend serves (no external CDN; strict CSP).
 
+## Desktop app
+
+`taskradar desktop` (the default of the packaged program) is the server plus a window, in one process
+(`taskradar/desktop/`):
+
+* **Start** (`shell.run`). Per-monitor DPI awareness; one TaskRadar per data folder through the folder's file lock.
+  A second start finds the open window (by process and title) and brings it to the front, waits a moment when
+  the other one is just closing, or, when the folder is used by `taskradar serve` (`instance.json` records the
+  mode and URL), offers to open that in the browser. Without the WebView2 runtime it says so and offers
+  Microsoft's download page. The server takes port 8000 when it is free, otherwise any free loopback port.
+* **Server** (`server.BackgroundServer`): the same container and FastAPI app as `serve`, run by uvicorn in a thread;
+  the window shows a small start page (inline HTML in the saved or Windows theme) until the server answers, then
+  loads the app; if the server cannot start, an error page names the log file.
+* **Window** (pywebview on Microsoft Edge WebView2, WinForms): at least 720×440. `prefs.py` restores size, position
+  and maximised state from `desktop.json` when the title bar would still be reachable on a current screen,
+  rescaled when the DPI changed; otherwise it centres 1280×860 on the primary screen (maximised on small screens).
+  The native title bar takes the page's frame colour and text colour (DWM attributes) in light and dark.
+* **Page ↔ window.** The app's Content-Security-Policy forbids `eval`, which pywebview's JS bridge needs, so the
+  page reports to the window over HTTP: `PUT /api/desktop/state` (CSRF-protected; 404 outside the desktop app)
+  carries unsaved changes, theme and language. Closing with unsaved changes asks with a Windows message box
+  ("No" is the default). Only the app's own address loads in the window; other links (http, https, mailto) open
+  in the default browser; the context menu keeps only editing commands. Google sign-in opens in the default
+  browser; the callback on the local server records the result (`last_authorization` with a sequence number),
+  shows a "close this tab" page and brings the window forward, and the settings page, which polls the status,
+  takes the result over.
+* **Close.** Window geometry is saved, the server shuts down (at most 5 s for running requests) and the container
+  is disposed; then the process ends without waiting for the .NET runtime to unload (several seconds otherwise).
+  WebView2 keeps its profile (local storage such as the sidebar mode) in `<data>\webview`.
+* `TASKRADAR_WEBVIEW_DEBUG_PORT` opens WebView2's DevTools port for automated checks only
+  (`scripts/desktop-check`); it is never set by the app.
+
+**Installing** (`packaging/installer.py`, `taskradar/desktop/install.py`). `TaskRadar-Setup-<version>.exe` is a
+one-file PyInstaller program that carries the portable zip and shows `installer.html` in a small WebView2 window
+(pywebview's JS bridge on this local page; the API object keeps all state private, so the page reaches only
+`info`, `install`, `open_app` and `close`). It installs for the current user into
+`%LOCALAPPDATA%\Programs\TaskRadar`: it refuses a non-empty folder without its `install.json` ("not ours"),
+checks that every archive member stays inside the folder, unpacks into `TaskRadar.new` and swaps the folders
+(when the old one is in use, nothing changes and it says to close TaskRadar). It creates the Start menu and,
+optionally, the desktop shortcut (COM `IShellLinkW`) and the entry in Settings → Apps (HKCU `Uninstall` key with
+`UninstallString` = `TaskRadar.exe uninstall`); `install.json` records them. `TaskRadar.exe uninstall` asks first,
+refuses while a program runs from the folder, removes only shortcuts that point into the folder, the autostart
+entry only if it is TaskRadar's own, the registry entry only if its location matches, then has a hidden PowerShell
+remove the program folder once the uninstaller has ended. Data and secrets stay; the message says where.
+`--silent`, `--quiet` and path options make installing and uninstalling testable without touching the real Start
+menu or registry.
+
 ## Packaging
 
-`packaging/taskradar.spec` builds TaskRadar.exe with PyInstaller (`scripts\build-exe.ps1`). `packaging/launcher.py`
-runs the same command line as `python -m taskradar` (`serve` when double-clicked), titles the window and keeps it
-open when the start fails. The web UI, the migrations (Alembic loads them as files), the demo samples and the
-evaluation data are packed at the paths the code finds through `__file__`, so the code is the same as from source;
-of the Google client's discovery documents only Gmail and Calendar are kept (the others are about 100 MB).
+`packaging/taskradar.spec` builds the windowed TaskRadar.exe with PyInstaller (`scripts\build-exe.ps1`, which also
+builds the web UI, zips the portable folder and builds the installer around it). `packaging/launcher.py` runs the
+same command line as `python -m taskradar` (`desktop` when double-clicked); commands that print (`serve`, `migrate`,
+`eval`, `--version`, help) attach to the console they were started from, and a failed start is logged and shown in
+a message box. The web UI, the migrations (Alembic loads them as files), the demo samples, the evaluation data and
+the icon are packed at the paths the code finds through `__file__`, so the code is the same as from source; of the
+Google client's discovery documents only Gmail and Calendar are kept (the others are about 100 MB); pywebview's
+WinForms/WebView2 backend and pythonnet are included, the Qt and GTK backends are not.
 Differences when packaged (`taskradar.packaged`): `.env` is read next to the exe, autostart starts the exe itself
-(minimised, `--no-browser`), and `/api/system/status` reports `packaged`, so the OCR hint names `Install-OCR.cmd`.
+(minimised), and `/api/system/status` reports `packaged`, so the OCR hint names `Install-OCR.cmd`.
 Data, secrets and Tesseract stay where the source version keeps them. The folder build starts faster; the
-one-file build unpacks itself into `%TEMP%` on every start and removes that copy when its window is closed.
+one-file build (`-OneFile`) unpacks itself into `%TEMP%` on every start and removes that copy when it ends.
 
 ## Decisions and trade-offs
 
@@ -306,6 +373,14 @@ one-file build unpacks itself into `%TEMP%` on every start and removes that copy
   path traversal, redaction, folder policy, destructive confirmations, prompt injection).
 * An end-to-end test drives the HTTP API through the acceptance scenarios (Chinese PDF, German screenshot,
   reminders, confirmation, completion, failures, restart).
+* Desktop (`tests/test_desktop.py`): window placement (first start, small screens, a screen that is gone, an
+  unreachable title bar, DPI changes), saved preferences, the page ↔ window state route (CSRF, validation, 404
+  outside the app), the Google callback in the desktop app, the background server starting and stopping on a real
+  port, and installing for real into temporary folders with a test registry key: shortcuts, update, removal,
+  refusing a foreign folder, an archive escaping its folder and an update while TaskRadar runs, finding programs
+  that run from a folder, removing the program folder after the uninstaller ended, and the installer page's API.
+  `scripts/desktop-check/flow.mjs` drives the real window (WebView2 through the DevTools protocol, Win32 for the
+  window itself) through start → add content → confirm → view → complete.
 * `python -m taskradar eval` measures extraction and deduplication on labelled synthetic cases
   ([docs/EVALUATION.md](docs/EVALUATION.md)).
 * Frontend: Vitest + Testing Library for formatting/DST, the API client (CSRF retry, error envelope), edit diffs,
@@ -320,4 +395,7 @@ one-file build unpacks itself into `%TEMP%` on every start and removes that copy
   changes: the same completion box re-rendered with the updated task (done, reopened, undone), a task ticked
   off and brought back in the open list (no fade left behind), the next task after a decision (scroll position
   and focus), toasts kept clear of the decision bar, an import whose new task has a duplicate suggestion
-  (not counted as two things), and a renamed related task (one name in the note and in the comparison).
+  (not counted as two things), and a renamed related task (one name in the note and in the comparison). For the
+  desktop app: unsaved changes are reported to the window only there, Google sign-in in the system browser is
+  picked up by the settings page, a ticked-off row leaves an inert ghost while it folds away, buttons keep their
+  width while loading, and the import result leads to "To confirm" only while something still waits there.

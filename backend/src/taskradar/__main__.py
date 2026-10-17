@@ -1,4 +1,7 @@
-"""Command line entry point: ``python -m taskradar [serve|migrate|demo-files|eval]``."""
+"""Command line entry point: ``python -m taskradar [desktop|serve|migrate|demo-files|eval|uninstall]``.
+
+Without a command, TaskRadar.exe opens the desktop window and ``python -m taskradar`` starts the browser version.
+"""
 
 from __future__ import annotations
 
@@ -11,9 +14,12 @@ import sys
 import threading
 import webbrowser
 from pathlib import Path
-from typing import BinaryIO
+from typing import TYPE_CHECKING, BinaryIO
 
 from taskradar import __version__
+
+if TYPE_CHECKING:
+    from taskradar.config import AppConfig
 
 log = logging.getLogger("taskradar")
 
@@ -67,7 +73,7 @@ def _load_env_files() -> None:
         load_dotenv(candidate)
 
 
-def cmd_serve(args: argparse.Namespace) -> int:
+def _config(args: argparse.Namespace) -> AppConfig:
     from taskradar.config import load_config
     from taskradar.logging_setup import configure_logging
 
@@ -75,18 +81,44 @@ def cmd_serve(args: argparse.Namespace) -> int:
     overrides: dict[str, object] = {}
     if args.port:
         overrides["port"] = args.port
-    if args.no_browser:
+    if getattr(args, "no_browser", False):
         overrides["open_browser"] = False
     if args.data_dir:
         overrides["data_dir"] = Path(args.data_dir).expanduser().resolve()
     config = load_config(**overrides)
     configure_logging(config.logs_dir, config.log_level)
+    return config
 
+
+def cmd_desktop(args: argparse.Namespace) -> int:
+    from taskradar.desktop.shell import run
+
+    config = _config(args)
+    # ``--no-browser`` came from autostart entries of earlier versions: start quietly, in the taskbar.
+    code = run(config, minimized=args.minimized or args.no_browser, debug=args.debug)
+    # Window closed, server stopped, database closed, position saved: end the process now. Left to itself, the
+    # process would spend seconds shutting down the .NET runtime of the window (Python's unload, then the runtime's
+    # own finalizer timeout), and opening TaskRadar again meanwhile would find the old one still running.
+    logging.shutdown()
+    if sys.platform == "win32":
+        import ctypes
+
+        kernel32 = ctypes.windll.kernel32
+        kernel32.TerminateProcess(kernel32.GetCurrentProcess(), code)
+    os._exit(code)
+
+
+def cmd_serve(args: argparse.Namespace) -> int:
+    from taskradar.desktop.instance import clear_instance, read_instance, write_instance
+
+    config = _config(args)
     lock = InstanceLock(config.data_dir / "taskradar.lock")
     if not lock.acquire():
-        print(f"TaskRadar is already running for this data folder: {config.base_url}")
+        running = read_instance(config.data_dir)
+        url = str(running["url"]) if running and running.get("url") else config.base_url
+        print(f"TaskRadar is already running for this data folder: {url}")
         if config.open_browser:
-            webbrowser.open(config.base_url)
+            webbrowser.open(url)
         return 0
     if not _port_free(config.host, config.port):
         print(f"Port {config.port} is already in use. Set TASKRADAR_PORT or use --port to choose another port.")
@@ -104,7 +136,11 @@ def cmd_serve(args: argparse.Namespace) -> int:
         log.warning("No OCR engine found - scanned PDFs and screenshots cannot be read. See README (Tesseract).")
     if config.open_browser:
         threading.Timer(1.5, lambda: webbrowser.open(config.base_url)).start()
-    uvicorn.run(app, host=config.host, port=config.port, log_config=None, access_log=False, server_header=False)
+    write_instance(config.data_dir, mode="serve", url=config.base_url)
+    try:
+        uvicorn.run(app, host=config.host, port=config.port, log_config=None, access_log=False, server_header=False)
+    finally:
+        clear_instance(config.data_dir)
     return 0
 
 
@@ -140,15 +176,32 @@ def cmd_eval(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_uninstall(args: argparse.Namespace) -> int:
+    from taskradar.desktop.install import uninstall_command
+
+    return uninstall_command(quiet=args.quiet)
+
+
 def main(argv: list[str] | None = None) -> int:
+    from taskradar.packaged import is_packaged
+
     parser = argparse.ArgumentParser(prog="taskradar", description="TaskRadar - personal obligation radar")
     parser.add_argument("--version", action="version", version=f"TaskRadar {__version__}")
     sub = parser.add_subparsers(dest="command")
+    data_help = r"data folder (default: %%LOCALAPPDATA%%\TaskRadar)"
 
-    serve = sub.add_parser("serve", help="start the local server (default)")
+    desktop = sub.add_parser("desktop", help="open the TaskRadar window (default of TaskRadar.exe)")
+    desktop.add_argument("--port", type=int, default=None, help="preferred port (another free one if it is taken)")
+    desktop.add_argument("--data-dir", default=None, help=data_help)
+    desktop.add_argument("--minimized", action="store_true", help="start in the taskbar (autostart)")
+    desktop.add_argument("--no-browser", action="store_true", help=argparse.SUPPRESS)
+    desktop.add_argument("--debug", action="store_true", help="developer tools and the browser's context menu")
+    desktop.set_defaults(func=cmd_desktop)
+
+    serve = sub.add_parser("serve", help="start the local server and use TaskRadar in the browser")
     serve.add_argument("--port", type=int, default=None)
     serve.add_argument("--no-browser", action="store_true")
-    serve.add_argument("--data-dir", default=None, help=r"data folder (default: %%LOCALAPPDATA%%\TaskRadar)")
+    serve.add_argument("--data-dir", default=None, help=data_help)
     serve.set_defaults(func=cmd_serve)
 
     migrate = sub.add_parser("migrate", help="apply database migrations")
@@ -164,9 +217,13 @@ def main(argv: list[str] | None = None) -> int:
     ev.add_argument("--json", default=None, help="also write the report as JSON")
     ev.set_defaults(func=cmd_eval)
 
+    uninstall = sub.add_parser("uninstall", help="remove the installed TaskRadar (your data is kept)")
+    uninstall.add_argument("--quiet", action="store_true", help="no questions (for scripts)")
+    uninstall.set_defaults(func=cmd_uninstall)
+
     argv = list(sys.argv[1:] if argv is None else argv)
     if not argv or (argv[0].startswith("--") and argv[0] not in ("--version", "-h", "--help")):
-        argv = ["serve", *argv]
+        argv = ["desktop" if is_packaged() else "serve", *argv]
     args = parser.parse_args(argv)
     if os.environ.get("PYTHONIOENCODING") is None and hasattr(sys.stdout, "reconfigure"):
         with contextlib.suppress(AttributeError, ValueError):

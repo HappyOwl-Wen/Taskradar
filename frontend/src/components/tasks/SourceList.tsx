@@ -17,7 +17,7 @@ const RELATION_TONE: Record<TaskSourceEntry["relation"], BadgeTone> = {
   deadline_update: "urgent",
   completion_evidence: "success",
   related: "outline",
-  manual_merge: "violet",
+  manual_merge: "primary",
 };
 
 const SOURCE_ICONS: Record<"demo" | "mail" | "image" | "pdf" | "manual", LucideIcon> = {

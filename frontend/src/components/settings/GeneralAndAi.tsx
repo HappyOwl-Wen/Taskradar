@@ -144,7 +144,7 @@ export function AiSection({ settings }: { settings: Settings }) {
     >
       <p className="flex items-center gap-2 text-sm">
         <span className="text-muted-foreground">{t("settings.ai.activeMode")}:</span>
-        <Badge tone={mode === "llm" ? "violet" : "success"}>
+        <Badge tone={mode === "llm" ? "primary" : "success"}>
           {mode === "llm" ? <Sparkles /> : <ShieldCheck />}
           {mode === "llm" ? t("agentMode.llm") : t("agentMode.rules")}
         </Badge>
@@ -188,7 +188,7 @@ export function AiSection({ settings }: { settings: Settings }) {
       {enabled ? (
         <>
           <ApiKeyField />
-          <div className="grid gap-3 rounded-lg border border-high/40 bg-high/5 p-4">
+          <div className="grid gap-3 rounded-lg bg-urgent/8 p-4">
             <p className="text-sm font-semibold">{t("settings.ai.consentTitle")}</p>
             <p className="text-[13px] leading-relaxed text-muted-foreground">{t("settings.ai.consentBody")}</p>
             <Label className="items-start font-normal leading-snug">

@@ -10,9 +10,9 @@ export const Dialog = DialogPrimitive.Root;
 export const DialogTrigger = DialogPrimitive.Trigger;
 export const DialogClose = DialogPrimitive.Close;
 
-const overlayClass = "fixed inset-0 z-50 bg-black/45 backdrop-blur-[1px]";
+const overlayClass = "motion-overlay fixed inset-0 z-50 bg-black/40 dark:bg-black/55";
 const contentClass =
-  "fixed top-[50%] left-[50%] z-50 grid max-h-[calc(100dvh-2rem)] w-full max-w-[calc(100%-2rem)] translate-x-[-50%] translate-y-[-50%] gap-4 overflow-y-auto rounded-xl border bg-card p-6 shadow-xl outline-none sm:max-w-lg";
+  "fixed top-[50%] left-[50%] z-50 grid max-h-[calc(100dvh-2rem)] w-full max-w-[calc(100%-2rem)] translate-x-[-50%] translate-y-[-50%] gap-4 overflow-y-auto rounded-xl border bg-card p-6 shadow-[0_24px_64px_-12px_rgb(0_0_0/0.28)] outline-none sm:max-w-lg";
 
 /**
  * The buttons that finish a dialog. On phones they stay in view at the bottom while the content scrolls and
@@ -35,16 +35,21 @@ export function DialogContent({
   className,
   children,
   showClose = true,
+  motion = "dialog",
   ...props
-}: ComponentProps<typeof DialogPrimitive.Content> & { showClose?: boolean }) {
+}: ComponentProps<typeof DialogPrimitive.Content> & { showClose?: boolean; motion?: "dialog" | "drawer" }) {
   const { t } = useTranslation();
   return (
     <DialogPrimitive.Portal>
       <DialogPrimitive.Overlay className={overlayClass} />
-      <DialogPrimitive.Content data-slot="dialog-content" className={cn(contentClass, className)} {...props}>
+      <DialogPrimitive.Content
+        data-slot="dialog-content"
+        className={cn(contentClass, motion === "drawer" ? "motion-drawer" : "motion-dialog", className)}
+        {...props}
+      >
         {children}
         {showClose ? (
-          <DialogPrimitive.Close className="touch-target absolute top-3 right-3 grid size-8 place-items-center rounded-md text-muted-foreground opacity-80 transition-opacity hover:bg-accent hover:opacity-100 focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none">
+          <DialogPrimitive.Close className="touch-target absolute top-3 right-3 grid size-8 place-items-center rounded-md text-muted-foreground transition-colors duration-(--duration-fast) hover:bg-accent hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none active:bg-accent-strong">
             <X className="size-4" />
             <span className="sr-only">{t("common.close")}</span>
           </DialogPrimitive.Close>
@@ -63,7 +68,7 @@ export function DialogFooter({ className, ...props }: ComponentProps<"div">) {
 }
 
 export function DialogTitle({ className, ...props }: ComponentProps<typeof DialogPrimitive.Title>) {
-  return <DialogPrimitive.Title className={cn("text-lg leading-tight font-semibold", className)} {...props} />;
+  return <DialogPrimitive.Title className={cn("font-display text-lg leading-tight font-semibold", className)} {...props} />;
 }
 
 export function DialogDescription({ className, ...props }: ComponentProps<typeof DialogPrimitive.Description>) {
@@ -103,9 +108,9 @@ export function ConfirmDialog({
     <AlertPrimitive.Root open={open} onOpenChange={onOpenChange}>
       <AlertPrimitive.Portal>
         <AlertPrimitive.Overlay className={overlayClass} />
-        <AlertPrimitive.Content className={cn(contentClass, "sm:max-w-md")}>
+        <AlertPrimitive.Content className={cn(contentClass, "motion-dialog sm:max-w-md")}>
           <div className="grid gap-2">
-            <AlertPrimitive.Title className="text-lg font-semibold">{title}</AlertPrimitive.Title>
+            <AlertPrimitive.Title className="font-display text-lg font-semibold">{title}</AlertPrimitive.Title>
             <AlertPrimitive.Description asChild>
               <div className="text-sm leading-relaxed text-muted-foreground">{description}</div>
             </AlertPrimitive.Description>
@@ -117,7 +122,8 @@ export function ConfirmDialog({
             </AlertPrimitive.Cancel>
             <Button
               variant={destructive ? "destructive" : "default"}
-              disabled={pending || confirmDisabled}
+              disabled={confirmDisabled}
+              loading={pending}
               onClick={onConfirm}
             >
               {confirmLabel}

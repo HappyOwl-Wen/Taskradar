@@ -67,7 +67,7 @@ function PreviewDialog({ task, open, onOpenChange, connected }: { task: TaskDeta
         {preview.error ? <ErrorState error={preview.error} onRetry={() => void preview.refetch()} /> : null}
         {p ? (
           <div className="grid gap-3">
-            <dl className="grid grid-cols-[7rem_1fr] gap-x-3 gap-y-2 rounded-lg border bg-muted/40 p-4 text-sm">
+            <dl className="grid grid-cols-[7rem_1fr] gap-x-3 gap-y-2 rounded-lg bg-subtle p-4 text-sm">
               <dt className="text-muted-foreground">{t("calendar.eventTitle")}</dt>
               <dd className="font-medium">{p.event.summary}</dd>
               <dt className="text-muted-foreground">{t("calendar.when")}</dt>
@@ -206,12 +206,8 @@ export function CalendarCard({ task }: { task: TaskDetail }) {
           </div>
         ) : null}
         <div className="flex flex-wrap gap-2">
-          <Button
-            variant={link && !removed && !outdated && link.status === "synced" ? "outline" : "default"}
-            size="sm"
-            onClick={() => setOpen(true)}
-            disabled={!known}
-          >
+          {/* Secondary on the task page, whose main action is ticking the task off. */}
+          <Button variant="outline" size="sm" onClick={() => setOpen(true)} disabled={!known}>
             {link && !removed ? <RefreshCw /> : <CalendarPlus />}
             {link && !removed ? t("calendar.update") : removed ? t("calendar.reAdd") : t("calendar.preview")}
           </Button>

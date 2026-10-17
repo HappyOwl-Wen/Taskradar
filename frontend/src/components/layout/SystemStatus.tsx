@@ -97,7 +97,7 @@ export function SystemStatusCard() {
   if (isLoading) return <LoadingRows rows={1} />;
   if (error || !data) {
     return (
-      <p className="flex items-center gap-2 rounded-lg border bg-card px-4 py-2 text-[13px] text-muted-foreground">
+      <p className="flex items-center gap-2 rounded-lg bg-subtle px-4 py-2 text-[13px] text-muted-foreground">
         {t("systemStatus.unavailable")}
         {details}
       </p>
@@ -105,7 +105,7 @@ export function SystemStatusCard() {
   }
   if (notable.length === 0) {
     return (
-      <p className="flex items-center gap-2 rounded-lg border bg-card px-4 py-2 text-sm">
+      <p className="flex items-center gap-2 rounded-lg bg-subtle px-4 py-2 text-sm">
         <CircleCheck className="size-4 shrink-0 text-success" aria-hidden />
         <span>{t("systemStatus.okLine")}</span>
         {details}
@@ -114,16 +114,16 @@ export function SystemStatusCard() {
   }
   return (
     <section className="grid gap-2">
-      <div className="flex min-h-7 items-center justify-between gap-2">
+      <div className="flex min-h-8 items-center justify-between gap-2">
         <h2 className="text-section font-semibold">{t("systemStatus.title")}</h2>
         {details}
       </div>
-      <div className="rounded-lg border bg-card px-4 py-1">
+      <div className="rounded-lg bg-subtle px-4 py-1">
         <p className="flex items-center gap-2 py-2.5 text-sm font-medium">
           <TriangleAlert className={cn("size-4", data.overall === "problem" ? "text-destructive" : "text-urgent")} aria-hidden />
           {headline(data, t)}
         </p>
-        <ul className="divide-y border-t">
+        <ul className="divide-y divide-border/70 border-t border-border/70">
           {notable.slice(0, 3).map((item) => (
             <StatusItemRow key={`${item.code}-${item.area}-${String(item.params.name ?? "")}`} item={item} compact />
           ))}
@@ -141,14 +141,14 @@ export function SystemStatusList() {
   if (!data) return null;
   if (data.items.length === 0) {
     return (
-      <p className="flex items-center gap-2 rounded-lg border bg-card px-4 py-3 text-sm">
+      <p className="flex items-center gap-2 rounded-lg bg-subtle px-4 py-3 text-sm">
         <CircleCheck className="size-4 text-success" aria-hidden /> {t("systemStatus.ok")}
         <span className="text-[13px] text-muted-foreground">· {t("systemStatus.okHint")}</span>
       </p>
     );
   }
   return (
-    <ul className="divide-y rounded-lg border bg-card">
+    <ul className="divide-y border-y">
       {data.items.map((item) => (
         <StatusItemRow key={`${item.code}-${item.area}-${String(item.params.name ?? "")}`} item={item} />
       ))}

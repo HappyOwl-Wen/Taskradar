@@ -22,6 +22,8 @@ import { EmptyState, ErrorState, LoadingRows } from "@/components/ui/states";
 import { TabCount, Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { translateKey } from "@/i18n";
 import { api, type TaskQuery } from "@/lib/api";
+import { useFoldAway } from "@/lib/foldAway";
+import { cn } from "@/lib/utils";
 import { useAction, useDashboard, useTasks } from "@/lib/queries";
 import { CATEGORIES, URGENCIES, type TaskStatus, type TaskSummary } from "@/lib/types";
 
@@ -155,6 +157,8 @@ export default function TasksPage() {
   }
   const total = data?.total ?? 0;
   const chosen = items.filter((i) => selected.has(i.id)).map((i) => i.id);
+  // A task ticked off here folds away once the list has caught up; another view or filter shows at once.
+  const rows = useFoldAway(items, JSON.stringify([view, q, categories, urgencies, sourceKinds, sampleOnly, sort]));
 
   const endSelection = () => {
     setSelecting(false);
@@ -272,8 +276,8 @@ export default function TasksPage() {
         </div>
       </div>
 
-      <div className="overflow-hidden rounded-lg border bg-card">
-        <div className="flex min-h-11 flex-wrap items-center gap-x-3 gap-y-1.5 border-b bg-muted/30 px-3 py-1.5">
+      <div>
+        <div className="flex min-h-10 flex-wrap items-center gap-x-3 gap-y-1.5 border-b px-3 py-1">
           {selecting ? (
             <>
               <Checkbox
@@ -355,16 +359,17 @@ export default function TasksPage() {
             }
           />
         ) : null}
-        <ul className="divide-y">
-          {items.map((task) => (
-            <li key={task.id}>
+        <ul className={cn("divide-y", rows.length > 0 && "border-b")}>
+          {rows.map(({ item: task, leaving: gone }) => (
+            <li key={task.id} className={gone ? "motion-row-out" : undefined} aria-hidden={gone || undefined} inert={gone}>
+              <div>
               <TaskListItem
                 task={task}
                 variant="row"
                 selected={selecting ? selected.has(task.id) : undefined}
                 onSelectedChange={selecting ? (on) => toggle(task.id, on) : undefined}
                 leading={selecting ? undefined : <CompleteToggle task={task} onLeaving={(on) => markLeaving(task, on)} />}
-                leaving={view === "active" && leaving.get(task.id) === task.status}
+                leaving={gone || (view === "active" && leaving.get(task.id) === task.status)}
                 actions={
                   selecting ? undefined : (
                     <>
@@ -374,11 +379,12 @@ export default function TasksPage() {
                   )
                 }
               />
+              </div>
             </li>
           ))}
         </ul>
         {total > items.length ? (
-          <div className="flex flex-wrap items-center justify-center gap-3 border-t px-3 py-2.5 text-[13px] text-muted-foreground">
+          <div className="flex flex-wrap items-center justify-center gap-3 px-3 py-3 text-[13px] text-muted-foreground">
             {t("tasks.countPartial", { shown: items.length, count: total })}
             <Button variant="outline" size="xs" onClick={() => setLimit((n) => n + PAGE)} disabled={isFetching}>
               {t("common.showMore")}

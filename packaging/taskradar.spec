@@ -1,8 +1,10 @@
-# PyInstaller spec for TaskRadar.exe. Build it with scripts\build-exe.ps1, which builds the web UI first.
+# PyInstaller spec for TaskRadar.exe, the desktop app. Build it with scripts\build-exe.ps1, which builds the web UI
+# first and then the installer (packaging/installer.spec) around the result.
 #
-# The result runs without Python or Node.js: the backend, the built web UI, the database migrations and the
-# synthetic demo files are inside. Data stays in %LOCALAPPDATA%\TaskRadar (as when running from source);
-# nothing personal is packed. TASKRADAR_ONEFILE=1 makes one self-unpacking TaskRadar.exe instead of a folder.
+# The result runs without Python or Node.js: the backend, the built web UI, the window (pywebview on the Microsoft
+# Edge WebView2 runtime that is part of Windows 11), the database migrations and the synthetic demo files are
+# inside. Data stays in %LOCALAPPDATA%\TaskRadar (as when running from source); nothing personal is packed.
+# TASKRADAR_ONEFILE=1 makes one self-unpacking TaskRadar.exe instead of a folder.
 
 import os
 from pathlib import Path
@@ -38,6 +40,8 @@ datas = [
     *[(str(p), "taskradar/demo/samples") for p in sorted((PKG / "demo" / "samples").iterdir()) if p.is_file()],
     (str(PKG / "demo" / "eval_dataset.json"), "taskradar/demo"),
     (str(PKG / "demo" / "eval_holdout.json"), "taskradar/demo"),
+    # The window's icon (title bar, Alt+Tab).
+    (str(PKG / "desktop" / "taskradar.ico"), "taskradar/desktop"),
     # Entry points: APScheduler finds its triggers and executors, keyring its Windows backend, through them.
     *copy_metadata("apscheduler"),
     *copy_metadata("keyring"),
@@ -54,6 +58,11 @@ hiddenimports = [
     *collect_submodules("apscheduler.jobstores"),
     "keyring.backends.Windows",
     "sqlalchemy.dialects.sqlite",
+    # The window: pywebview's Windows platform (WinForms + WebView2 through pythonnet); pywebview's own PyInstaller
+    # hook adds its scripts and the WebView2 DLLs.
+    "webview.platforms.winforms",
+    "webview.platforms.edgechromium",
+    "clr",
 ]
 
 a = Analysis(  # noqa: F821
@@ -62,7 +71,7 @@ a = Analysis(  # noqa: F821
     binaries=collect_dynamic_libs("pymupdf"),
     datas=datas,
     hiddenimports=hiddenimports,
-    excludes=["tkinter", "pytest", "_pytest", "mypy", "ruff", "IPython"],
+    excludes=["tkinter", "pytest", "_pytest", "mypy", "ruff", "IPython", "PyQt5", "PyQt6", "PySide2", "PySide6", "gi"],
     noarchive=False,
 )
 
@@ -106,7 +115,7 @@ exe_options = dict(
     name="TaskRadar",
     icon=str(ROOT / "packaging" / "taskradar.ico"),
     version=version_info,
-    console=True,  # the window shows that TaskRadar runs; closing it stops TaskRadar
+    console=False,  # a windowed program: the TaskRadar window shows that it runs; closing it stops TaskRadar
     upx=False,  # compressed executables are flagged by virus scanners more often
     debug=False,
     strip=False,

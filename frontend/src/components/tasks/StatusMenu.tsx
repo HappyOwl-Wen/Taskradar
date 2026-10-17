@@ -19,7 +19,7 @@ import { STATUS_ICON, STATUS_TEXT } from "./meta";
 
 // Menu items colour their icons grey by default; these win over that rule.
 const STATUS_TEXT_MENU: Record<TaskStatus, string> = {
-  candidate: "text-violet!",
+  candidate: "text-tentative!",
   confirmed: "text-primary!",
   in_progress: "text-upcoming!",
   waiting_for_reply: "text-high!",

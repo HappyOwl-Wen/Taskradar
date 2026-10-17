@@ -8,7 +8,8 @@ import { ProcessingRecords } from "@/components/sources/ProcessingRecords";
 import { AddFolderForm, AddSourceMenu, DemoRow, FolderRows, GmailRow, SampleRow, UploadsRow } from "@/components/sources/SourceCards";
 import { ErrorState, LoadingRows } from "@/components/ui/states";
 import { useTimezone } from "@/lib/hooks";
-import { useSources } from "@/lib/queries";
+import { useSources, useWaitingCount } from "@/lib/queries";
+import { importTotals, useLastImport } from "@/lib/upload";
 
 function SectionTitle({ id, title, hint, aside }: { id?: string; title: string; hint?: string; aside?: React.ReactNode }) {
   return (
@@ -45,6 +46,12 @@ export default function SourcesPage() {
   const demo = sources.find((s) => s.kind === "demo_mail");
   const uploads = sources.find((s) => s.kind === "upload");
   const testData = sources.find((s) => s.kind === "sample_upload");
+  // Right after an import that found something, confirming it is the next step (while it still waits): that button
+  // leads, this one steps back.
+  const [last] = useLastImport();
+  const totals = last ? importTotals(last.results) : null;
+  const waiting = useWaitingCount();
+  const toConfirm = Boolean(totals && totals.created + totals.suggestions > 0 && waiting !== 0);
   return (
     <div className="grid gap-6">
       {/* Adding something is what this page is for: importing is its main action. */}
@@ -53,7 +60,7 @@ export default function SourcesPage() {
           <h1 className="text-page font-semibold">{t("sources.title")}</h1>
           <p className="text-[13px] text-muted-foreground">{t("sources.description")}</p>
         </div>
-        <UploadButton variant="default" compact={false} />
+        <UploadButton variant={toConfirm ? "outline" : "default"} compact={false} />
       </header>
 
       <LastImportCard />
@@ -63,7 +70,7 @@ export default function SourcesPage() {
         {isLoading ? <LoadingRows rows={3} /> : null}
         {error ? <ErrorState error={error} onRetry={() => void refetch()} /> : null}
         {data ? (
-          <ul className="divide-y rounded-lg border bg-card">
+          <ul className="divide-y border-y">
             <GmailRow sources={sources} timezone={timezone} />
             {demo ? <DemoRow source={demo} timezone={timezone} /> : null}
             <FolderRows sources={sources} timezone={timezone} />

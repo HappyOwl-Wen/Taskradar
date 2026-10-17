@@ -11,6 +11,7 @@ import { TooltipProvider } from "@/components/ui/menu";
 import { LoadingRows } from "@/components/ui/states";
 import { rememberLanguage } from "@/i18n";
 import { ApiError, loadSession } from "@/lib/api";
+import { reportAppearance, setDesktopApp } from "@/lib/desktop";
 import { setTheme, useTheme } from "@/lib/theme";
 import NotFoundPage, { RouteError } from "@/pages/NotFoundPage";
 
@@ -55,9 +56,27 @@ const router = createBrowserRouter([
   },
 ]);
 
+/** Keeps the desktop window's title bar and start screen in the page's colours and language. */
+function DesktopSync() {
+  const { i18n } = useTranslation();
+  useEffect(() => {
+    const root = document.documentElement;
+    const send = () => reportAppearance(root.classList.contains("dark") ? "dark" : "light", i18n.language);
+    send();
+    const observer = new MutationObserver(send);
+    observer.observe(root, { attributes: true, attributeFilter: ["class"] });
+    i18n.on("languageChanged", send);
+    return () => {
+      observer.disconnect();
+      i18n.off("languageChanged", send);
+    };
+  }, [i18n]);
+  return null;
+}
+
 function Splash() {
   return (
-    <div className="grid min-h-dvh place-items-center">
+    <div className="grid min-h-dvh place-items-center bg-frame">
       <Radar className="size-8 animate-pulse text-primary" aria-label="TaskRadar" />
     </div>
   );
@@ -88,6 +107,7 @@ function SessionGate() {
   useEffect(() => {
     const s = session.data;
     if (!s) return;
+    setDesktopApp(Boolean(s.desktop));
     if (s.language !== i18n.language) {
       void i18n.changeLanguage(s.language);
       rememberLanguage(s.language);
@@ -99,7 +119,12 @@ function SessionGate() {
 
   if (session.isLoading) return <Splash />;
   if (session.error) return <BackendDown onRetry={() => void session.refetch()} retrying={session.isFetching} />;
-  return <RouterProvider router={router} />;
+  return (
+    <>
+      {session.data?.desktop ? <DesktopSync /> : null}
+      <RouterProvider router={router} />
+    </>
+  );
 }
 
 export default function App() {
@@ -108,13 +133,34 @@ export default function App() {
       <TooltipProvider delayDuration={300}>
         <SessionGate />
         <Toaster
-          richColors
           closeButton
           position="bottom-right"
+          // The app's own surfaces: a quiet panel with a coloured icon, and the action as an indigo button.
+          style={
+            {
+              "--normal-bg": "var(--popover)",
+              "--normal-text": "var(--popover-foreground)",
+              "--normal-border": "var(--border)",
+            } as React.CSSProperties
+          }
           // Above an action bar at the bottom of the screen (see keepToastsClear), so the next decision stays reachable.
           offset={{ bottom: "calc(24px + var(--toast-clearance, 0px))" }}
           mobileOffset={{ bottom: "calc(16px + var(--toast-clearance, 0px))" }}
-          toastOptions={{ className: "whitespace-pre-line" }}
+          toastOptions={{
+            className: "whitespace-pre-line rounded-lg! shadow-[0_8px_24px_-6px_rgb(0_0_0/0.2)]! font-sans!",
+            classNames: {
+              title: "font-medium! leading-snug!",
+              description: "text-muted-foreground!",
+              actionButton:
+                "bg-primary! text-primary-foreground! h-7! rounded-md! px-2.5! text-[13px]! font-medium! transition-colors hover:bg-primary-hover!",
+              cancelButton: "bg-secondary! text-secondary-foreground! h-7! rounded-md! px-2.5! text-[13px]!",
+              closeButton: "bg-popover! text-muted-foreground! border-border! hover:text-foreground!",
+              success: "[&_[data-icon]]:text-success",
+              error: "[&_[data-icon]]:text-destructive",
+              warning: "[&_[data-icon]]:text-urgent",
+              info: "[&_[data-icon]]:text-primary",
+            },
+          }}
         />
       </TooltipProvider>
     </QueryClientProvider>

@@ -7,7 +7,8 @@ export const DropdownMenu = MenuPrimitive.Root;
 export const DropdownMenuTrigger = MenuPrimitive.Trigger;
 export const DropdownMenuGroup = MenuPrimitive.Group;
 
-const panel = "z-50 min-w-[10rem] overflow-hidden rounded-lg border bg-popover p-1 text-popover-foreground shadow-lg";
+const panel =
+  "motion-popover z-50 min-w-[10rem] overflow-hidden rounded-lg border bg-popover p-1 text-popover-foreground shadow-[0_8px_24px_-6px_rgb(0_0_0/0.18)]";
 
 export function DropdownMenuContent({ className, sideOffset = 6, ...props }: ComponentProps<typeof MenuPrimitive.Content>) {
   return (
@@ -18,7 +19,7 @@ export function DropdownMenuContent({ className, sideOffset = 6, ...props }: Com
 }
 
 const itemClass =
-  "relative flex cursor-default items-center gap-2 rounded-md px-2 py-1.5 text-sm outline-none select-none focus:bg-accent focus:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50 [&_svg]:size-4 [&_svg]:shrink-0 [&_svg]:text-muted-foreground";
+  "relative flex min-h-8 cursor-default items-center gap-2 rounded-md px-2 py-1.5 text-sm outline-none select-none transition-colors duration-(--duration-fast) focus:bg-accent focus:text-accent-foreground active:bg-accent-strong data-[disabled]:pointer-events-none data-[disabled]:opacity-45 [&_svg]:size-4 [&_svg]:shrink-0 [&_svg]:text-muted-foreground";
 
 export function DropdownMenuItem({
   className,
@@ -80,7 +81,10 @@ export function PopoverContent({ className, align = "end", sideOffset = 6, ...pr
       <PopoverPrimitive.Content
         align={align}
         sideOffset={sideOffset}
-        className={cn("z-50 rounded-xl border bg-popover text-popover-foreground shadow-lg outline-none", className)}
+        className={cn(
+          "motion-popover z-50 rounded-lg border bg-popover text-popover-foreground shadow-[0_8px_24px_-6px_rgb(0_0_0/0.18)] outline-none",
+          className,
+        )}
         {...props}
       />
     </PopoverPrimitive.Portal>
@@ -98,7 +102,7 @@ export function Tip({ content, children, side = "top" }: { content: ReactNode; c
         <TooltipPrimitive.Content
           side={side}
           sideOffset={6}
-          className="z-50 max-w-xs rounded-md bg-foreground px-2.5 py-1.5 text-xs leading-snug text-background shadow-md"
+          className="motion-popover z-50 max-w-xs rounded-md bg-foreground px-2.5 py-1.5 text-xs leading-snug text-background shadow-md"
         >
           {content}
         </TooltipPrimitive.Content>

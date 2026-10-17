@@ -11,6 +11,7 @@ import { SimpleSelect } from "@/components/ui/select";
 import { ErrorState, LoadingRows } from "@/components/ui/states";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { translateKey } from "@/i18n";
+import { useUnsavedChanges } from "@/lib/desktop";
 import { DirtyReporter } from "@/lib/settings";
 import { useSettings } from "@/lib/queries";
 import type { Settings } from "@/lib/types";
@@ -100,13 +101,8 @@ export default function SettingsPage() {
     });
   }, []);
 
-  // Closing or reloading the window with unsaved edits asks first (the browser shows its own prompt).
-  useEffect(() => {
-    if (dirty.size === 0) return;
-    const warn = (e: BeforeUnloadEvent) => e.preventDefault();
-    window.addEventListener("beforeunload", warn);
-    return () => window.removeEventListener("beforeunload", warn);
-  }, [dirty.size]);
+  // Closing the window (desktop app) or the tab with unsaved edits asks first.
+  useUnsavedChanges(dirty.size > 0);
 
   // Every in-app navigation away from the current drafts (another category or another page) asks first.
   const blocker = useBlocker(
@@ -157,11 +153,13 @@ export default function SettingsPage() {
                 onClick={() => select(s)}
                 aria-current={section === s ? "page" : undefined}
                 className={cn(
-                  "flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-left text-sm text-muted-foreground transition-colors outline-none hover:bg-accent hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/40",
-                  section === s && "bg-selected font-medium text-selected-foreground hover:bg-selected hover:text-selected-foreground",
+                  "relative flex h-8 items-center gap-2.5 rounded-md px-2.5 text-left text-sm text-muted-foreground transition-colors duration-(--duration-fast) outline-none hover:bg-accent hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/40 active:bg-accent-strong",
+                  section === s && "bg-accent font-medium text-foreground",
                 )}
               >
-                <Icon className="size-4" />
+                {/* The same selection mark as the main navigation. */}
+                <span aria-hidden className={cn("absolute top-1/2 left-0 h-4 w-[3px] -translate-y-1/2 rounded-full bg-primary transition-opacity", section === s ? "opacity-100" : "opacity-0")} />
+                <Icon className={cn("size-4", section === s && "text-primary")} />
                 {t(`settings.sections.${s}`)}
               </button>
             );

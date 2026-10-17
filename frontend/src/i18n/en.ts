@@ -21,6 +21,8 @@ const en: Messages = {
     sources: "Add content",
     settings: "Settings",
     mainNav: "Main navigation",
+    collapse: "Collapse navigation",
+    expand: "Expand navigation",
   },
   topbar: {
     search: "Search all tasks…",
@@ -37,6 +39,7 @@ const en: Messages = {
     language: "Language",
     openMenu: "Open navigation",
     more: "More",
+    appearance: "Theme and language",
   },
   agentMode: {
     rules: "Local rule engine",
@@ -1038,6 +1041,8 @@ const en: Messages = {
       connectedAs: "Connected: {{account}}",
       notConnected: "Not connected",
       opening: "Opening the Google authorization page…",
+      waitingBrowser: "Google's authorization page is open in your browser. Come back to TaskRadar when you are done; the result shows here automatically.",
+      stopWaiting: "Stop waiting",
       authHint:
         "Connecting takes you to Google's consent page. Sign in with your own Google account and approve the permission; you are brought back here afterwards. TaskRadar never sees your password.",
       disconnected: "Gmail disconnected and token revoked",
@@ -1121,9 +1126,9 @@ const en: Messages = {
       autostartUnsupported: "Windows only.",
       autostartConfirmTitle: "Change the autostart setting?",
       autostartEnableBody:
-        "Creates TaskRadar.cmd in %APPDATA%\\Microsoft\\Windows\\Start Menu\\Programs\\Startup so TaskRadar starts in the background after you sign in to Windows. You can turn it off here at any time.",
+        "Creates TaskRadar.cmd in %APPDATA%\\Microsoft\\Windows\\Start Menu\\Programs\\Startup so TaskRadar starts after you sign in to Windows (its window minimised in the taskbar; close the window to stop it). You can turn it off here at any time.",
       autostartEnableBodyPackaged:
-        "Creates TaskRadar.cmd in %APPDATA%\\Microsoft\\Windows\\Start Menu\\Programs\\Startup, which starts TaskRadar.exe when you sign in to Windows (minimised in the taskbar; close it to stop). If you move the TaskRadar folder later, turn this off and on again here.",
+        "Creates TaskRadar.cmd in %APPDATA%\\Microsoft\\Windows\\Start Menu\\Programs\\Startup, which starts TaskRadar when you sign in to Windows (its window minimised in the taskbar; close the window to stop it). If you move TaskRadar elsewhere later, turn this off and on again here.",
       autostartDisableBody: "Removes the start script TaskRadar created.",
       autostartOn: "Autostart enabled",
       autostartOff: "Autostart disabled",

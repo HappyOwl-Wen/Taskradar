@@ -79,7 +79,7 @@ export function Timeline({ events, timezone }: { events: TaskEvent[]; timezone: 
             <span
               className={cn(
                 "z-10 grid size-7 shrink-0 place-items-center rounded-full border bg-card",
-                ev.actor === "agent" && "text-violet",
+                ev.actor === "agent" && "text-muted-foreground",
                 ev.actor === "user" && "text-primary",
               )}
             >

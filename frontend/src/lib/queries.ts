@@ -28,6 +28,15 @@ export const qk = {
 
 export const useDashboard = () => useQuery({ queryKey: qk.dashboard, queryFn: api.dashboard, refetchInterval: 30_000 });
 
+/**
+ * Distinct tasks waiting for a decision (a candidate with an open suggestion counts once), the number next to
+ * "To confirm" everywhere; null until it is known.
+ */
+export function useWaitingCount(): number | null {
+  const { data } = useDashboard();
+  return data ? (data.counts.needs_action ?? data.counts.candidates + data.counts.pending_suggestions) : null;
+}
+
 export const useTasks = (query: TaskQuery) =>
   useQuery({ queryKey: qk.tasks(query), queryFn: () => api.tasks(query), placeholderData: keepPreviousData });
 

@@ -35,6 +35,8 @@ dependencies = [
   "keyring>=25",
   "tzdata>=2024.1",
   "httpx>=0.27",
+  # The desktop window (Microsoft Edge WebView2 through pythonnet); the browser version does not need it.
+  "pywebview>=6.1; sys_platform == 'win32'",
 ]
 
 [project.optional-dependencies]
@@ -56,7 +58,7 @@ taskradar = "taskradar.__main__:main"
 where = ["src"]
 
 [tool.setuptools.package-data]
-taskradar = ["migrations/*.py", "migrations/*.mako", "migrations/versions/*.py", "static/**/*", "py.typed"]
+taskradar = ["migrations/*.py", "migrations/*.mako", "migrations/versions/*.py", "static/**/*", "desktop/*.ico", "py.typed"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

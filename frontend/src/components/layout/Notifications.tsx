@@ -30,9 +30,9 @@ export function NotificationsMenu() {
   const unreadLevels = new Set(items.filter((i) => !i.read).map((i) => i.level));
   const badgeTone =
     unreadLevels.has("overdue") || unreadLevels.has("error")
-      ? "bg-overdue text-white"
+      ? "bg-overdue text-on-status"
       : unreadLevels.has("urgent") || unreadLevels.has("high")
-        ? "bg-urgent text-white"
+        ? "bg-urgent text-on-status"
         : "bg-muted-foreground text-card";
 
   const openItem = (item: NotificationItem) => {
@@ -49,7 +49,7 @@ export function NotificationsMenu() {
         <Button variant="ghost" size="icon" className="touch-target relative" aria-label={`${t("topbar.notifications")} (${unread})`}>
           <Bell />
           {unread > 0 ? (
-            <span className={cn("absolute top-1 right-1 grid min-w-4 place-items-center rounded-full px-1 text-[10px] leading-4 font-semibold tabular-nums", badgeTone)}>
+            <span className={cn("absolute top-0.5 right-0.5 grid min-w-4 place-items-center rounded-full px-1 text-[10px] leading-4 font-semibold tabular-nums ring-2 ring-frame", badgeTone)}>
               {unread > 99 ? "99+" : unread}
             </span>
           ) : null}
@@ -78,7 +78,7 @@ export function NotificationsMenu() {
                   type="button"
                   onClick={() => openItem(item)}
                   className={cn(
-                    "flex w-full gap-3 px-4 py-2.5 text-left transition-colors hover:bg-accent focus-visible:bg-accent focus-visible:outline-none",
+                    "flex w-full gap-3 px-4 py-2.5 text-left transition-colors duration-(--duration-fast) hover:bg-accent focus-visible:bg-accent focus-visible:outline-none active:bg-accent-strong",
                     item.read && "opacity-65",
                   )}
                 >

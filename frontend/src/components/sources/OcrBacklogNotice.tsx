@@ -34,7 +34,7 @@ export function OcrBacklogNotice() {
   const ready = status.ocr.available;
   const message = reprocessing ? "running" : ready ? "ready" : "missing";
   return (
-    <div role="status" className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-high/40 bg-high/8 px-4 py-3 text-sm">
+    <div role="status" className="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-urgent/8 px-4 py-3 text-sm">
       <p className="flex min-w-0 flex-1 items-start gap-2">
         {reprocessing ? (
           <LoaderCircle className="mt-0.5 size-4 shrink-0 animate-spin text-high" />

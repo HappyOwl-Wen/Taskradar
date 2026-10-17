@@ -223,7 +223,7 @@ export function DataSection() {
           </a>
         </Button>
       </div>
-      <div className="grid gap-2 rounded-lg border border-destructive/30 bg-destructive/5 p-4">
+      <div className="grid gap-2 rounded-lg bg-destructive/6 p-4">
         <p className="text-sm font-semibold text-destructive">{t("settings.data.deleteAll")}</p>
         <p className="text-[13px] leading-relaxed text-muted-foreground">{t("settings.data.deleteAllHint")}</p>
         <Button variant="destructive" size="sm" className="w-fit" onClick={() => setOpen(true)}>

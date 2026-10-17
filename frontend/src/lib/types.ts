@@ -512,6 +512,8 @@ export interface GoogleStatus {
   redirect_uri: string;
   gmail: { connected: boolean; scopes: string[]; source: Source | null };
   calendar: { connected: boolean; calendar_id: string | null; calendar_name: string; scopes: string[] };
+  /** How the last authorization ended (``seq`` grows with each one); null before the first. */
+  last_authorization?: { seq: number; service: "gmail" | "calendar" | null; ok: boolean; error: string | null } | null;
 }
 
 export interface CalendarPreview {
