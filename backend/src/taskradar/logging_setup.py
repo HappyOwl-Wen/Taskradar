@@ -40,7 +40,14 @@ def configure_logging(logs_dir: Path | None, level: str = "INFO") -> None:
     root.handlers = handlers
     root.setLevel(level)
     # Third-party loggers that are noisy or might echo request URLs.
-    for name in ("googleapiclient.discovery_cache", "httpx", "httpcore", "openai", "apscheduler.executors"):
+    for name in (
+        "googleapiclient.discovery_cache",
+        "httpx",
+        "httpcore",
+        "openai",
+        "apscheduler.executors",
+        "alembic.runtime.plugins",
+    ):
         logging.getLogger(name).setLevel(logging.WARNING)
     for name in ("uvicorn", "uvicorn.access", "uvicorn.error"):
         lg = logging.getLogger(name)

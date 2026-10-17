@@ -446,6 +446,8 @@ export interface Settings {
 
 export interface SystemStatus {
   version: string;
+  /** Running as TaskRadar.exe (not from the project folder). */
+  packaged?: boolean;
   data_dir: string;
   ocr: {
     engine: string;

@@ -1111,6 +1111,7 @@ const en: Messages = {
       ocr: "OCR engine",
       ocrAvailable: "Available ({{version}}), languages: {{languages}}",
       ocrMissing: "Tesseract not found; scans and screenshots cannot be read. Double-click Setup.cmd in the project folder and follow the prompt (or run scripts\\install-tesseract.ps1), then refresh this page. No restart needed.",
+      ocrMissingPackaged: "Tesseract not found; scans and screenshots cannot be read. Double-click Install-OCR.cmd next to TaskRadar.exe (needs 7-Zip; downloads about 110 MB, each file checked against its SHA-256), then refresh this page; no restart needed.",
       secretStore: "Credential store",
       scheduler: "Background jobs",
       schedulerRunning: "Running ({{count}} scheduled jobs)",
@@ -1121,6 +1122,8 @@ const en: Messages = {
       autostartConfirmTitle: "Change the autostart setting?",
       autostartEnableBody:
         "Creates TaskRadar.cmd in %APPDATA%\\Microsoft\\Windows\\Start Menu\\Programs\\Startup so TaskRadar starts in the background after you sign in to Windows. You can turn it off here at any time.",
+      autostartEnableBodyPackaged:
+        "Creates TaskRadar.cmd in %APPDATA%\\Microsoft\\Windows\\Start Menu\\Programs\\Startup, which starts TaskRadar.exe when you sign in to Windows (minimised in the taskbar; close it to stop). If you move the TaskRadar folder later, turn this off and on again here.",
       autostartDisableBody: "Removes the start script TaskRadar created.",
       autostartOn: "Autostart enabled",
       autostartOff: "Autostart disabled",

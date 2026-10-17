@@ -156,7 +156,7 @@ export function SystemSection() {
               {t("settings.system.ocrAvailable", { version: status.ocr.version ?? status.ocr.engine, languages: status.ocr.languages.join(", ") })}
             </span>
           ) : (
-            <span className="text-high">{t("settings.system.ocrMissing")}</span>
+            <span className="text-high">{t(status.packaged ? "settings.system.ocrMissingPackaged" : "settings.system.ocrMissing")}</span>
           )}
         </InfoRow>
         <InfoRow label={t("settings.system.secretStore")}>
@@ -186,7 +186,7 @@ export function SystemSection() {
         open={pending !== null}
         onOpenChange={(o) => !o && setPending(null)}
         title={t("settings.system.autostartConfirmTitle")}
-        description={pending ? t("settings.system.autostartEnableBody") : t("settings.system.autostartDisableBody")}
+        description={pending ? t(status.packaged ? "settings.system.autostartEnableBodyPackaged" : "settings.system.autostartEnableBody") : t("settings.system.autostartDisableBody")}
         confirmLabel={t("common.confirm")}
         cancelLabel={t("common.cancel")}
         pending={autostart.isPending}

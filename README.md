@@ -77,6 +77,7 @@ mail or document and quotes the sentence it came from. Details: [ARCHITECTURE.md
 | User interface | Four places named by what you do there. **Today**: what needs attention (overdue / due today / tomorrow / within 7 days, then changed or disputed deadlines; unconfirmed tasks always marked), the next decisions with one "N things waiting for your decision" entry (a disputed date that waits there is pointed to, not listed twice), system status in one line while it is fine; a three-step guide until your first confirmation (can be reopened). **To confirm**: one queue for new tasks, deadline updates and possible duplicates, list + detail with "n of N", problems in plain language whose fix buttons open the field concerned with the whole source sentence (the date and a weekday next to it marked); "Edit & confirm" saves and confirms in one step ("Save only" is the secondary choice); the decisions stay at the bottom edge and toasts never cover them; after a decision the next task opens at its start, with the focus on its title. **My tasks**: open / to confirm / completed / dismissed / all; complete in one click (fades out, with undo), other statuses behind "…", "Select several" for batch actions, one search, "Showing 300 of N" with "Show more". **Add content**: one import button, with the last result kept (new tasks and suggestions counted in their own units, "go to confirm", each file's outcome, retry or another file when one failed), connected sources and processing records. **Settings** one category at a time, unsaved changes protected on any navigation, Gmail connected step by step, Activity and diagnostics. Undo after every decision; rows show title, date and at most two states (more behind "N more"); 44 px touch targets on touch screens; reduced motion respected; layouts from 360 px phones to desktops; dark/light; zh/en | implemented, unit-tested, verified in a browser at 1920 / 1440 / 1024 / 768 / 390 / 360 px, light and dark, Chinese and English; not yet tested with users or on a real phone |
 | Background | scheduled Gmail sync, folder scans, reminder checks, automatic retries, restart recovery, optional Windows autostart (only after confirmation) | implemented, tested |
 | Data control | export as JSON, delete single items, delete everything (typed confirmation) | implemented, tested |
+| One program | `scripts\build-exe.ps1` packages TaskRadar as TaskRadar.exe, which runs without Python or Node.js | built and tested on this computer (Windows 11): starts and migrates a new database, serves the UI, reads PDFs and (with Tesseract) scans and screenshots, uses the Windows Credential Manager, runs the background jobs, stops when its window is closed; the evaluation gives the same figures. **Not tested on another computer; not code-signed** |
 
 ## Quick start (Windows 10/11)
 
@@ -92,6 +93,24 @@ Requirements: **Python 3.12+**, **Node.js 20+** (only to build the web UI) and, 
    into `%LOCALAPPDATA%\TaskRadar\tools\tesseract`.
 3. **Start** — double-click `TaskRadar.cmd`. The dashboard opens at <http://127.0.0.1:8000>; closing the
    window stops the server. `scripts\start.ps1 -Background` starts it without a window.
+
+### Or as one program: TaskRadar.exe
+
+`scripts\build-exe.ps1` packages TaskRadar with PyInstaller into a program that runs without Python or
+Node.js (building it needs the setup above once). Double-click TaskRadar.exe: the browser opens
+<http://127.0.0.1:8000>, and the window shows that TaskRadar runs; closing it stops TaskRadar.
+
+| | `dist\TaskRadar\TaskRadar.exe` (default) | `dist\onefile\TaskRadar.exe` (`-OneFile`) |
+| --- | --- | --- |
+| What you get | a folder (TaskRadar.exe and its `_internal` folder), also zipped as `dist\TaskRadar-0.1.0-windows-x64.zip` | one file |
+| Size | 108.6 MB (zip 57.6 MB) | 57.7 MB; unpacks about 92 MB into `%TEMP%` on every start |
+| Ready after start (measured: 3 starts, plus 1 with a new data folder) | 1.6–2.2 s | 3.2–3.7 s |
+
+The program keeps its data where the source version does (`%LOCALAPPDATA%\TaskRadar`) and finds the same
+Tesseract, so both versions can be used in turn; started while one runs, the second only opens the browser.
+`Install-OCR.cmd` next to the program installs OCR. Nothing personal is packed (no data, no `.env`, no tokens).
+The program is not code-signed, so Windows SmartScreen may ask on the first start ("More info" → "Run anyway").
+Autostart (optional, in the settings) starts TaskRadar.exe minimised.
 
 ### Try it without any account
 
@@ -154,7 +173,7 @@ See [SECURITY.md](SECURITY.md) for the threat model.
 
 ```powershell
 cd backend
-.venv\Scripts\python.exe -m pytest            # 283 tests, about 40 s, includes real OCR
+.venv\Scripts\python.exe -m pytest            # 286 tests, about 40 s, includes real OCR
 .venv\Scripts\python.exe -m ruff check .
 .venv\Scripts\python.exe -m ruff format --check .
 .venv\Scripts\python.exe -m mypy
@@ -210,7 +229,8 @@ backend/            FastAPI app, agent pipeline, SQLite + Alembic, tests  (Pytho
   src/taskradar/    api · parsing · extraction · llm · reconciliation · deadlines · policy · services
                     connectors (Gmail, Calendar, OAuth) · scheduler · security · demo · migrations
 frontend/           React + TypeScript + Tailwind dashboard (built into backend/src/taskradar/static)
-scripts/            setup.ps1 · start.ps1 · install-tesseract.ps1
+packaging/          PyInstaller spec, launcher, icon and read-me for TaskRadar.exe
+scripts/            setup.ps1 · start.ps1 · install-tesseract.ps1 · build-exe.ps1
 docs/               EVALUATION.md · screenshots/
 TaskRadar.cmd       double-click launcher       Setup.cmd   one-time setup
 ```
@@ -254,7 +274,11 @@ TaskRadar.cmd       double-click launcher       Setup.cmd   one-time setup
    「API 和服务 → 库」中启用 Gmail API；要写入日历，还需启用 Google Calendar API。步骤见上文
    [Connecting Gmail and Google Calendar](#connecting-gmail-and-google-calendar)。Gmail 只申请只读权限。
 6. 默认使用本地规则引擎，不会把内容发给任何云服务；启用 OpenAI 前需要在设置中明确同意数据发送说明。
-7. 自己的待办：任意页面右上角「添加待办」，写一句话即可，例如“周五前交房租”“明天下午3点开组会”，
+7. 也可以打包成一个程序：运行 `powershell -ExecutionPolicy Bypass -File scripts\build-exe.ps1`，得到
+   `dist\TaskRadar\TaskRadar.exe`（文件夹版，启动约 2 秒）；加 `-OneFile` 得到单个 `TaskRadar.exe`（启动约 3–4 秒）。
+   双击即可运行，不需要 Python 或 Node.js；数据仍保存在 `%LOCALAPPDATA%\TaskRadar`。这个程序没有数字签名，
+   第一次启动时 Windows 可能提示“已保护你的电脑”，点“更多信息”→“仍要运行”。
+8. 自己的待办：任意页面右上角「添加待办」，写一句话即可，例如“周五前交房租”“明天下午3点开组会”，
    日期和时间会自动识别并填好，可以直接修改；类别、优先级和说明在「更多选项」里。自己添加的待办直接生效，
    同样有提醒，也可以写入或移出日历。
 

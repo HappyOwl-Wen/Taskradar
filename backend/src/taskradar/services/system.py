@@ -7,6 +7,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+from taskradar.packaged import is_packaged
+
 MARKER = "REM TaskRadar autostart (created on user request; delete this file to disable)"
 FILENAME = "TaskRadar.cmd"
 
@@ -36,19 +38,19 @@ class AutostartManager:
             self.path and self.path.is_file() and MARKER in self.path.read_text(encoding="utf-8", errors="ignore")
         )
 
+    def command(self) -> str:
+        """The line that starts TaskRadar at login (without opening the browser)."""
+        if is_packaged():
+            # TaskRadar.exe: a minimised window in the taskbar shows that it runs; closing it stops TaskRadar.
+            return f'start "" /min "{self.python_exe}" --no-browser'
+        pythonw = Path(self.python_exe).with_name("pythonw.exe")
+        exe = pythonw if pythonw.exists() else Path(self.python_exe)
+        return f'start "" "{exe}" -m taskradar --no-browser'
+
     def enable(self) -> None:
         if not self.supported or self.path is None:
             raise RuntimeError("Autostart is only supported on Windows")
-        pythonw = Path(self.python_exe).with_name("pythonw.exe")
-        exe = pythonw if pythonw.exists() else Path(self.python_exe)
-        content = "\r\n".join(
-            [
-                "@echo off",
-                MARKER,
-                f'start "" "{exe}" -m taskradar --no-browser',
-                "",
-            ]
-        )
+        content = "\r\n".join(["@echo off", MARKER, self.command(), ""])
         self.startup_dir.mkdir(parents=True, exist_ok=True)  # type: ignore[union-attr]
         self.path.write_text(content, encoding="utf-8")
 

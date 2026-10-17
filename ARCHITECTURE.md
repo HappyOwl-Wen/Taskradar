@@ -275,6 +275,18 @@ Pages: Today, To confirm, My tasks, Task detail, Add content, Settings, Activity
 `npm run build` writes the
 bundle into `backend/src/taskradar/static`, which the backend serves (no external CDN; strict CSP).
 
+## Packaging
+
+`packaging/taskradar.spec` builds TaskRadar.exe with PyInstaller (`scripts\build-exe.ps1`). `packaging/launcher.py`
+runs the same command line as `python -m taskradar` (`serve` when double-clicked), titles the window and keeps it
+open when the start fails. The web UI, the migrations (Alembic loads them as files), the demo samples and the
+evaluation data are packed at the paths the code finds through `__file__`, so the code is the same as from source;
+of the Google client's discovery documents only Gmail and Calendar are kept (the others are about 100 MB).
+Differences when packaged (`taskradar.packaged`): `.env` is read next to the exe, autostart starts the exe itself
+(minimised, `--no-browser`), and `/api/system/status` reports `packaged`, so the OCR hint names `Install-OCR.cmd`.
+Data, secrets and Tesseract stay where the source version keeps them. The folder build starts faster; the
+one-file build unpacks itself into `%TEMP%` on every start and removes that copy when its window is closed.
+
 ## Decisions and trade-offs
 
 * **SQLite instead of a server database** – single user, zero setup, transactional, easy to back up and delete.

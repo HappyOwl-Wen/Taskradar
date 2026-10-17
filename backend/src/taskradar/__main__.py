@@ -53,9 +53,17 @@ def _port_free(host: str, port: int) -> bool:
 
 def _load_env_files() -> None:
     from taskradar.config import load_dotenv
+    from taskradar.packaged import program_dir
 
     here = Path.cwd()
-    for candidate in (here / ".env", here.parent / ".env", Path(__file__).resolve().parents[3] / ".env"):
+    beside_exe = program_dir()
+    # The packaged program looks next to TaskRadar.exe; from source, next to the repository.
+    candidates = (
+        (here / ".env", beside_exe / ".env")
+        if beside_exe
+        else (here / ".env", here.parent / ".env", Path(__file__).resolve().parents[3] / ".env")
+    )
+    for candidate in candidates:
         load_dotenv(candidate)
 
 

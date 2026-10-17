@@ -44,6 +44,10 @@ dev = [
   "ruff>=0.6",
   "mypy>=1.11",
 ]
+# Packaging TaskRadar.exe (scripts/build-exe.ps1 installs it when missing).
+build = [
+  "pyinstaller>=6.11",
+]
 
 [project.scripts]
 taskradar = "taskradar.__main__:main"

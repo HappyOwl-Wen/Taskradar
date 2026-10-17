@@ -15,6 +15,7 @@ from taskradar.api.errors import ApiError
 from taskradar.container import Container
 from taskradar.llm.base import LLMError
 from taskradar.notify.desktop import desktop_notifications_supported
+from taskradar.packaged import is_packaged
 from taskradar.security import secrets as sk
 from taskradar.security.permissions import SideEffect
 from taskradar.services.system import AutostartManager
@@ -59,6 +60,7 @@ def system_status(request: Request, c: Container = Depends(get_container)) -> di
         key_source = "environment"
     return {
         "version": __version__,
+        "packaged": is_packaged(),
         "data_dir": str(c.config.data_dir),
         "ocr": {
             "engine": ocr.name,
