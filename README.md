@@ -1,5 +1,9 @@
 # TaskRadar — personal obligation radar
 
+[![CI](https://github.com/HappyOwl-Wen/Taskradar/actions/workflows/ci.yml/badge.svg)](https://github.com/HappyOwl-Wen/Taskradar/actions/workflows/ci.yml)
+![Windows 10/11](https://img.shields.io/badge/Windows-10%20%7C%2011-0078D4)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
+
 TaskRadar is a local agent for Windows. It reads your e-mail (Gmail, read-only), PDFs and screenshots,
 finds what you have to do and by when, shows you the sentence it based that on, and reminds you once you
 have confirmed the task. It is a desktop app: installed for your Windows account, it opens in its own window
@@ -211,9 +215,9 @@ cd ..\frontend
 npm run lint; npm run typecheck; npm test      # 126 tests
 ```
 
-The workflow in `.github/workflows/ci.yml` runs the same checks on Ubuntu, with Tesseract and the same pinned
-language models. It has not run on GitHub yet (the repository has not been pushed); the backend checks were run
-locally on Windows 11 and on Ubuntu 24.04 (WSL), where the four OCR tests were skipped for lack of Tesseract.
+The workflow in `.github/workflows/ci.yml` runs the same checks on Ubuntu on every push, with Tesseract and the
+same pinned language models. Locally the backend checks also run on Windows 11 and on Ubuntu 24.04 (WSL), where the
+OCR tests are skipped when Tesseract is not installed.
 
 ### Evaluation (rule engine, `rules-1.6`)
 
@@ -326,6 +330,10 @@ TaskRadar.cmd       double-click launcher (window; --browser)     Setup.cmd   on
    日期和时间会自动识别并填好，可以直接修改；类别、优先级和说明在「更多选项」里。自己添加的待办直接生效，
    同样有提醒，也可以写入或移出日历。
 
+## Author
+
+Yu Wen ([@HappyOwl-Wen](https://github.com/HappyOwl-Wen))
+
 ## License
 
-[MIT](LICENSE)
+[MIT](LICENSE) © 2026 Yu Wen
