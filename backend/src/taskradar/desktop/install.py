@@ -84,11 +84,13 @@ class _GUID(ctypes.Structure):
 
     def __init__(self, text: str) -> None:
         super().__init__()
+        if sys.platform != "win32":
+            raise OSError("Windows only")
         ctypes.oledll.ole32.CLSIDFromString(ctypes.c_wchar_p(text), ctypes.byref(self))
 
 
 def known_folder(folder_id: str) -> Path | None:
-    if not win32.IS_WINDOWS:
+    if sys.platform != "win32":
         return None
     path = ctypes.c_wchar_p()
     try:
@@ -107,6 +109,8 @@ IID_IPERSIST_FILE = "{0000010B-0000-0000-C000-000000000046}"
 
 
 def _method(obj: ctypes.c_void_p, index: int, *argtypes: Any) -> Callable[..., Any]:
+    if sys.platform != "win32":
+        raise OSError("Windows only")
     vtable = ctypes.cast(obj, ctypes.POINTER(ctypes.POINTER(ctypes.c_void_p))).contents
     prototype = ctypes.WINFUNCTYPE(ctypes.HRESULT, ctypes.c_void_p, *argtypes)
     function = prototype(vtable[index])
@@ -114,6 +118,8 @@ def _method(obj: ctypes.c_void_p, index: int, *argtypes: Any) -> Callable[..., A
 
 
 def _release(obj: ctypes.c_void_p) -> None:
+    if sys.platform != "win32":
+        raise OSError("Windows only")
     vtable = ctypes.cast(obj, ctypes.POINTER(ctypes.POINTER(ctypes.c_void_p))).contents
     ctypes.WINFUNCTYPE(ctypes.c_ulong, ctypes.c_void_p)(vtable[2])(obj)
 
@@ -121,6 +127,8 @@ def _release(obj: ctypes.c_void_p) -> None:
 @contextlib.contextmanager
 def _shell_link() -> Iterator[tuple[ctypes.c_void_p, ctypes.c_void_p]]:
     """An IShellLinkW with its IPersistFile, in an initialised COM apartment."""
+    if sys.platform != "win32":
+        raise OSError("Windows only")
     ole32 = ctypes.windll.ole32
     ole32.CoInitializeEx.restype = ctypes.c_long
     initialised = ole32.CoInitializeEx(None, 0x2) in (0, 1)  # apartment-threaded; S_FALSE: already initialised
@@ -188,6 +196,8 @@ def _inside(path: str | Path | None, folder: Path) -> bool:
 
 
 def register(paths: InstallPaths, *, version: str, size_kb: int) -> None:
+    if sys.platform != "win32":
+        raise OSError("Windows only")
     import winreg
 
     exe = str(paths.exe)
@@ -208,7 +218,7 @@ def register(paths: InstallPaths, *, version: str, size_kb: int) -> None:
 
 
 def registered(registry_key: str = UNINSTALL_KEY) -> dict[str, Any] | None:
-    if not win32.IS_WINDOWS:
+    if sys.platform != "win32":
         return None
     import winreg
 
@@ -224,6 +234,8 @@ def registered(registry_key: str = UNINSTALL_KEY) -> dict[str, Any] | None:
 
 
 def unregister(paths: InstallPaths) -> bool:
+    if sys.platform != "win32":
+        return False
     import winreg
 
     entry = registered(paths.registry_key)

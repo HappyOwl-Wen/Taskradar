@@ -11,8 +11,9 @@ import os
 import sys
 from ctypes import wintypes
 from dataclasses import dataclass
+from typing import Any
 
-IS_WINDOWS = sys.platform == "win32"
+IS_WINDOWS = sys.platform == "win32"  # for callers; the checks below spell it out so that mypy sees them
 
 # MessageBox flags and answers.
 MB_OK = 0x0
@@ -76,7 +77,7 @@ class Monitor:
     primary: bool
 
 
-if IS_WINDOWS:
+if sys.platform == "win32":
     _user32 = ctypes.WinDLL("user32", use_last_error=True)
     _kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
 
@@ -140,6 +141,15 @@ if IS_WINDOWS:
     _user32.GetDpiForWindow.restype = wintypes.UINT
     _user32.GetDpiForSystem.restype = wintypes.UINT
     _user32.SetProcessDpiAwarenessContext.argtypes = [ctypes.c_void_p]
+else:  # other systems: every function below returns before it would use these
+    _user32: Any = None
+    _kernel32: Any = None
+    _RECT: Any = None
+    _MONITORINFO: Any = None
+    _WINDOWPLACEMENT: Any = None
+    _FLASHWINFO: Any = None
+    _MONITORENUMPROC: Any = None
+    _WNDENUMPROC: Any = None
 
 
 def enable_dpi_awareness() -> str:
@@ -147,7 +157,7 @@ def enable_dpi_awareness() -> str:
 
     Must run before the first window is created. Returns the mode that was set.
     """
-    if not IS_WINDOWS:
+    if sys.platform != "win32":
         return "none"
     with contextlib.suppress(AttributeError, OSError):
         if _user32.SetProcessDpiAwarenessContext(ctypes.c_void_p(-4)):  # per monitor v2 (Windows 10 1703+)
@@ -163,19 +173,19 @@ def enable_dpi_awareness() -> str:
 
 def set_app_user_model_id(app_id: str) -> None:
     """Group the window under its own taskbar button with its own icon (needed when running from python.exe)."""
-    if IS_WINDOWS:
+    if sys.platform == "win32":
         with contextlib.suppress(AttributeError, OSError):
             ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(ctypes.c_wchar_p(app_id))
 
 
 def message_box(text: str, title: str, flags: int = MB_OK, owner: int = 0) -> int:
-    if not IS_WINDOWS:
+    if sys.platform != "win32":
         return IDOK
     return int(_user32.MessageBoxW(owner or None, text, title, flags | MB_SETFOREGROUND))
 
 
 def monitors() -> list[Monitor]:
-    if not IS_WINDOWS:
+    if sys.platform != "win32":
         return []
     found: list[Monitor] = []
 
@@ -202,7 +212,7 @@ def monitors() -> list[Monitor]:
 
 
 def window_rect(hwnd: int) -> Rect | None:
-    if not IS_WINDOWS or not hwnd:
+    if sys.platform != "win32" or not hwnd:
         return None
     rect = _RECT()
     if not _user32.GetWindowRect(hwnd, ctypes.byref(rect)):
@@ -211,12 +221,14 @@ def window_rect(hwnd: int) -> Rect | None:
 
 
 def is_minimized(hwnd: int) -> bool:
-    return bool(IS_WINDOWS and hwnd and _user32.IsIconic(hwnd))
+    if sys.platform != "win32" or not hwnd:
+        return False
+    return bool(_user32.IsIconic(hwnd))
 
 
 def is_maximized(hwnd: int) -> bool:
     """Maximised, or minimised from the maximised state (so that it opens maximised again)."""
-    if not IS_WINDOWS or not hwnd:
+    if sys.platform != "win32" or not hwnd:
         return False
     if _user32.IsZoomed(hwnd):
         return True
@@ -229,7 +241,7 @@ def is_maximized(hwnd: int) -> bool:
 
 
 def dpi_for_window(hwnd: int) -> int:
-    if not IS_WINDOWS or not hwnd:
+    if sys.platform != "win32" or not hwnd:
         return 96
     try:
         return int(_user32.GetDpiForWindow(hwnd)) or 96
@@ -239,7 +251,7 @@ def dpi_for_window(hwnd: int) -> int:
 
 def find_window(pid: int, title: str) -> int | None:
     """The top-level window of process ``pid`` with this title (the TaskRadar window of a running instance)."""
-    if not IS_WINDOWS:
+    if sys.platform != "win32":
         return None
     found: list[int] = []
 
@@ -260,7 +272,7 @@ def find_window(pid: int, title: str) -> int | None:
 
 def bring_to_front(hwnd: int) -> bool:
     """Restore a minimised window and activate it; if Windows does not allow that, flash its taskbar button."""
-    if not IS_WINDOWS or not hwnd:
+    if sys.platform != "win32" or not hwnd:
         return False
     if _user32.IsIconic(hwnd):
         _user32.ShowWindow(hwnd, SW_RESTORE)
@@ -273,7 +285,7 @@ def bring_to_front(hwnd: int) -> bool:
 
 def set_title_bar(hwnd: int, *, dark: bool, caption: str | None = None, text: str | None = None) -> None:
     """Match the native title bar to the app's theme: dark mode, and on Windows 11 the caption colours."""
-    if not IS_WINDOWS or not hwnd:
+    if sys.platform != "win32" or not hwnd:
         return
     dwmapi = ctypes.windll.dwmapi
 
@@ -296,7 +308,7 @@ def colorref(hex_colour: str) -> int:
 
 
 def apps_use_dark_theme() -> bool:
-    if not IS_WINDOWS:
+    if sys.platform != "win32":
         return False
     import winreg
 
@@ -311,7 +323,7 @@ def apps_use_dark_theme() -> bool:
 
 def webview2_version() -> str | None:
     """The installed Microsoft Edge WebView2 runtime (part of Windows 11), or None."""
-    if not IS_WINDOWS:
+    if sys.platform != "win32":
         return None
     import winreg
 
@@ -333,7 +345,7 @@ def webview2_version() -> str | None:
 
 def processes_running_from(folder: str) -> list[int]:
     """Processes (other than this one) whose program file lies in ``folder``: a running TaskRadar.exe there."""
-    if not IS_WINDOWS:
+    if sys.platform != "win32":
         return []
     psapi = ctypes.WinDLL("psapi")
     pids = (wintypes.DWORD * 4096)()
@@ -362,7 +374,7 @@ def processes_running_from(folder: str) -> list[int]:
 
 def attach_parent_console() -> bool:
     """Let a windowed TaskRadar.exe print to the terminal it was started from (``TaskRadar.exe --version``)."""
-    if not IS_WINDOWS or (sys.stdout is not None and sys.stderr is not None):
+    if sys.platform != "win32" or (sys.stdout is not None and sys.stderr is not None):
         return False
     if not _kernel32.AttachConsole(wintypes.DWORD(-1 & 0xFFFFFFFF)):  # ATTACH_PARENT_PROCESS
         return False

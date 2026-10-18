@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import logging
 import socket
+import sys
 import threading
 import time
 from typing import TYPE_CHECKING
@@ -25,7 +26,12 @@ log = logging.getLogger(__name__)
 
 
 def port_available(host: str, port: int) -> bool:
+    """Whether a server could listen on this address now, bound the way uvicorn binds it."""
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+        if sys.platform != "win32":
+            # As asyncio does on POSIX: connections of an earlier server still in TIME_WAIT do not block a new
+            # listener. (On Windows the option would even allow binding over a live listener, so it stays off.)
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         try:
             sock.bind((host, port))
         except OSError:
