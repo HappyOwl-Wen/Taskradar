@@ -1,21 +1,53 @@
-import { FilePlus2, Inbox, LayoutDashboard, ListTodo, Menu, Settings, ShieldCheck, Sparkles } from "lucide-react";
-import { NavLink, useLocation } from "react-router";
+import { CalendarDays, Hourglass, LayoutDashboard, ListTodo, Menu, PenLine, Settings, Timer, type LucideIcon } from "lucide-react";
+import { Link, useLocation, type Location } from "react-router";
 import { useTranslation } from "react-i18next";
 import { Tip } from "@/components/ui/menu";
 import { useMediaQuery } from "@/lib/hooks";
-import { useNavMode } from "@/lib/navigation";
-import { useDashboard, useWaitingCount } from "@/lib/queries";
+import { taskScope, useNavMode } from "@/lib/navigation";
+import { useDashboard } from "@/lib/queries";
+import { formatClock, isActive, isRunning, useLiveTimers } from "@/lib/timers";
 import { cn } from "@/lib/utils";
 
-// What the user does, in that order: see today, decide, work through the list, add something.
-// Diagnostics (run history, processing figures) are reached from Settings and the system status.
-const NAV = [
-  { to: "/", key: "dashboard", icon: LayoutDashboard, end: true },
-  { to: "/inbox", key: "inbox", icon: Inbox, end: false },
-  { to: "/tasks", key: "tasks", icon: ListTodo, end: false },
-  { to: "/sources", key: "sources", icon: FilePlus2, end: false },
-  { to: "/settings", key: "settings", icon: Settings, end: false },
-] as const;
+interface NavItem {
+  to: string;
+  key: "dashboard" | "allTasks" | "mine" | "calendar" | "focus" | "countdowns" | "settings";
+  icon: LucideIcon;
+  isActive: (location: Location) => boolean;
+}
+
+// Today first; then the tasks by where they come from (all of them, the user's own, the ones in Google Calendar);
+// then the timers.
+const NAV: { group: "main" | "tasks" | "focus"; items: NavItem[] }[] = [
+  { group: "main", items: [{ to: "/", key: "dashboard", icon: LayoutDashboard, isActive: (l) => l.pathname === "/" }] },
+  {
+    group: "tasks",
+    items: [
+      { to: "/tasks", key: "allTasks", icon: ListTodo, isActive: (l) => taskScope(l) === "all" },
+      { to: "/tasks?scope=mine", key: "mine", icon: PenLine, isActive: (l) => taskScope(l) === "mine" },
+      { to: "/tasks?scope=calendar", key: "calendar", icon: CalendarDays, isActive: (l) => taskScope(l) === "calendar" },
+    ],
+  },
+  {
+    group: "focus",
+    items: [
+      { to: "/focus", key: "focus", icon: Timer, isActive: (l) => l.pathname.startsWith("/focus") },
+      { to: "/timers", key: "countdowns", icon: Hourglass, isActive: (l) => l.pathname.startsWith("/timers") },
+    ],
+  },
+];
+
+/** A running timer beside its entry: the time left, coloured by what runs (focus, a break), grey when paused. */
+interface LiveTime {
+  text: string;
+  tone: "focus" | "break" | "paused";
+}
+
+const LIVE_TONE: Record<LiveTime["tone"], { text: string; dot: string }> = {
+  focus: { text: "text-primary", dot: "bg-primary" },
+  break: { text: "text-success", dot: "bg-success" },
+  paused: { text: "text-muted-foreground", dot: "bg-muted-foreground" },
+};
+const SETTINGS: NavItem = { to: "/settings", key: "settings", icon: Settings, isActive: (l) => l.pathname.startsWith("/settings") };
 
 /** The radar mark of the app icon (frontend/public/favicon.svg). */
 export function BrandMark({ className }: { className?: string }) {
@@ -44,19 +76,14 @@ export function Brand() {
   );
 }
 
-function useNavCounts() {
-  const { data } = useDashboard();
-  return { inbox: useWaitingCount() ?? 0, overdue: data?.counts.overdue ?? 0 };
-}
-
-/** The number next to an entry: what waits for a decision (indigo), what is overdue (red). */
-function NavCount({ value, tone, rail }: { value: number; tone: "decide" | "overdue"; rail?: boolean }) {
+/** The number next to "Today": what is overdue (red). */
+function NavCount({ value, rail }: { value: number; rail?: boolean }) {
   if (value <= 0) return null;
   return (
     <span
       className={cn(
         "grid h-[18px] min-w-[18px] place-items-center rounded-full px-1 text-[11px] leading-none font-semibold tabular-nums",
-        tone === "decide" ? "bg-primary text-primary-foreground" : rail ? "bg-overdue text-on-status" : "bg-overdue/12 text-overdue",
+        rail ? "bg-overdue text-on-status" : "bg-overdue/12 text-overdue",
         rail && "absolute -top-1.5 left-[calc(50%+2px)] ring-2 ring-frame group-aria-[current=page]/nav:ring-card dark:group-aria-[current=page]/nav:ring-frame",
       )}
     >
@@ -65,81 +92,117 @@ function NavCount({ value, tone, rail }: { value: number; tone: "decide" | "over
   );
 }
 
-export function SidebarNav({ onNavigate, rail = false }: { onNavigate?: () => void; rail?: boolean }) {
+function NavEntry({
+  item,
+  rail,
+  count,
+  live,
+  onNavigate,
+}: {
+  item: NavItem;
+  rail: boolean;
+  count?: number;
+  live?: LiveTime | null;
+  onNavigate?: () => void;
+}) {
   const { t } = useTranslation();
-  const { pathname } = useLocation();
-  const counts = useNavCounts();
+  const location = useLocation();
+  const Icon = item.icon;
+  const current = item.isActive(location);
+  return (
+    <Link
+      to={item.to}
+      onClick={onNavigate}
+      aria-current={current ? "page" : undefined}
+      className={cn(
+        "group/nav relative flex rounded-md text-muted-foreground outline-none transition-colors duration-(--duration-fast) hover:bg-accent hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50 active:bg-accent-strong",
+        rail ? "h-14 flex-col items-center justify-center gap-1 px-1 text-[11px] leading-tight font-medium" : "h-9 items-center gap-3 px-3 text-sm font-medium",
+        current && "bg-card text-foreground shadow-[0_1px_2px_rgb(0_0_0/0.06)] hover:bg-card dark:bg-accent-strong dark:shadow-none",
+      )}
+    >
+      {/* Windows 11's selection mark: a short indigo bar at the left edge. */}
+      <span
+        aria-hidden
+        className={cn(
+          "absolute top-1/2 left-0 w-[3px] -translate-y-1/2 rounded-full bg-primary transition-[height,opacity] duration-(--duration-normal) ease-out",
+          current ? "h-4 opacity-100" : "h-2 opacity-0",
+        )}
+      />
+      <span className="relative">
+        <Icon className={cn("size-[18px]", current && "text-primary")} />
+        {rail && count !== undefined ? <NavCount value={count} rail /> : null}
+        {rail && live ? (
+          <span
+            aria-hidden
+            className={cn("absolute -top-0.5 -right-1 size-2 rounded-full ring-2 ring-frame", LIVE_TONE[live.tone].dot)}
+          />
+        ) : null}
+      </span>
+      <span className={cn("min-w-0 truncate", rail ? "max-w-full" : "flex-1")}>{t(`nav.${item.key}`)}</span>
+      {!rail && count !== undefined ? <NavCount value={count} /> : null}
+      {live ? (
+        <span className={cn("text-xs font-semibold tabular-nums", rail ? "sr-only" : LIVE_TONE[live.tone].text)}>
+          {live.tone === "paused" ? t("timers.pausedShort", { time: live.text }) : live.text}
+        </span>
+      ) : null}
+    </Link>
+  );
+}
+
+/** What the timer entries show: the Pomodoro phase's time left, and the countdown that ends first. */
+function useLiveTimes(lang: string): Partial<Record<NavItem["key"], LiveTime | null>> {
+  const { data, remaining } = useLiveTimers();
+  if (!data) return {};
+  const pomodoro = data.pomodoro.current;
+  const countdown = data.countdowns.find(isRunning) ?? data.countdowns.find(isActive);
+  return {
+    focus: isActive(pomodoro)
+      ? {
+          text: formatClock(remaining(pomodoro), lang),
+          tone: pomodoro.status === "paused" ? "paused" : pomodoro.phase === "focus" ? "focus" : "break",
+        }
+      : null,
+    countdowns: countdown
+      ? { text: formatClock(remaining(countdown), lang), tone: countdown.status === "paused" ? "paused" : "focus" }
+      : null,
+  };
+}
+
+export function SidebarNav({ onNavigate, rail = false }: { onNavigate?: () => void; rail?: boolean }) {
+  const { t, i18n } = useTranslation();
+  const { data } = useDashboard();
+  const overdue = data?.counts.overdue ?? 0;
+  const live = useLiveTimes(i18n.language);
   return (
     <nav aria-label={t("nav.mainNav")} className={cn("grid", rail ? "gap-1" : "gap-0.5")}>
-      {NAV.map(({ to, key, icon: Icon, end }) => {
-        const count = key === "inbox" ? counts.inbox : key === "dashboard" ? counts.overdue : 0;
-        const tone = key === "inbox" ? "decide" : "overdue";
-        return (
-          <NavLink
-            key={to}
-            to={to}
-            end={end}
-            onClick={onNavigate}
-            className={({ isActive }) =>
-              cn(
-                "group/nav relative flex rounded-md text-muted-foreground outline-none transition-colors duration-(--duration-fast) hover:bg-accent hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50 active:bg-accent-strong",
-                rail
-                  ? "h-14 flex-col items-center justify-center gap-1 px-1 text-[11px] leading-tight font-medium"
-                  : "h-9 items-center gap-3 px-3 text-sm font-medium",
-                (isActive || (key === "settings" && pathname.startsWith("/insights"))) &&
-                  "bg-card text-foreground shadow-[0_1px_2px_rgb(0_0_0/0.06)] hover:bg-card dark:bg-accent-strong dark:shadow-none",
-              )
-            }
-          >
-            {({ isActive }) => {
-              const current = isActive || (key === "settings" && pathname.startsWith("/insights"));
-              return (
-                <>
-                  {/* Windows 11's selection mark: a short indigo bar at the left edge. */}
-                  <span
-                    aria-hidden
-                    className={cn(
-                      "absolute top-1/2 left-0 w-[3px] -translate-y-1/2 rounded-full bg-primary transition-[height,opacity] duration-(--duration-normal) ease-out",
-                      current ? "h-4 opacity-100" : "h-2 opacity-0",
-                    )}
-                  />
-                  <span className="relative">
-                    <Icon className={cn("size-[18px]", current && "text-primary")} />
-                    {rail ? <NavCount value={count} tone={tone} rail /> : null}
-                  </span>
-                  <span className={cn("min-w-0 truncate", rail ? "max-w-full" : "flex-1")}>{t(`nav.${key}`)}</span>
-                  {rail ? null : <NavCount value={count} tone={tone} />}
-                </>
-              );
-            }}
-          </NavLink>
-        );
-      })}
+      {NAV.map(({ group, items }) => (
+        <div key={group} role="group" aria-label={group === "main" ? undefined : t(`nav.group.${group}`)} className={cn("grid", rail ? "gap-1" : "gap-0.5")}>
+          {group !== "main" ? (
+            rail ? (
+              <div aria-hidden className="mx-3 my-1 border-t" />
+            ) : (
+              <p className="px-3 pt-3 pb-1 text-[11px] font-semibold tracking-wide text-muted-foreground">{t(`nav.group.${group}`)}</p>
+            )
+          ) : null}
+          {items.map((item) => (
+            <NavEntry
+              key={item.key}
+              item={item}
+              rail={rail}
+              count={item.key === "dashboard" ? overdue : undefined}
+              live={live[item.key]}
+              onNavigate={onNavigate}
+            />
+          ))}
+        </div>
+      ))}
     </nav>
   );
 }
 
-export function AgentModeChip({ compact = false }: { compact?: boolean }) {
-  const { t } = useTranslation();
-  const { data } = useDashboard();
-  const mode = data?.agent_mode ?? "rules";
-  const Icon = mode === "llm" ? Sparkles : ShieldCheck;
-  const label = mode === "llm" ? t("agentMode.llm") : t("agentMode.rules");
-  return (
-    <Tip content={mode === "llm" ? t("agentMode.llmHint") : t("agentMode.rulesHint")} side="right">
-      <NavLink
-        to="/settings?section=ai"
-        aria-label={compact ? label : undefined}
-        className={cn(
-          "flex items-center gap-2 rounded-md text-xs text-muted-foreground outline-none transition-colors duration-(--duration-fast) hover:bg-accent hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50",
-          compact ? "size-9 justify-center self-center" : "px-3 py-2",
-        )}
-      >
-        <Icon className={cn("size-3.5 shrink-0", mode === "llm" ? "text-primary" : "text-success")} />
-        {compact ? null : <span className="truncate">{label}</span>}
-      </NavLink>
-    </Tip>
-  );
+/** Settings, at the foot of the navigation (as in Windows 11 apps). */
+export function SettingsNav({ onNavigate, rail = false }: { onNavigate?: () => void; rail?: boolean }) {
+  return <NavEntry item={SETTINGS} rail={rail} onNavigate={onNavigate} />;
 }
 
 /**
@@ -185,7 +248,7 @@ export function Sidebar({ onOpenDrawer }: { onOpenDrawer: () => void }) {
         <SidebarNav rail={rail} />
       </div>
       <div className="mt-auto grid pt-3">
-        <AgentModeChip compact={rail} />
+        <SettingsNav rail={rail} />
       </div>
     </aside>
   );

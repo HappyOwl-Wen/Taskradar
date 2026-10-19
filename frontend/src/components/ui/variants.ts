@@ -34,8 +34,8 @@ export const buttonVariants = cva(
 );
 
 /**
- * Small states next to a title ("已逾期", "截止日期冲突"). Colour only where it carries meaning; unconfirmed tasks
- * get a dashed outline ("tentative") instead of a colour: found by TaskRadar, not yet accepted.
+ * Small states next to a title ("已逾期", "进行中"). Colour only where it carries meaning; unconfirmed tasks (of
+ * earlier versions) get a dashed outline ("tentative") instead of a colour.
  */
 export const badgeVariants = cva(
   "inline-flex h-5 w-fit shrink-0 items-center gap-1 rounded-[5px] px-1.5 text-xs leading-none font-medium whitespace-nowrap [&_svg]:size-3 [&_svg]:shrink-0",
@@ -52,6 +52,8 @@ export const badgeVariants = cva(
         normal: "bg-secondary text-muted-foreground",
         success: "bg-success/10 text-success",
         tentative: "border border-dashed border-tentative/70 text-tentative",
+        progress: "bg-progress/10 text-progress",
+        waiting: "bg-waiting/10 text-waiting",
         destructive: "bg-destructive/10 text-destructive",
       },
     },

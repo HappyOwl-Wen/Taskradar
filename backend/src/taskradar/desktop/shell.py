@@ -1,11 +1,15 @@
 """The desktop window: pywebview on Microsoft Edge WebView2 around the local server of the same process.
 
 * Opening TaskRadar shows the window at once (start screen); the server starts behind it and the web UI replaces
-  the start screen as soon as it answers. Closing the window stops the server and the background jobs.
+  the start screen as soon as it answers.
+* Closing the window leaves TaskRadar running in the notification area (tray), so reminders and timers go on;
+  "Quit" in the tray menu ends it, together with the server and the background jobs. (Settings can make the close
+  button quit instead.) Started by autostart, TaskRadar begins in the tray.
 * The window opens where it was left (size, position, maximised), on a screen that still exists.
-* A second start brings the open window to the front instead of starting TaskRadar twice.
-* Links to other sites, and the Google sign-in, open in the system browser; the window only shows TaskRadar.
-* Closing with unsaved changes asks first (the page reports them, see :mod:`taskradar.desktop.bridge`).
+* A second start brings the open window to the front, also out of the tray, instead of starting TaskRadar twice.
+* Links to other sites, and the Google sign-in, open in the system browser; the window only shows TaskRadar, and
+  going back never leaves it for the start screen.
+* Quitting with unsaved changes asks first (the page reports them, see :mod:`taskradar.desktop.bridge`).
 """
 
 from __future__ import annotations
@@ -26,12 +30,14 @@ from taskradar.desktop.instance import clear_instance, read_instance, write_inst
 from taskradar.desktop.prefs import MIN_SIZE, Appearance, DesktopPrefs, SavedWindow, initial_placement
 from taskradar.desktop.server import BackgroundServer, choose_port
 from taskradar.desktop.splash import FRAME, TEXT, error_page, start_page
+from taskradar.desktop.tray import Tray
+from taskradar.notify import windows as notifications
 from taskradar.packaged import is_packaged
 
 log = logging.getLogger(__name__)
 
 TITLE = "TaskRadar"
-APP_ID = "TaskRadar.Desktop"
+APP_ID = notifications.APP_ID  # one identity for the taskbar and the notifications
 ICON = Path(__file__).with_name("taskradar.ico")
 WEBVIEW2_DOWNLOAD = "https://developer.microsoft.com/microsoft-edge/webview2/"
 # Context menu entries that make sense in an app (editing text, copying links); browser entries are removed.
@@ -52,6 +58,9 @@ CONTEXT_MENU_KEEP = {
 TEXTS = {
     "zh-CN": {
         "unsaved": "有尚未保存的修改。\n\n关闭 TaskRadar 会丢失这些修改。仍要关闭吗？",
+        "unsaved_quit": "有尚未保存的修改。\n\n退出 TaskRadar 会丢失这些修改。仍要退出吗？",
+        "tray_title": "TaskRadar 仍在运行",
+        "tray_body": "提醒和计时会继续。TaskRadar 的图标在任务栏右下角（可能收在“^”里）：点它重新打开，右键可以退出。",
         "already_running": "TaskRadar 已经在运行。",
         "browser_running": (
             "TaskRadar 正以浏览器版本运行（{url}）。\n\n要改用桌面窗口，请先关闭浏览器版本的命令行窗口，"
@@ -64,6 +73,10 @@ TEXTS = {
     },
     "en": {
         "unsaved": "There are unsaved changes.\n\nClosing TaskRadar discards them. Close anyway?",
+        "unsaved_quit": "There are unsaved changes.\n\nQuitting TaskRadar discards them. Quit anyway?",
+        "tray_title": "TaskRadar is still running",
+        "tray_body": "Reminders and timers go on. TaskRadar's icon sits at the right of the taskbar (perhaps under ^): "
+        "click it to open the window again, right-click it to quit.",
         "already_running": "TaskRadar is already running.",
         "browser_running": (
             "TaskRadar is running as the browser version ({url}).\n\nTo use the desktop window instead, close the "
@@ -87,6 +100,7 @@ def run(config: AppConfig, *, minimized: bool = False, debug: bool = False) -> i
     win32.enable_dpi_awareness()
     if not is_packaged():
         win32.set_app_user_model_id(APP_ID)  # python.exe would otherwise lend the window its own taskbar icon
+    notifications.register()  # name and icon of TaskRadar's Windows notifications
     prefs = DesktopPrefs.load(config.data_dir / "desktop.json")
     language = prefs.appearance.language
 
@@ -115,6 +129,8 @@ def _hand_over(data_dir: Path, language: str | None, lock: Any) -> bool:
     """
     texts = _texts(language)
     info = read_instance(data_dir)
+    if info and info.get("mode") == "desktop" and info.get("url") and _activate_running(str(info["url"])):
+        return False  # its window came forward (also out of the tray)
     if info is None or info.get("mode") == "desktop":
         for _ in range(50):  # it may still be creating its window, or be about to end
             if lock.acquire():
@@ -133,6 +149,23 @@ def _hand_over(data_dir: Path, language: str | None, lock: Any) -> bool:
         return False
     win32.message_box(texts["already_running"], TITLE, win32.MB_OK | win32.MB_ICONINFORMATION)
     return False
+
+
+def _activate_running(url: str) -> bool:
+    """Ask the TaskRadar that runs on this data folder to show its window (it may be hidden in the tray)."""
+    import json
+    import urllib.request
+
+    try:
+        with urllib.request.urlopen(f"{url}/api/session", timeout=3) as response:  # noqa: S310 - local, our URL
+            token = json.loads(response.read())["csrf_token"]
+        request = urllib.request.Request(  # noqa: S310 - local, our URL
+            f"{url}/api/desktop/activate", method="POST", headers={"X-TaskRadar-CSRF": token}
+        )
+        with urllib.request.urlopen(request, timeout=3) as response:  # noqa: S310
+            return bool(json.loads(response.read()).get("ok"))
+    except (OSError, ValueError, KeyError):
+        return False
 
 
 def _run_window(config: AppConfig, prefs: DesktopPrefs, *, minimized: bool, debug: bool) -> int:
@@ -161,7 +194,7 @@ def _run_window(config: AppConfig, prefs: DesktopPrefs, *, minimized: bool, debu
         height=placement.height,
         min_size=MIN_SIZE,
         maximized=placement.maximized and not minimized,
-        minimized=minimized,
+        hidden=minimized,  # autostart: TaskRadar starts in the tray
         background_color=FRAME[theme],
         text_select=True,
         zoomable=True,
@@ -177,14 +210,27 @@ def _run_window(config: AppConfig, prefs: DesktopPrefs, *, minimized: bool, debu
         gui="edgechromium",
     )
     shell.closed.set()
+    shell.remove_tray()
+    notifications.set_click_handler(None)
     log.info("Window closed; stopping the server")
     server.stop()
     log.info("TaskRadar desktop window closed; server stopped")
     return 0
 
 
+def leaves_the_app(uri: str, *, app_shown: bool) -> bool:
+    """Whether a navigation to ``uri`` would take the window away from TaskRadar's own pages.
+
+    The start and error screens are inline pages (data: / about:). Once the web UI is shown, going back to them
+    (the Back key or mouse button on the first page) would show "Starting..." for ever, so they stay closed.
+    """
+    if uri.startswith(("data:", "about:")):
+        return app_shown
+    return True
+
+
 class Shell:
-    """Keeps the window and the server in step. Window events arrive on pywebview threads."""
+    """Keeps the window, the tray icon and the server in step. Window events arrive on pywebview threads."""
 
     def __init__(
         self,
@@ -206,10 +252,14 @@ class Shell:
         self.debug = debug
         self.hwnd = 0
         self.closed = threading.Event()
+        self.tray: Tray | None = None
         self._normal = prefs.window.rect if prefs.window else None
         self._normal_dpi = prefs.window.dpi if prefs.window else 96
         self._save_timer: threading.Timer | None = None
         self._native_ready = False
+        self._app_shown = False  # the web UI has been loaded (from then on the start screen stays behind)
+        self._quitting = False  # "Quit" was chosen (and confirmed): the next close really ends TaskRadar
+        self._timers_changed = threading.Event()  # wakes the tray tooltip up when a timer starts, stops or ends
         self._lock = threading.Lock()
 
     def connect(self) -> None:
@@ -223,7 +273,8 @@ class Shell:
         events.closing += self._on_closing
         events.closed += self.closed.set
         self.bridge.on_appearance = self._on_appearance
-        self.bridge.on_activate = self._on_activate
+        self.bridge.on_activate = self.show_window
+        notifications.set_click_handler(self.show_window)
 
     # -- start ----------------------------------------------------------------------------------------------
 
@@ -231,6 +282,7 @@ class Shell:
         """Runs once the window exists: show the web UI as soon as the server answers."""
         if self.server.wait_ready(cancel=self.closed):
             self.window.load_url(self.server.url)
+            threading.Thread(target=self._follow_timers, name="taskradar-tray-status", daemon=True).start()
         elif not self.closed.is_set():
             log_path = str(self.server.config.logs_dir / "taskradar.log")
             code = self.server.error or "unknown"
@@ -240,11 +292,50 @@ class Shell:
         native = self.window.native
         if native is not None:
             self.hwnd = int(native.Handle.ToInt64())
+            self._install_tray(native)
         self._apply_title_bar()
         self._on_geometry()
 
+    def _install_tray(self, form: Any) -> None:
+        if self.tray is not None:
+            return
+        tray = Tray(form, ICON, language=self.language, on_open=self.show_window, on_quit=self.quit)
+        try:
+            tray.install()
+        except Exception:  # without a tray icon the close button simply quits
+            log.exception("Could not add the TaskRadar icon to the notification area")
+            return
+        self.tray = tray
+
+    def remove_tray(self) -> None:
+        self._timers_changed.set()  # lets the tooltip thread see that TaskRadar ends
+        if self.tray is not None:
+            self.tray.remove()
+            self.tray = None
+
+    def _follow_timers(self) -> None:
+        """Keep the tray icon's tooltip on the running timers ("TaskRadar · 专注中 · 剩 18 分钟")."""
+        container = self.server.container
+        if container is None:
+            return
+        container.timers.subscribe(self._timers_changed.set)
+        shown: str | None = None
+        while not self.closed.is_set():
+            try:
+                status = container.timers.tray_status()
+            except Exception:  # the database may be closing while TaskRadar ends
+                log.debug("Could not read the timers for the tray", exc_info=True)
+                status = None
+            tray = self.tray
+            if status != shown and tray is not None:
+                tray.set_status(status)
+                shown = status
+            # The minutes left change while a timer runs; otherwise only a change wakes the thread up.
+            self._timers_changed.wait(10 if status else 300)
+            self._timers_changed.clear()
+
     def _on_loaded(self) -> None:
-        if self._native_ready or self.debug:
+        if self._native_ready:
             return
         self._native_ready = True
         try:
@@ -259,9 +350,10 @@ class Shell:
 
         def setup() -> None:
             core = form.browser.webview.CoreWebView2
-            core.Settings.AreDefaultContextMenusEnabled = True
-            core.ContextMenuRequested += self._on_context_menu
             core.NavigationStarting += self._on_navigation_starting
+            if not self.debug:  # in debug mode the full browser menu (with "Inspect") stays
+                core.Settings.AreDefaultContextMenusEnabled = True
+                core.ContextMenuRequested += self._on_context_menu
 
         form.Invoke(Func[Type](setup))
 
@@ -292,20 +384,68 @@ class Shell:
             self.prefs.appearance = Appearance(theme=self.theme, language=self.language)
             self.prefs.save()
 
-    # -- closing ---------------------------------------------------------------------------------------------
-
-    def _on_closing(self) -> bool:
-        """On the UI thread; returning False keeps the window open."""
-        if self.bridge.unsaved:
-            flags = win32.MB_YESNO | win32.MB_ICONWARNING | win32.MB_DEFBUTTON2
-            if win32.message_box(_texts(self.language)["unsaved"], TITLE, flags, owner=self.hwnd) != win32.IDYES:
-                return False
+    def _save_now(self) -> None:
         with self._lock:
             if self._save_timer is not None:
                 self._save_timer.cancel()
         self._save()
+
+    # -- showing, hiding, closing and quitting ---------------------------------------------------------------
+
+    def show_window(self) -> None:
+        """Bring the window forward: out of the tray, out of the taskbar, or just to the front."""
+        try:
+            self.window.show()
+        except Exception:  # not shown yet (still starting): it will appear by itself
+            log.debug("show() before the window existed", exc_info=True)
+        if self.hwnd:
+            win32.bring_to_front(self.hwnd)
+
+    def _close_to_tray(self) -> bool:
+        if self.tray is None or not self.tray.installed:
+            return False  # nothing to come back from: closing must quit
+        container = self.server.container
+        if container is None:
+            return True
+        try:
+            return bool(container.settings.get().general.close_to_tray)
+        except Exception:  # the database is unavailable: keep the safe default
+            return True
+
+    def _on_closing(self) -> bool:
+        """On the UI thread; returning False keeps TaskRadar running (in the tray, or with the window open)."""
+        if not self._quitting and self._close_to_tray():
+            self._hide_to_tray()
+            return False
+        if not self._quitting and self.bridge.unsaved:  # a quit from the tray asked already
+            flags = win32.MB_YESNO | win32.MB_ICONWARNING | win32.MB_DEFBUTTON2
+            if win32.message_box(_texts(self.language)["unsaved"], TITLE, flags, owner=self.hwnd) != win32.IDYES:
+                return False
+        self._save_now()
+        self.remove_tray()
         log.info("Window closing")
         return True
+
+    def _hide_to_tray(self) -> None:
+        self._save_now()
+        self.window.hide()  # unsaved input stays in the page: nothing is lost
+        log.info("Window hidden in the notification area")
+        if not self.prefs.tray_hint_shown:
+            texts = _texts(self.language)
+            if notifications.show(texts["tray_title"], texts["tray_body"]):
+                self.prefs.tray_hint_shown = True
+                self._schedule_save()
+
+    def quit(self) -> None:
+        """ "Quit" in the tray menu (UI thread): end TaskRadar, after asking about unsaved changes."""
+        if self.bridge.unsaved:
+            self.show_window()  # let the user see what would be lost
+            flags = win32.MB_YESNO | win32.MB_ICONWARNING | win32.MB_DEFBUTTON2
+            if win32.message_box(_texts(self.language)["unsaved_quit"], TITLE, flags, owner=self.hwnd) != win32.IDYES:
+                return
+        self._quitting = True
+        log.info("Quit from the notification area")
+        self.window.destroy()
 
     # -- requests from the page and the server ---------------------------------------------------------------
 
@@ -313,15 +453,13 @@ class Shell:
         self.theme = theme or self.theme
         self.language = language or self.language
         self._apply_title_bar()
+        if self.tray is not None:
+            self.tray.set_language(self.language)
         self._schedule_save()
 
     def _apply_title_bar(self) -> None:
         if self.hwnd:
             win32.set_title_bar(self.hwnd, dark=self.theme == "dark", caption=FRAME[self.theme], text=TEXT[self.theme])
-
-    def _on_activate(self) -> None:
-        if self.hwnd:
-            win32.bring_to_front(self.hwnd)
 
     # -- WebView2 events (UI thread) -------------------------------------------------------------------------
 
@@ -347,8 +485,11 @@ class Shell:
     def _on_navigation_starting(self, _sender: Any, args: Any) -> None:
         uri = str(args.Uri)
         base = self.server.url
-        if uri == base or uri.startswith(base + "/") or uri.startswith(("data:", "about:")):
+        if uri == base or uri.startswith(base + "/"):
+            self._app_shown = True
             return
+        if not leaves_the_app(uri, app_shown=self._app_shown):
+            return  # the start or error screen while TaskRadar starts
         args.Cancel = True  # the window shows TaskRadar only
         if uri.startswith(("http://", "https://", "mailto:")):
             webbrowser.open(uri)

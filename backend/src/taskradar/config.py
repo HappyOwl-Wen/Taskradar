@@ -1,6 +1,6 @@
 """Process-level configuration (paths, network binding).
 
-User-adjustable behaviour (scan intervals, reminder thresholds, LLM provider, ...) lives in the
+User-adjustable behaviour (reminder thresholds, calendar rules, timers, ...) lives in the
 database-backed settings service (:mod:`taskradar.services.settings`). This module only covers
 what must be known *before* the database is opened.
 """
@@ -41,7 +41,6 @@ class AppConfig:
     open_browser: bool = True
     scheduler_enabled: bool = True
     log_level: str = "INFO"
-    tesseract_cmd: str | None = None
     extra: dict[str, str] = field(default_factory=dict)
 
     @property
@@ -54,23 +53,12 @@ class AppConfig:
 
     @property
     def files_dir(self) -> Path:
+        """Copies of mails' attachments and files imported by earlier versions (removed with all data)."""
         return self.data_dir / "files"
-
-    @property
-    def uploads_dir(self) -> Path:
-        return self.files_dir / "uploads"
-
-    @property
-    def attachments_dir(self) -> Path:
-        return self.files_dir / "attachments"
 
     @property
     def logs_dir(self) -> Path:
         return self.data_dir / "logs"
-
-    @property
-    def tools_dir(self) -> Path:
-        return self.data_dir / "tools"
 
     @property
     def exports_dir(self) -> Path:
@@ -82,7 +70,7 @@ class AppConfig:
         return f"http://{host}:{self.port}"
 
     def ensure_dirs(self) -> None:
-        for path in (self.data_dir, self.uploads_dir, self.attachments_dir, self.logs_dir, self.exports_dir):
+        for path in (self.data_dir, self.logs_dir, self.exports_dir):
             path.mkdir(parents=True, exist_ok=True)
 
 
@@ -120,7 +108,6 @@ def load_config(**overrides: object) -> AppConfig:
         "open_browser": not _env_flag("TASKRADAR_NO_BROWSER"),
         "scheduler_enabled": not _env_flag("TASKRADAR_DISABLE_SCHEDULER"),
         "log_level": os.environ.get("TASKRADAR_LOG_LEVEL", "INFO").upper(),
-        "tesseract_cmd": os.environ.get("TASKRADAR_TESSERACT_CMD") or None,
     }
     values.update(overrides)
     return AppConfig(**values)  # type: ignore[arg-type]

@@ -1,4 +1,4 @@
-"""Command line entry point: ``python -m taskradar [desktop|serve|migrate|demo-files|eval|uninstall]``.
+"""Command line entry point: ``python -m taskradar [desktop|serve|migrate|uninstall]``.
 
 Without a command, TaskRadar.exe opens the desktop window and ``python -m taskradar`` starts the browser version.
 """
@@ -132,8 +132,6 @@ def cmd_serve(args: argparse.Namespace) -> int:
     container = build_container(config)
     app = create_app(container, enable_scheduler=config.scheduler_enabled)
     log.info("TaskRadar %s starting on %s (data: %s)", __version__, config.base_url, config.data_dir)
-    if not container.ocr.available():
-        log.warning("No OCR engine found - scanned PDFs and screenshots cannot be read. See README (Tesseract).")
     if config.open_browser:
         threading.Timer(1.5, lambda: webbrowser.open(config.base_url)).start()
     write_instance(config.data_dir, mode="serve", url=config.base_url)
@@ -153,26 +151,6 @@ def cmd_migrate(args: argparse.Namespace) -> int:
     config.ensure_dirs()
     upgrade_to_head(create_sqlite_engine(config.database_url))
     print(f"Database at {config.db_path} is up to date.")
-    return 0
-
-
-def cmd_demo_files(args: argparse.Namespace) -> int:
-    from taskradar.demo.samples import write_samples
-
-    target = Path(args.target).resolve()
-    written = write_samples(target)
-    for path in written:
-        print(path)
-    return 0
-
-
-def cmd_eval(args: argparse.Namespace) -> int:
-    from taskradar.evaluation import run_evaluation
-
-    report = run_evaluation(Path(args.dataset) if args.dataset else None)
-    print(report.to_text())
-    if args.json:
-        Path(args.json).write_text(report.to_json(), encoding="utf-8")
     return 0
 
 
@@ -207,15 +185,6 @@ def main(argv: list[str] | None = None) -> int:
     migrate = sub.add_parser("migrate", help="apply database migrations")
     migrate.add_argument("--data-dir", default=None)
     migrate.set_defaults(func=cmd_migrate)
-
-    demo = sub.add_parser("demo-files", help="write synthetic demo PDFs / screenshots into a folder")
-    demo.add_argument("target")
-    demo.set_defaults(func=cmd_demo_files)
-
-    ev = sub.add_parser("eval", help="run the extraction / dedup evaluation on the synthetic labelled dataset")
-    ev.add_argument("--dataset", default=None)
-    ev.add_argument("--json", default=None, help="also write the report as JSON")
-    ev.set_defaults(func=cmd_eval)
 
     uninstall = sub.add_parser("uninstall", help="remove the installed TaskRadar (your data is kept)")
     uninstall.add_argument("--quiet", action="store_true", help="no questions (for scripts)")

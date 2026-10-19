@@ -1,11 +1,9 @@
-import { ChevronRight, ExternalLink, FileText, FlaskConical, FolderOpen, Image, Mail, PenLine, type LucideIcon } from "lucide-react";
+import { ChevronRight, ExternalLink, FileText, FlaskConical, Image, Mail, PenLine, type LucideIcon } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Badge } from "@/components/ui/badge";
 import type { BadgeTone } from "@/components/ui/variants";
 import { Button } from "@/components/ui/button";
-import { api } from "@/lib/api";
 import { formatBytes } from "@/lib/format";
-import { useAction } from "@/lib/queries";
 import type { TaskSourceEntry } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { EvidenceList } from "./Evidence";
@@ -34,35 +32,20 @@ function iconKey(entry: TaskSourceEntry): keyof typeof SOURCE_ICONS {
   return "manual";
 }
 
-/** Links to the original: the Gmail message, the stored file, the folder in Explorer. */
-export function SourceLinks({ entry }: { entry: TaskSourceEntry }) {
+/** The mail in Gmail (opens in the browser); TaskRadar itself no longer reads mail or opens imported files. */
+function SourceLinks({ entry }: { entry: TaskSourceEntry }) {
   const { t } = useTranslation();
-  const reveal = useAction((id: number) => api.revealDocument(id), { success: t("detail.revealed"), invalidate: false });
   const msg = entry.message;
-  const doc = entry.document;
-  const links = [];
-  if (msg?.web_link && msg.source_kind === "gmail") {
-    links.push(
-      <Button key="gmail" variant="outline" size="xs" asChild>
+  if (!msg?.web_link || msg.source_kind !== "gmail") return null;
+  return (
+    <div className="flex flex-wrap gap-2">
+      <Button variant="outline" size="xs" asChild>
         <a href={msg.web_link} target="_blank" rel="noreferrer noopener">
           <ExternalLink /> {t("detail.openInGmail")}
         </a>
-      </Button>,
-    );
-  }
-  if (doc && (doc.has_stored_copy || doc.original_path)) {
-    links.push(
-      <Button key="file" variant="outline" size="xs" asChild>
-        <a href={api.documentFileUrl(doc.id)} target="_blank" rel="noreferrer noopener">
-          <ExternalLink /> {t("detail.viewFile")}
-        </a>
-      </Button>,
-      <Button key="reveal" variant="ghost" size="xs" onClick={() => reveal.mutate(doc.id)} disabled={reveal.isPending}>
-        <FolderOpen /> {t("detail.reveal")}
-      </Button>,
-    );
-  }
-  return links.length ? <div className="flex flex-wrap gap-2">{links}</div> : null;
+      </Button>
+    </div>
+  );
 }
 
 function SourceEntry({ entry, timezone, open }: { entry: TaskSourceEntry; timezone: string; open: boolean }) {
@@ -111,8 +94,8 @@ function SourceEntry({ entry, timezone, open }: { entry: TaskSourceEntry; timezo
 }
 
 /**
- * Every source of a task with its verbatim quotes, collapsed to one line each so that a task with
- * many reminders stays readable. The first source is open by default.
+ * Where an earlier version found the task: every mail or file with its verbatim quotes, collapsed to one line each.
+ * Only tasks of earlier versions have sources; the user's own to-dos have none.
  */
 export function SourceList({ sources, timezone, className, openFirst = true }: { sources: TaskSourceEntry[]; timezone: string; className?: string; openFirst?: boolean }) {
   const { t } = useTranslation();

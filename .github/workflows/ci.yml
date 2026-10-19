@@ -13,7 +13,7 @@ concurrency:
 
 jobs:
   backend:
-    name: Backend (lint, types, tests, evaluation)
+    name: Backend (lint, types, tests)
     runs-on: ubuntu-24.04
     defaults:
       run:
@@ -26,25 +26,6 @@ jobs:
           python-version: "3.13"
           cache: pip
           cache-dependency-path: backend/pyproject.toml
-
-      - name: Install Tesseract with the pinned language models
-        # Same model files as scripts/install-tesseract.ps1 (verified by SHA-256), so OCR results match Windows.
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends tesseract-ocr tesseract-ocr-eng
-          TESSDATA="$RUNNER_TEMP/tessdata"
-          mkdir -p "$TESSDATA"
-          SYSTEM_TESSDATA="$(dirname "$(find /usr/share/tesseract-ocr -name eng.traineddata | head -n 1)")"
-          cp "$SYSTEM_TESSDATA/eng.traineddata" "$SYSTEM_TESSDATA/osd.traineddata" "$TESSDATA/"
-          while read -r lang sha; do
-            curl -fsSL -o "$TESSDATA/$lang.traineddata" "https://github.com/tesseract-ocr/tessdata/raw/main/$lang.traineddata"
-            echo "$sha  $TESSDATA/$lang.traineddata" | sha256sum -c -
-          done <<'MODELS'
-          deu 896b3b4956503ab9daa10285db330881b2d74b70d889b79262cc534b9ec699a4
-          chi_sim fc05d89ab31d8b4e226910f16a8bcbf78e43bae3e2580bb5feefd052efdab363
-          MODELS
-          echo "TESSDATA_PREFIX=$TESSDATA" >> "$GITHUB_ENV"
-          TESSDATA_PREFIX="$TESSDATA" tesseract --list-langs
 
       - name: Install the backend
         run: python -m pip install -e ".[dev]"
@@ -60,11 +41,6 @@ jobs:
 
       - name: Tests
         run: pytest -q -rs
-
-      - name: Evaluation report
-        run: |
-          python -m taskradar eval
-          python -m taskradar eval --dataset src/taskradar/demo/eval_holdout.json
 
   frontend:
     name: Frontend (lint, types, tests, build)

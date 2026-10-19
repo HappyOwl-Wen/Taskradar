@@ -84,3 +84,20 @@ def test_existing_demo_tasks_become_samples_and_real_ones_stay_real(config: AppC
         flags = dict(conn.execute(text("SELECT id, sample FROM tasks")).all())
     assert flags == {"demo": 1, "real": 0, "mixed": 0, "manual": 0}
     engine.dispose()
+
+
+def test_the_migrations_build_the_schema_the_models_describe(config: AppConfig) -> None:
+    from alembic.autogenerate import compare_metadata
+    from alembic.migration import MigrationContext
+
+    from taskradar.db.base import Base
+
+    config.ensure_dirs()
+    engine = create_sqlite_engine(config.database_url)
+    try:
+        upgrade_to_head(engine)
+        with engine.connect() as conn:
+            context = MigrationContext.configure(conn, opts={"compare_type": True})
+            assert compare_metadata(context, Base.metadata) == []
+    finally:
+        engine.dispose()

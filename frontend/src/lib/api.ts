@@ -1,27 +1,18 @@
 import type {
-  AgentRun,
   CalendarLink,
   CalendarPreview,
   Dashboard,
-  DocumentBrief,
-  DocumentDetail,
   GoogleStatus,
-  ImportResult,
-  IngestOutcome,
-  MessageDetail,
-  MessageListItem,
-  Metrics,
+  LegacyData,
   NotificationItem,
   QuickParse,
   Settings,
-  Source,
-  RecheckResult,
-  Suggestion,
-  SyncJob,
   SystemStatus,
   SystemSummary,
   TaskDetail,
   TaskSummary,
+  TimerPhase,
+  TimersOverview,
 } from "./types";
 
 /** Error envelope returned by the backend: {"error": {code, message, recoverable, details}} */
@@ -132,20 +123,23 @@ export interface TaskQuery extends Query {
   status?: string[];
   category?: string[];
   urgency?: string[];
-  source_kind?: string[];
   q?: string;
-  needs_review?: boolean;
-  /** true: only demo/test data, false: only real tasks, omitted: both. */
+  /** true: only test data, false: only real tasks, omitted: both. */
   sample?: boolean;
-  /** Unconfirmed tasks and tasks with an open suggestion: everything waiting for a decision. */
-  needs_decision?: boolean;
+  /** true: only the user's own to-dos; false: only tasks found in mails and files by earlier versions. */
+  manual?: boolean;
+  /** true: only tasks with an event in TaskRadar's Google calendar. */
+  in_calendar?: boolean;
   sort?: string;
   order?: "asc" | "desc";
   limit?: number;
 }
 
-/** Which deadline survives a merge: the kept task's ("existing") or the merged-in task's ("new"). */
-export type DueChoice = "existing" | "new";
+/** What can be done to a running (or finished) timer. */
+export type TimerAction = "pause" | "resume" | "skip" | "restart" | "cancel";
+
+/** What a selection of tasks can be set to at once ("todo" reopens; "delete" removes them for good). */
+export type BatchAction = "todo" | "in_progress" | "waiting_for_reply" | "complete" | "dismiss" | "delete";
 
 export interface TaskPatch {
   title?: string;
@@ -167,63 +161,25 @@ export const api = {
   quickParse: (text: string) => post<QuickParse>("/api/tasks/quick-parse", { text }),
   updateTask: (id: string, body: TaskPatch) => patch<TaskDetail>(`/api/tasks/${id}`, body),
   setStatus: (id: string, status: string, note?: string) => post<TaskDetail>(`/api/tasks/${id}/status`, { status, note }),
-  batch: (ids: string[], action: string) =>
-    post<{ changed: string[]; count: number; undo_event_ids?: number[] }>("/api/tasks/batch", { ids, action }),
-  /** `dueChoice` is required when the two deadlines differ (the server answers 409 due_choice_required). */
-  mergeTask: (id: string, intoTaskId: string, dueChoice?: DueChoice) =>
-    post<TaskDetail>(`/api/tasks/${id}/merge`, { into_task_id: intoTaskId, due_choice: dueChoice ?? null }),
-  deleteTask: (id: string) => del<{ deleted: string }>(`/api/tasks/${id}`),
-  setSample: (id: string, sample: boolean) =>
-    post<TaskDetail & { calendar_warning?: string }>(`/api/tasks/${id}/sample`, { sample }),
-  /** Keep what an automatic change did (e.g. the new deadline) and clear the flag; undoable. */
-  resolveReview: (id: string, reasons: string[]) => post<TaskDetail>(`/api/tasks/${id}/review/resolve`, { reasons }),
-  recheck: () => get<RecheckResult>("/api/review/recheck"),
+  batch: (ids: string[], action: BatchAction) =>
+    post<{ changed?: string[]; deleted?: string[]; count: number; undo_event_ids?: number[]; calendar_not_removed?: string[] }>(
+      "/api/tasks/batch",
+      { ids, action },
+    ),
+  deleteTask: (id: string) => del<{ deleted: string; calendar_warning?: string }>(`/api/tasks/${id}`),
+  setSample: (id: string, sample: boolean) => post<TaskDetail>(`/api/tasks/${id}/sample`, { sample }),
   undo: (eventId: number) => post<TaskDetail>(`/api/events/${eventId}/undo`),
-  suggestions: () => get<{ items: Suggestion[] }>("/api/suggestions"),
-  acceptSuggestion: (id: number, dueChoice?: DueChoice) =>
-    post<TaskDetail>(`/api/suggestions/${id}/accept`, { due_choice: dueChoice ?? null }),
-  rejectSuggestion: (id: number) => post<TaskDetail>(`/api/suggestions/${id}/reject`),
   calendarPreview: (id: string) => get<CalendarPreview>(`/api/tasks/${id}/calendar/preview`),
   calendarSync: (id: string) => post<CalendarLink & { unchanged?: boolean }>(`/api/tasks/${id}/calendar`, { confirm: true }),
   calendarRemove: (id: string) => post<CalendarLink>(`/api/tasks/${id}/calendar/remove`, { confirm: true }),
 
-  sources: () => get<{ items: Source[] }>("/api/sources"),
-  syncSource: (id: number) => post<{ job: SyncJob | null; accepted: boolean }>(`/api/sources/${id}/sync`),
-  addFolder: (path: string, recursive: boolean) => post<Source>("/api/sources/folders", { path, recursive }),
-  deleteSource: (id: number) => del<{ deleted: number; removed_tasks?: number }>(`/api/sources/${id}`),
-  patchSource: (id: number, enabled: boolean) => patch<Source>(`/api/sources/${id}`, { enabled }),
-  jobs: (limit = 30) => get<{ items: SyncJob[] }>("/api/sync-jobs", { limit }),
-  failures: () => get<{ documents: DocumentBrief[]; messages: MessageListItem[]; jobs: SyncJob[] }>("/api/failures"),
-  createDemoMailbox: () => post<Source>("/api/demo/mailbox"),
-  advanceDemo: () => post<{ stage: number }>("/api/demo/advance"),
-  setFailureMode: (mode: string) => put<{ mode: string }>("/api/demo/failure-mode", { mode }),
-
-  documents: () => get<{ items: DocumentBrief[] }>("/api/documents", { limit: 1000 }),
-  document: (id: number) => get<DocumentDetail>(`/api/documents/${id}`),
-  upload: (files: File[]) => {
-    const form = new FormData();
-    files.forEach((f) => form.append("files", f, f.name));
-    return request<{ results: ImportResult[] }>("POST", "/api/documents/upload", { form });
-  },
-  revealDocument: (id: number) => post<{ revealed: boolean }>(`/api/documents/${id}/reveal`),
-  reprocessDocument: (id: number) => post<ImportResult>(`/api/documents/${id}/reprocess`),
-  reprocessOcrBacklog: () => post<{ accepted: boolean; count: number; job: SyncJob | null }>("/api/documents/reprocess-ocr"),
-  deleteDocument: (id: number) => del<{ deleted: number }>(`/api/documents/${id}`),
-  documentFileUrl: (id: number) => `/api/documents/${id}/file`,
-  messages: () => get<{ items: MessageListItem[] }>("/api/messages", { limit: 1000 }),
-  message: (id: number) => get<MessageDetail>(`/api/messages/${id}`),
-  deleteMessage: (id: number) => del<{ deleted: number }>(`/api/messages/${id}`),
-  reprocessMessage: (id: number) => post<IngestOutcome>(`/api/messages/${id}/reprocess`),
-  agentRuns: (limit = 50) => get<{ items: AgentRun[] }>("/api/agent-runs", { limit }),
-
   settings: () => get<Settings>("/api/settings"),
   updateSettings: (changes: Partial<{ [K in keyof Settings]: Partial<Settings[K]> }>) => put<Settings>("/api/settings", changes),
-  setApiKey: (apiKey: string) => put<{ configured: boolean }>("/api/settings/llm-key", { api_key: apiKey }),
-  deleteApiKey: () => del<{ configured: boolean }>("/api/settings/llm-key"),
-  testLlm: () => post<{ ok: boolean; model: string; latency_ms: number }>("/api/settings/llm/test"),
   systemStatus: () => get<SystemStatus>("/api/system/status"),
   systemSummary: () => get<SystemSummary>("/api/system/summary"),
   setAutostart: (enabled: boolean) => post<{ enabled: boolean }>("/api/system/autostart", { enabled, confirm: true }),
+  setStartMenu: (enabled: boolean) =>
+    post<NonNullable<SystemStatus["start_menu"]>>("/api/system/start-menu", { enabled, confirm: true }),
   google: () => get<GoogleStatus>("/api/integrations/google"),
   uploadClientConfig: (file: File) => {
     const form = new FormData();
@@ -231,16 +187,26 @@ export const api = {
     return request<GoogleStatus["client"]>("POST", "/api/integrations/google/client-config", { form });
   },
   deleteClientConfig: () => del<GoogleStatus["client"]>("/api/integrations/google/client-config"),
-  connectGoogle: (service: "gmail" | "calendar") => post<{ auth_url: string }>(`/api/integrations/google/${service}/connect`),
+  connectGoogle: (service: "calendar") => post<{ auth_url: string }>(`/api/integrations/google/${service}/connect`),
+  disconnectGoogle: (service: "calendar") => post<{ connected: boolean }>(`/api/integrations/google/${service}/disconnect`),
   updateDesktopState: (state: { unsaved?: boolean; theme?: "light" | "dark"; language?: "zh-CN" | "en" }) =>
     put<{ ok: boolean }>("/api/desktop/state", state),
-  disconnectGoogle: (service: "gmail" | "calendar") => post<{ connected: boolean }>(`/api/integrations/google/${service}/disconnect`),
+
+  timers: () => get<TimersOverview>("/api/timers"),
+  startPomodoro: (body: { phase?: TimerPhase; task_id?: string } = {}) => post<TimersOverview>("/api/timers/pomodoro", body),
+  /** A duration in seconds, or an end time "YYYY-MM-DDTHH:MM" in the user's time zone. */
+  startCountdown: (body: { label?: string; seconds?: number; until?: string }) => post<TimersOverview>("/api/timers/countdowns", body),
+  timerAction: (id: number, action: TimerAction) => post<TimersOverview>(`/api/timers/${id}/${action}`),
+  clearFinishedTimers: () => post<TimersOverview>("/api/timers/clear-finished"),
 
   notifications: () => get<{ items: NotificationItem[]; unread: number }>("/api/notifications", { limit: 30 }),
   markRead: (id?: number) => post<{ unread: number }>("/api/notifications/read", { id: id ?? null }),
-  scanReminders: () => post<SyncJob>("/api/notifications/scan"),
+  scanReminders: () => post<{ details?: Record<string, unknown> }>("/api/notifications/scan"),
   testDesktopNotification: () => post<{ delivered: boolean }>("/api/notifications/test-desktop"),
-  metrics: () => get<Metrics>("/api/metrics"),
   exportUrl: (includeContent: boolean) => buildUrl("/api/data/export", { include_content: includeContent }),
   deleteAll: () => post<{ deleted: Record<string, number> }>("/api/data/delete-all", { confirm: "DELETE" }),
+  legacyData: () => get<LegacyData>("/api/data/legacy"),
+  deleteImported: () => post<{ deleted: Record<string, number> }>("/api/data/delete-imported", { confirm: true }),
+  deleteLegacyCredential: (name: LegacyData["credentials"][number]) =>
+    del<{ credentials: LegacyData["credentials"] }>(`/api/data/legacy-credentials/${name}`),
 };

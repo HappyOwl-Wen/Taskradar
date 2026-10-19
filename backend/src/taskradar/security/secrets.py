@@ -18,6 +18,9 @@ GOOGLE_CLIENT_CONFIG = "google_client_config"
 GOOGLE_TOKEN_GMAIL = "google_token_gmail"  # noqa: S105 - name of a credential-store entry, not a secret
 GOOGLE_TOKEN_CALENDAR = "google_token_calendar"  # noqa: S105 - name of a credential-store entry, not a secret
 
+# What removed features stored (Gmail reading, analysis by a language model): only ever deleted, never used.
+LEGACY_SECRETS = {"gmail": GOOGLE_TOKEN_GMAIL, "llm_api_key": OPENAI_API_KEY}
+
 _CHUNK = 1000
 
 

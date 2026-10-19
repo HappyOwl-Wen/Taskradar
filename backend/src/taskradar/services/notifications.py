@@ -16,7 +16,7 @@ from taskradar.db.session import transaction
 from taskradar.deadlines.engine import Thresholds, evaluate, format_due_at
 from taskradar.deadlines.reminders import ReminderSettings, plan_reminder
 from taskradar.domain.enums import ACTIVE_STATUSES, JobKind, JobStatus, JobTrigger
-from taskradar.notify.desktop import show_toast
+from taskradar.notify import windows
 from taskradar.security.permissions import PermissionGuard, SideEffect
 from taskradar.services.jobs import JobContext, JobRunner
 from taskradar.services.settings import SettingsService
@@ -33,7 +33,7 @@ class NotificationService:
         guard: PermissionGuard,
         jobs: JobRunner,
         clock: Callable[[], dt.datetime] = utcnow,
-        toast: Callable[[str, str], bool] = show_toast,
+        toast: Callable[[str, str], bool] = windows.show,
     ) -> None:
         self._factory = session_factory
         self.settings = settings

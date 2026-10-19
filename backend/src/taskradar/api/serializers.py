@@ -5,16 +5,7 @@ from __future__ import annotations
 import datetime as dt
 from typing import Any
 
-from taskradar.db.models import (
-    Document,
-    ExtractionRun,
-    Message,
-    Source,
-    Task,
-    TaskEvent,
-    TaskSource,
-    TaskSuggestion,
-)
+from taskradar.db.models import Document, Message, Task, TaskEvent, TaskSource
 from taskradar.deadlines.engine import Thresholds, evaluate, format_due_at
 from taskradar.services.calendar_sync import link_to_dict
 
@@ -45,7 +36,8 @@ def task_summary(task: Task, *, now: dt.datetime, thresholds: Thresholds) -> dic
         now=now,
         thresholds=thresholds,
     )
-    kinds = sorted({kind for s in task.sources if (kind := _source_kind(s))})
+    # Where the task comes from: "manual" for the user's own to-dos, else the kind of mail or file it was found in.
+    kinds = sorted({kind for s in task.sources if (kind := _source_kind(s))} | ({"manual"} if task.manual else set()))
     link = task.calendar_links[0] if task.calendar_links else None
     return {
         "id": task.id,
@@ -71,9 +63,6 @@ def task_summary(task: Task, *, now: dt.datetime, thresholds: Thresholds) -> dic
         "review_reasons": list(task.review_reasons or []),
         "source_count": len(task.sources),
         "source_kinds": kinds,
-        "pending_suggestions": sum(1 for s in task.suggestions if s.status == "pending"),
-        # What the open suggestions are about, so a list can say it ("deadline update", "possibly done").
-        "pending_suggestion_kinds": sorted({s.kind for s in task.suggestions if s.status == "pending"}),
         "calendar_status": link.status if link else None,
         "detected_at": _iso(task.detected_at),
         "source_published_at": _iso(task.source_published_at),
@@ -172,6 +161,10 @@ _SAFE_EVENT_KEYS = {
 }
 
 
+# What can still be undone: merges, suggestions and attached mails of earlier versions stay in the history only.
+_REVERTIBLE_EVENTS = {"status_changed", "fields_updated"}
+
+
 def event_entry(ev: TaskEvent) -> dict[str, Any]:
     return {
         "id": ev.id,
@@ -180,24 +173,9 @@ def event_entry(ev: TaskEvent) -> dict[str, Any]:
         "summary": ev.summary,
         "reason": ev.reason,
         "created_at": _iso(ev.created_at),
-        "revertible": ev.revertible and ev.reverted_at is None,
+        "revertible": ev.revertible and ev.reverted_at is None and ev.event_type in _REVERTIBLE_EVENTS,
         "reverted": ev.reverted_at is not None,
         "data": {k: v for k, v in (ev.data or {}).items() if k in _SAFE_EVENT_KEYS},
-    }
-
-
-def suggestion_entry(s: TaskSuggestion) -> dict[str, Any]:
-    return {
-        "id": s.id,
-        "task_id": s.task_id,
-        "kind": s.kind,
-        "payload": s.payload,
-        "evidence": s.evidence,
-        "confidence": round(s.confidence, 3),
-        "reason": s.reason,
-        "status": s.status,
-        "created_at": _iso(s.created_at),
-        "related_task_id": s.related_task_id,
     }
 
 
@@ -215,51 +193,8 @@ def task_detail(
             "due_version": task.due_version,
             "sources": [source_entry(s) for s in task.sources],
             "events": [event_entry(e) for e in reversed(task.events)],
-            "suggestions": [suggestion_entry(s) for s in task.suggestions],
             "calendar": link_to_dict(task.calendar_links[0]) if task.calendar_links else None,
             "links": links or [],
         }
     )
     return data
-
-
-def source_to_dict(source: Source, extra: dict[str, Any] | None = None) -> dict[str, Any]:
-    return {
-        "id": source.id,
-        "kind": source.kind,
-        "name": source.name,
-        "account": source.account,
-        "folder_path": source.folder_path,
-        "recursive": source.recursive,
-        "enabled": source.enabled,
-        "status": source.status,
-        "last_sync_at": _iso(source.last_sync_at),
-        "last_success_at": _iso(source.last_success_at),
-        "last_error_code": source.last_error_code,
-        "last_error_message": source.last_error_message,
-        **(extra or {}),
-    }
-
-
-def run_to_dict(run: ExtractionRun) -> dict[str, Any]:
-    return {
-        "id": run.id,
-        "message_id": run.message_id,
-        "document_id": run.document_id,
-        "extractor": run.extractor,
-        "provider": run.provider,
-        "model": run.model,
-        "status": run.status,
-        "content_type": run.content_type,
-        "attempts": run.attempts,
-        "input_chars": run.input_chars,
-        "redactions": run.redactions,
-        "input_tokens": run.input_tokens,
-        "output_tokens": run.output_tokens,
-        "cost_usd": run.cost_usd,
-        "latency_ms": run.latency_ms,
-        "candidates_count": run.candidates_count,
-        "error": run.error,
-        "trace": run.trace,
-        "created_at": _iso(run.created_at),
-    }

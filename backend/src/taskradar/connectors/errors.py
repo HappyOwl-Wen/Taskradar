@@ -1,14 +1,10 @@
-"""Connector error taxonomy and a bounded retry helper with exponential backoff and jitter."""
+"""Errors of the Google Calendar connector, by what can be done about them (retry, reconnect, nothing)."""
 
 from __future__ import annotations
 
-import logging
-import random
-import threading
-import time
-from collections.abc import Callable
-
-log = logging.getLogger(__name__)
+import json
+import re
+from typing import Any
 
 
 class ConnectorError(RuntimeError):
@@ -63,82 +59,57 @@ class ApiNotEnabledError(ConnectorError):
         self.activation_url = activation_url
 
 
-RETRYABLE = (RateLimitedError, TransientError)
+# Google's link to switch an API on; only ever shown as a link, so accept nothing but the Cloud Console.
+_ACTIVATION_URL = re.compile(r"https://console\.(?:developers|cloud)\.google\.com/[^\s\"'<>]+")
 
 
-def backoff_delay(
-    exc: ConnectorError,
-    attempt: int,
+def _activation_url(error: dict[str, Any]) -> str | None:
+    for detail in error.get("details") or []:
+        url = ((detail or {}).get("metadata") or {}).get("activationUrl")
+        if isinstance(url, str) and _ACTIVATION_URL.fullmatch(url):
+            return url
+    found = _ACTIVATION_URL.search(str(error.get("message") or ""))
+    return found.group(0).rstrip(".,;)") if found else None
+
+
+def map_http_error(
+    status: int,
+    content: bytes | str | None,
+    headers: dict[str, str] | None = None,
     *,
-    base_delay: float,
-    max_delay: float,
-    rate_limit_base_delay: float | None = None,
-    rand: Callable[[], float] = random.random,
-) -> float:
-    """Exponential back-off with jitter for the given (1-based) attempt.
-
-    Rate limits start from a longer base delay. A server-provided ``Retry-After`` is a minimum: the delay
-    is never shorter than what the server asked for.
-    """
-    base = rate_limit_base_delay if isinstance(exc, RateLimitedError) and rate_limit_base_delay else base_delay
-    delay = min(max_delay, base * 2 ** (attempt - 1)) * (0.5 + rand() / 2)
-    if exc.retry_after:
-        delay = max(delay, exc.retry_after * (1 + rand() / 10))
-    return delay
-
-
-def call_with_retries[T](
-    fn: Callable[[], T],
-    *,
-    max_attempts: int = 5,
-    base_delay: float = 1.0,
-    max_delay: float = 32.0,
-    rate_limit_base_delay: float | None = None,
-    sleep: Callable[[float], None] = time.sleep,
-) -> T:
-    """Call ``fn`` and retry rate limits / transient errors with back-off.
-
-    When the server asks to wait longer than ``2 * max_delay`` the error is raised instead, so the caller's
-    job can fail recoverably and be rescheduled rather than blocking for minutes.
-    """
-    attempt = 0
-    while True:
-        attempt += 1
-        try:
-            return fn()
-        except RETRYABLE as exc:
-            if attempt >= max_attempts or (exc.retry_after or 0) > 2 * max_delay:
-                raise
-            delay = backoff_delay(
-                exc, attempt, base_delay=base_delay, max_delay=max_delay, rate_limit_base_delay=rate_limit_base_delay
-            )
-            log.info("%s (attempt %s/%s); retrying in %.1fs", exc.code, attempt, max_attempts, delay)
-            sleep(delay)
-
-
-class RequestPacer:
-    """Spaces out API requests (at most one every ``min_interval`` seconds), thread-safe.
-
-    Google's per-user rate limiter reacts to bursts; a steady pace avoids most 403 rateLimitExceeded errors.
-    """
-
-    def __init__(
-        self,
-        min_interval: float,
-        *,
-        clock: Callable[[], float] = time.monotonic,
-        sleep: Callable[[float], None] = time.sleep,
-    ) -> None:
-        self.min_interval = min_interval
-        self._clock = clock
-        self._sleep = sleep
-        self._lock = threading.Lock()
-        self._next_slot = 0.0
-
-    def wait(self) -> None:
-        with self._lock:
-            now = self._clock()
-            slot = max(now, self._next_slot)
-            self._next_slot = slot + self.min_interval
-        if slot > now:
-            self._sleep(slot - now)
+    api: str = "Google API",
+) -> Exception:
+    """Translate an HTTP failure from a Google API into the connector error taxonomy."""
+    reason = ""
+    error: dict[str, Any] = {}
+    try:
+        payload = json.loads(content or b"{}")
+        error = payload.get("error", {}) if isinstance(payload.get("error"), dict) else {}
+        errors = error.get("errors") or []
+        reason = (errors[0].get("reason") if errors else "") or error.get("status", "")
+    except (ValueError, AttributeError, TypeError):
+        pass
+    detail_reasons = {(d or {}).get("reason") for d in error.get("details") or [] if isinstance(d, dict)}
+    retry_after = None
+    if headers:
+        raw = headers.get("retry-after") or headers.get("Retry-After")
+        if raw and str(raw).isdigit():
+            retry_after = float(raw)
+    if status == 401:
+        return AuthRequiredError("Google rejected the stored credentials; please reconnect")
+    if status == 403 and (
+        reason in ("accessNotConfigured", "SERVICE_DISABLED") or "SERVICE_DISABLED" in detail_reasons
+    ):
+        return ApiNotEnabledError(
+            f"The {api} is not enabled in your Google Cloud project. Enable it, wait a minute, then try again.",
+            activation_url=_activation_url(error),
+        )
+    if status == 429 or (status == 403 and reason in ("rateLimitExceeded", "userRateLimitExceeded", "quotaExceeded")):
+        return RateLimitedError(f"{api} rate limit reached", retry_after=retry_after)
+    if status == 403 and reason in ("insufficientPermissions", "forbidden", "PERMISSION_DENIED"):
+        return AuthRequiredError("The Google authorization does not include the required permission")
+    if status == 404:
+        return NotFoundError("Resource not found")
+    if status >= 500:
+        return TransientError(f"{api} server error ({status})")
+    return PermanentError(f"{api} request failed ({status} {reason})".strip())

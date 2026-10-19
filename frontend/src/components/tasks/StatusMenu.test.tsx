@@ -86,9 +86,14 @@ describe("CompleteToggle", () => {
     expect(box()).toHaveAttribute("aria-checked", "false");
   });
 
-  it("is not a tick box for tasks that cannot be completed yet", () => {
-    renderToggle(makeTask({ status: "candidate" }));
+  it("ticks off an unconfirmed task of an earlier version like any other", () => {
+    renderToggle(makeTask({ title: "Alt", status: "candidate" }));
+    expect(screen.getByRole("checkbox", { name: "把「Alt」标记为已完成" })).toBeInTheDocument();
+  });
+
+  it("is not a tick box for a dismissed task (it is restored first)", () => {
+    renderToggle(makeTask({ status: "dismissed" }));
     expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
-    expect(screen.getByText("待确认")).toBeInTheDocument();
+    expect(screen.getByText("已忽略")).toBeInTheDocument();
   });
 });

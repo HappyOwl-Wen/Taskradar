@@ -7,14 +7,7 @@ import datetime as dt
 import pytest
 
 from taskradar.domain.enums import DueAnchor, DuePrecision
-from taskradar.extraction.dates import (
-    choose_deadline,
-    detect_document_date,
-    find_dates,
-    find_times,
-    mention_to_due,
-    parse_due_text,
-)
+from taskradar.extraction.dates import choose_deadline, find_dates, mention_to_due
 
 ANCHOR = dt.date(2026, 10, 13)  # a Tuesday
 
@@ -135,13 +128,6 @@ def test_approximate_expressions_need_confirmation() -> None:
     assert first("Bitte bis Ende November einreichen.").date == dt.date(2026, 11, 30)
 
 
-def test_relative_date_without_source_date_is_flagged() -> None:
-    due = parse_due_text("bis nächsten Freitag", ANCHOR, anchor_kind=DueAnchor.IMPORT_TIME)
-    assert due is not None
-    assert due.needs_confirmation
-    assert "relative_to_import_time" in due.notes
-
-
 def test_year_inference_rolls_over() -> None:
     assert first("请在1月5日前提交", anchor=dt.date(2026, 12, 28)).date == dt.date(2027, 1, 5)
 
@@ -161,20 +147,3 @@ def test_utc_times_are_converted_to_berlin_across_dst_change() -> None:
 
 def test_version_numbers_are_not_dates() -> None:
     assert find_dates("Version 1.5.2 released", ANCHOR) == []
-
-
-def test_find_times() -> None:
-    assert dt.time(17, 0) in find_times("截止时间为2026-10-20 17:00")
-
-
-@pytest.mark.parametrize(
-    ("text", "expected"),
-    [
-        ("München, 01.10.2026\n\nSehr geehrte Frau Wang,", dt.date(2026, 10, 1)),
-        ("Universität\nDatum: 2. Oktober 2026\nBetreff", dt.date(2026, 10, 2)),
-        ("通知\n发布日期：2026年10月8日\n各位同学", dt.date(2026, 10, 8)),
-        ("Bitte zahlen Sie bis 30.10.2026.", None),
-    ],
-)
-def test_document_date_detection(text: str, expected: dt.date | None) -> None:
-    assert detect_document_date(text) == expected

@@ -1,18 +1,17 @@
-"""Local data management: export everything as JSON, delete single items or all data.
+"""Local data management: export everything as JSON, delete a task, the mails and files imported by earlier
+versions, or all data.
 
-Deleting never touches original files in watched folders - only TaskRadar's own copies.
+Deleting never touches the user's original files - only TaskRadar's own copies.
 """
 
 from __future__ import annotations
 
 import datetime as dt
-import logging
 import shutil
 from collections.abc import Callable
-from pathlib import Path
 from typing import Any
 
-from sqlalchemy import delete, or_, select
+from sqlalchemy import delete, select
 from sqlalchemy.orm import Session, sessionmaker
 
 from taskradar import __version__
@@ -35,10 +34,9 @@ from taskradar.db.models import (
     TaskLink,
     TaskSource,
     TaskSuggestion,
+    Timer,
 )
 from taskradar.db.session import transaction
-
-log = logging.getLogger(__name__)
 
 
 def _iso(value: Any) -> Any:
@@ -80,76 +78,33 @@ class DataService:
                 "document_pages": [_row(p, content_fields) for p in session.scalars(select(DocumentPage))],
                 "calendar_links": [_row(c) for c in session.scalars(select(CalendarLink))],
                 "sync_jobs": [_row(j) for j in session.scalars(select(SyncJob))],
+                "timers": [_row(t) for t in session.scalars(select(Timer))],
             }
 
-    def _remove_owned_file(self, stored_path: str | None) -> None:
-        if not stored_path:
-            return
-        path = Path(stored_path)
-        try:
-            if path.resolve().is_relative_to(self.config.files_dir.resolve()) and path.is_file():
-                path.unlink()
-        except OSError:
-            log.warning("Could not delete stored copy %s", path.name)
-
-    def delete_document(self, document_id: int) -> None:
+    def imported_counts(self) -> dict[str, int]:
+        """Mails and files that earlier versions imported (kept until the user deletes them)."""
         with transaction(self._factory) as session:
-            doc = session.get(Document, document_id)
-            if doc is None:
-                raise LookupError("Document not found")
-            stored = doc.stored_path
-            still_used = (
-                session.scalar(select(Document.id).where(Document.stored_path == stored, Document.id != document_id))
-                if stored
-                else None
-            )
-            session.delete(doc)
-        if stored and still_used is None:
-            self._remove_owned_file(stored)
+            return {
+                "messages": len(session.scalars(select(Message.id)).all()),
+                "documents": len(session.scalars(select(Document.id)).all()),
+            }
 
-    def delete_message(self, message_id: int) -> None:
+    def delete_imported(self) -> dict[str, int]:
+        """Remove the imported mails and files with everything read from them (texts, pages, analysis runs,
+        sync history) and TaskRadar's copies of the files. Tasks stay, with the quotes they were found by."""
+        counts: dict[str, int] = {}
         with transaction(self._factory) as session:
-            msg = session.get(Message, message_id)
-            if msg is None:
-                raise LookupError("Message not found")
-            stored = [d.stored_path for d in msg.attachments]
-            session.delete(msg)
-        for path in stored:
-            self._remove_owned_file(path)
+            for model in (TaskCandidate, ExtractionRun, DocumentPage, Document, Message, SyncCheckpoint, SyncJob):
+                result = session.execute(delete(model))
+                counts[model.__tablename__] = int(getattr(result, "rowcount", 0) or 0)
+            result = session.execute(delete(Source))
+            counts["sources"] = int(getattr(result, "rowcount", 0) or 0)
+        self._remove_copies()
+        return counts
 
-    def delete_sample_source(self, source_id: int) -> int:
-        """Remove a demo / test-data source with what it brought in: its mails and files, and the sample tasks
-        that have no evidence left afterwards. Real tasks are never touched. Returns the number of removed tasks."""
-        with transaction(self._factory) as session:
-            source = session.get(Source, source_id)
-            if source is None:
-                raise LookupError("Source not found")
-            stored = [
-                p for p in session.scalars(select(Document.stored_path).where(Document.source_id == source_id)) if p
-            ]
-            task_ids = set(
-                session.scalars(
-                    select(TaskSource.task_id).where(
-                        or_(
-                            TaskSource.message_id.in_(select(Message.id).where(Message.source_id == source_id)),
-                            TaskSource.document_id.in_(select(Document.id).where(Document.source_id == source_id)),
-                        )
-                    )
-                )
-            )
-            session.delete(source)  # mails and files cascade; task evidence keeps its text but loses the link
-            session.flush()
-            session.expire_all()
-            removed = 0
-            for task in session.scalars(select(Task).where(Task.id.in_(task_ids), Task.sample.is_(True))):
-                if all(ts.message_id is None and ts.document_id is None for ts in task.sources):
-                    session.delete(task)
-                    removed += 1
-            still_used = set(session.scalars(select(Document.stored_path).where(Document.stored_path.in_(stored))))
-        for path in stored:
-            if path not in still_used:
-                self._remove_owned_file(path)
-        return removed
+    def _remove_copies(self) -> None:
+        if self.config.files_dir.exists():
+            shutil.rmtree(self.config.files_dir, ignore_errors=True)
 
     def delete_task(self, task_id: str) -> None:
         with transaction(self._factory) as session:
@@ -159,15 +114,14 @@ class DataService:
             session.delete(task)
 
     def delete_all(self) -> dict[str, int]:
-        """Remove all tasks, imported items, history, sources and stored file copies.
+        """Remove all tasks, timers, imported items, history and stored file copies.
 
-        Watched folders are no longer watched (otherwise the next scan would silently re-import everything),
-        but the files in them are never touched. Settings and credentials stay; Gmail/Calendar can be
-        disconnected separately.
+        Settings and credentials stay; Google Calendar can be disconnected separately.
         """
         counts: dict[str, int] = {}
         with transaction(self._factory) as session:
             for model in (
+                Timer,
                 Notification,
                 CalendarLink,
                 TaskSuggestion,
@@ -188,8 +142,5 @@ class DataService:
                 counts[model.__tablename__] = int(getattr(result, "rowcount", 0) or 0)
             result = session.execute(delete(Source))
             counts["sources"] = int(getattr(result, "rowcount", 0) or 0)
-        for folder in (self.config.uploads_dir, self.config.attachments_dir):
-            if folder.exists():
-                shutil.rmtree(folder, ignore_errors=True)
-            folder.mkdir(parents=True, exist_ok=True)
+        self._remove_copies()
         return counts

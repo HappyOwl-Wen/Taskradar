@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "taskradar"
 version = "0.1.0"
-description = "TaskRadar - Personal Obligation Intelligence Agent: finds obligations hidden in your mail, PDFs and screenshots."
+description = "TaskRadar - a local to-do app for Windows: one-line date recognition, Google Calendar, reminders, Pomodoro and countdown timers."
 readme = "README.md"
 license = { text = "MIT" }
 requires-python = ">=3.12"
@@ -23,20 +23,22 @@ dependencies = [
   "alembic>=1.13",
   "python-multipart>=0.0.9",
   "apscheduler>=3.10,<4",
-  "pymupdf>=1.24",
-  "pillow>=10.4",
-  "pytesseract>=0.3.10",
-  "beautifulsoup4>=4.12",
   "google-api-python-client>=2.130",
   "google-auth>=2.30",
   "google-auth-oauthlib>=1.2",
   "google-auth-httplib2>=0.2",
-  "openai>=1.40",
+  "requests>=2.31",
   "keyring>=25",
   "tzdata>=2024.1",
-  "httpx>=0.27",
   # The desktop window (Microsoft Edge WebView2 through pythonnet); the browser version does not need it.
   "pywebview>=6.1; sys_platform == 'win32'",
+  # Windows notifications through the Windows API, with a click that brings the window forward (without them
+  # TaskRadar sends the same notification through Windows PowerShell).
+  "winrt-runtime>=3.1; sys_platform == 'win32'",
+  "winrt-Windows.Data.Xml.Dom>=3.1; sys_platform == 'win32'",
+  "winrt-Windows.Foundation>=3.1; sys_platform == 'win32'",
+  "winrt-Windows.Foundation.Collections>=3.1; sys_platform == 'win32'",
+  "winrt-Windows.UI.Notifications>=3.1; sys_platform == 'win32'",
 ]
 
 [project.optional-dependencies]
@@ -45,6 +47,8 @@ dev = [
   "pytest-cov>=5",
   "ruff>=0.6",
   "mypy>=1.11",
+  "httpx>=0.27",  # FastAPI's TestClient
+  "pillow>=10.4",  # window screenshots of scripts/desktop-check
 ]
 # Packaging TaskRadar.exe (scripts/build-exe.ps1 installs it when missing).
 build = [
@@ -58,17 +62,13 @@ taskradar = "taskradar.__main__:main"
 where = ["src"]
 
 [tool.setuptools.package-data]
-taskradar = ["migrations/*.py", "migrations/*.mako", "migrations/versions/*.py", "static/**/*", "desktop/*.ico", "py.typed"]
+taskradar = ["migrations/*.py", "migrations/*.mako", "migrations/versions/*.py", "static/**/*", "desktop/*.ico", "desktop/*.png", "py.typed"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-ra"
 markers = [
-  "ocr: requires a working OCR engine (Tesseract with eng/deu/chi_sim)",
   "e2e: end-to-end flow through the HTTP API",
-]
-filterwarnings = [
-  "ignore::DeprecationWarning:pytesseract.*",
 ]
 
 [tool.ruff]

@@ -896,11 +896,6 @@ def mention_to_due(
     )
 
 
-def find_times(text: str) -> list[dt.time]:
-    """All explicit clock times stated in ``text`` (used to ground model-provided times)."""
-    return [t.time for t in _time_mentions(text)]
-
-
 def choose_deadline(mentions: list[DateMention]) -> DateMention | None:
     """Prefer an explicitly cued deadline; else the first concrete mention."""
     if not mentions:
@@ -909,44 +904,3 @@ def choose_deadline(mentions: list[DateMention]) -> DateMention | None:
     if cued:
         return cued[0]
     return mentions[0]
-
-
-def parse_due_text(
-    text: str,
-    anchor: dt.date,
-    *,
-    anchor_kind: DueAnchor,
-    tz: str = "Europe/Berlin",
-    lang: str | None = None,
-) -> DueInfo | None:
-    mention = choose_deadline(find_dates(text, anchor, tz=tz, lang=lang))
-    if mention is None:
-        return None
-    return mention_to_due(mention, anchor_kind=anchor_kind)
-
-
-_DOC_DATE_LABEL = re.compile(r"(Datum|Date|Dated|日期|发文日期|发布日期|Stand|Ausgestellt am)\s*[:：]?\s*$", re.I)
-_DOC_DATE_CITY = re.compile(r"^\s*[A-ZÄÖÜ][A-Za-zÄÖÜäöüß\- ]{1,30},\s*(den\s+)?$")
-
-
-def detect_document_date(text: str) -> dt.date | None:
-    """Detect the issue date of a letter/notice (e.g. 'München, 01.10.2026' or 'Datum: ...')."""
-    head = text[:1200]
-    if not head.strip():
-        return None
-    # Use an anchor far in the past so only explicit-year dates matter here.
-    mentions = [m for m in _absolute_mentions(head, dt.date(2000, 1, 1), None) if "year_inferred" not in m.notes]
-    mentions.sort(key=lambda m: m.start)
-    for m in mentions:
-        line_start = head.rfind("\n", 0, m.start) + 1
-        line_end = head.find("\n", m.end)
-        line_end = len(head) if line_end == -1 else line_end
-        prefix = head[line_start : m.start]
-        suffix = head[m.end : line_end]
-        if _DOC_DATE_LABEL.search(prefix):
-            return m.date
-        if _DOC_DATE_CITY.match(prefix) and not suffix.strip():
-            return m.date
-        if not prefix.strip() and not suffix.strip() and m.start < 400:
-            return m.date
-    return None

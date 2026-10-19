@@ -1,11 +1,11 @@
 import { QueryClient, QueryClientProvider, useQuery } from "@tanstack/react-query";
 import { Radar, RefreshCw, ServerCrash } from "lucide-react";
 import { lazy, Suspense, useEffect } from "react";
-import { createBrowserRouter } from "react-router";
+import { createBrowserRouter, Navigate } from "react-router";
 import { RouterProvider } from "react-router/dom";
 import { useTranslation } from "react-i18next";
 import { Toaster } from "sonner";
-import { AppShell, type RouteHandle } from "@/components/layout/AppShell";
+import { AppShell } from "@/components/layout/AppShell";
 import { Button } from "@/components/ui/button";
 import { TooltipProvider } from "@/components/ui/menu";
 import { LoadingRows } from "@/components/ui/states";
@@ -16,12 +16,11 @@ import { setTheme, useTheme } from "@/lib/theme";
 import NotFoundPage, { RouteError } from "@/pages/NotFoundPage";
 
 const DashboardPage = lazy(() => import("@/pages/DashboardPage"));
-const InboxPage = lazy(() => import("@/pages/InboxPage"));
 const TasksPage = lazy(() => import("@/pages/TasksPage"));
 const TaskDetailPage = lazy(() => import("@/pages/TaskDetailPage"));
-const SourcesPage = lazy(() => import("@/pages/SourcesPage"));
 const SettingsPage = lazy(() => import("@/pages/SettingsPage"));
-const InsightsPage = lazy(() => import("@/pages/InsightsPage"));
+const FocusPage = lazy(() => import("@/pages/FocusPage"));
+const CountdownsPage = lazy(() => import("@/pages/CountdownsPage"));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -45,12 +44,15 @@ const router = createBrowserRouter([
     errorElement: <RouteError />,
     children: [
       { index: true, element: page(<DashboardPage />) },
-      { path: "inbox", element: page(<InboxPage />), handle: { fullHeight: true } satisfies RouteHandle },
       { path: "tasks", element: page(<TasksPage />) },
       { path: "tasks/:id", element: page(<TaskDetailPage />) },
-      { path: "sources", element: page(<SourcesPage />) },
+      { path: "focus", element: page(<FocusPage />) },
+      { path: "timers", element: page(<CountdownsPage />) },
       { path: "settings", element: page(<SettingsPage />) },
-      { path: "insights", element: page(<InsightsPage />) },
+      // Pages of removed features (review queue, importing, processing figures): old links land somewhere useful.
+      { path: "inbox", element: <Navigate to="/tasks" replace /> },
+      { path: "sources", element: <Navigate to="/" replace /> },
+      { path: "insights", element: <Navigate to="/settings?section=system" replace /> },
       { path: "*", element: <NotFoundPage /> },
     ],
   },

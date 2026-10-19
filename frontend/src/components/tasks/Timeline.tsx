@@ -1,7 +1,5 @@
 import { Bot, Cog, Info, Undo2, User, type LucideIcon } from "lucide-react";
-import { useNavigate } from "react-router";
 import { useTranslation } from "react-i18next";
-import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Tip } from "@/components/ui/menu";
@@ -56,18 +54,8 @@ function useEventLabel() {
 
 export function Timeline({ events, timezone }: { events: TaskEvent[]; timezone: string }) {
   const { t, i18n } = useTranslation();
-  const navigate = useNavigate();
   const label = useEventLabel();
-  const undo = useAction((eventId: number) => api.undo(eventId), {
-    onSuccess: (detail) => {
-      if (detail.split_task_id) {
-        const split = detail.split_task_id;
-        toast.success(t("detail.splitCreated"), { action: { label: t("common.open"), onClick: () => navigate(`/tasks/${split}`) } });
-      } else {
-        toast.success(t("detail.undoSuccess"));
-      }
-    },
-  });
+  const undo = useAction((eventId: number) => api.undo(eventId), { success: t("detail.undoSuccess") });
 
   if (events.length === 0) return <p className="text-sm text-muted-foreground">{t("detail.timelineEmpty")}</p>;
   return (

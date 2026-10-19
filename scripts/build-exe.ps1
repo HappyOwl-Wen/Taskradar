@@ -4,10 +4,10 @@
 
 .DESCRIPTION
     1. Builds the web UI (frontend -> backend\src\taskradar\static).
-    2. Packages backend, web UI, the window (pywebview on Microsoft Edge WebView2), database migrations and the
-       synthetic demo files with PyInstaller (installed into backend\.venv if it is missing) as a windowed program.
-    3. Puts Install-OCR.cmd, the OCR installer script and a short read-me next to the program and zips the folder
-       (the portable version, which runs without installing).
+    2. Packages backend, web UI, the window (pywebview on Microsoft Edge WebView2) and the database migrations with
+       PyInstaller (installed into backend\.venv if it is missing) as a windowed program.
+    3. Puts a short read-me next to the program and zips the folder (the portable version, which runs without
+       installing).
     4. Builds the installer around that archive: dist\TaskRadar-Setup-<version>.exe installs TaskRadar for the
        current user (no administrator rights) with a Start menu entry, an optional desktop shortcut and an entry in
        Settings -> Apps to uninstall it again.
@@ -69,10 +69,8 @@ try {
     }
 } finally { Remove-Item Env:\TASKRADAR_ONEFILE -ErrorAction SilentlyContinue }
 
-# Next to the program: the optional OCR installer and the read-me.
+# Next to the program: the read-me.
 $Target = $(if ($OneFile) { $Dist } else { Join-Path $Dist "TaskRadar" })
-Copy-Item (Join-Path $Root "packaging\Install-OCR.cmd") $Target -Force
-Copy-Item (Join-Path $Root "scripts\install-tesseract.ps1") $Target -Force
 $Version = (& $Python -c "import taskradar; print(taskradar.__version__)").Trim()
 $Readme = (Get-Content (Join-Path $Root "packaging\README.txt") -Raw -Encoding UTF8).Replace("{version}", $Version)
 # Lines marked [folder] are about the folder build only.

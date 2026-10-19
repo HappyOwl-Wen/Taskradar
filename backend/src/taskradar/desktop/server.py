@@ -66,6 +66,11 @@ class BackgroundServer:
     def url(self) -> str:
         return self.config.base_url
 
+    @property
+    def container(self) -> Container | None:
+        """The services once the server has built them (None while it starts or after a failed start)."""
+        return self._container
+
     def start(self) -> None:
         self._thread.start()
 
@@ -78,8 +83,6 @@ class BackgroundServer:
 
             container = self._container = build_container(self.config)
             app = create_app(container, enable_scheduler=self.config.scheduler_enabled, desktop=self.bridge)
-            if not container.ocr.available():
-                log.warning("No OCR engine found - scanned PDFs and screenshots cannot be read.")
             self._server = uvicorn.Server(
                 uvicorn.Config(
                     app,

@@ -116,8 +116,8 @@ describe("TaskEditDialog: adding a to-do", () => {
   });
 });
 
-describe("TaskEditDialog: edit and confirm", () => {
-  const candidate = makeDetail({ id: "c1", title: "Formular abgeben", status: "candidate", due_date: "2026-10-20" });
+describe("TaskEditDialog: editing a task", () => {
+  const task = makeDetail({ id: "c1", title: "Formular abgeben", due_date: "2026-10-20" });
 
   beforeAll(async () => {
     await i18n.changeLanguage("zh-CN");
@@ -127,39 +127,24 @@ describe("TaskEditDialog: edit and confirm", () => {
     vi.restoreAllMocks();
   });
 
-  it("saves and confirms with the main button, as its label says", async () => {
-    const update = vi.spyOn(api, "updateTask").mockResolvedValue({ ...candidate, title: "Formular unterschrieben abgeben" });
-    const setStatus = vi.spyOn(api, "setStatus").mockResolvedValue({ ...candidate, status: "confirmed" });
-    wrap(<TaskEditDialog open onOpenChange={() => undefined} task={candidate} intent="confirm" />);
+  it("saves only what changed, with one button", async () => {
+    const update = vi.spyOn(api, "updateTask").mockResolvedValue({ ...task, title: "Formular unterschrieben abgeben" });
+    const setStatus = vi.spyOn(api, "setStatus");
+    const onOpenChange = vi.fn();
+    wrap(<TaskEditDialog open onOpenChange={onOpenChange} task={task} />);
 
-    expect(screen.getByRole("heading", { name: "编辑后确认" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "编辑任务" })).toBeInTheDocument();
     const title = screen.getByLabelText("标题");
     await userEvent.clear(title);
     await userEvent.type(title, "Formular unterschrieben abgeben");
-    await userEvent.click(screen.getByRole("button", { name: "保存并确认" }));
-    await waitFor(() => expect(setStatus).toHaveBeenCalledWith("c1", "confirmed"));
-    expect(update).toHaveBeenCalledWith("c1", { title: "Formular unterschrieben abgeben" });
-  });
-
-  it("can still only save the changes", async () => {
-    vi.spyOn(api, "updateTask").mockResolvedValue(candidate);
-    const setStatus = vi.spyOn(api, "setStatus");
-    wrap(<TaskEditDialog open onOpenChange={() => undefined} task={candidate} intent="confirm" />);
-    await userEvent.type(screen.getByLabelText("标题"), " (Kopie)");
-    await userEvent.click(screen.getByRole("button", { name: "只保存修改" }));
-    await waitFor(() => expect(api.updateTask).toHaveBeenCalledTimes(1));
+    await userEvent.click(screen.getByRole("button", { name: "保存" }));
+    await waitFor(() => expect(update).toHaveBeenCalledWith("c1", { title: "Formular unterschrieben abgeben" }));
     expect(setStatus).not.toHaveBeenCalled();
+    expect(onOpenChange).toHaveBeenCalledWith(false);
   });
 
-  it("opened to fix the date, it starts at the date and shows the whole sentence with the date marked", () => {
-    const sentence = "Bitte laden Sie die Erklärung bis Freitag, 4.11.2026 hoch.";
-    wrap(<TaskEditDialog open onOpenChange={() => undefined} task={candidate} focus="date" context={{ text: sentence, mark: "4.11.2026" }} />);
+  it("opened from “change date”, it starts at the date", () => {
+    wrap(<TaskEditDialog open onOpenChange={() => undefined} task={task} focus="date" />);
     expect(screen.getByLabelText("日期")).toHaveFocus();
-    // The weekday that disagrees with the date is shown and marked together with it.
-    const marked = screen.getByText("Freitag, 4.11.2026");
-    expect(marked.tagName).toBe("MARK");
-    expect(marked.closest("p")).toHaveTextContent(`“${sentence}”`);
-    expect(screen.getByRole("button", { name: "保存" })).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "保存并确认" })).not.toBeInTheDocument();
   });
 });

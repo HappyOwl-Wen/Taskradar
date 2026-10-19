@@ -15,22 +15,12 @@ os.environ.setdefault("TASKRADAR_DISABLE_SCHEDULER", "1")
 
 from taskradar.config import AppConfig
 from taskradar.connectors.calendar import FakeCalendarClient
-from taskradar.connectors.fake_gmail import FakeGmailClient
 from taskradar.container import Container, build_container
-from taskradar.db.models import Source
-from taskradar.demo.mailbox import build_demo_mailbox
-from taskradar.domain.schemas import ExtractionInput, TextSegment
-from taskradar.llm.base import LLMProvider
-from taskradar.parsing.ocr import TesseractEngine
-from taskradar.security import secrets as sk
+from taskradar.db.session import transaction
+from taskradar.domain.schemas import DueInfo
 from taskradar.security.secrets import MemorySecretStore
 
 FIXED_NOW = dt.datetime(2026, 10, 14, 8, 0, tzinfo=dt.UTC)  # 10:00 in Berlin (CEST)
-SAMPLES = Path(__file__).resolve().parent.parent / "src" / "taskradar" / "demo" / "samples"
-
-_OCR = TesseractEngine()
-OCR_AVAILABLE = _OCR.available() and {"chi_sim", "deu", "eng"} <= set(_OCR.languages())
-requires_ocr = pytest.mark.skipif(not OCR_AVAILABLE, reason="Tesseract with chi_sim+deu+eng is not installed")
 
 
 class Clock:
@@ -54,47 +44,34 @@ def config(tmp_path: Path) -> AppConfig:
     return AppConfig(data_dir=tmp_path / "data", open_browser=False, scheduler_enabled=False)
 
 
-class FakeGmailRegistry:
-    """Lets tests control the mailbox the Gmail sync service sees."""
-
-    def __init__(self, clock: Clock) -> None:
-        messages, attachments = build_demo_mailbox(clock())
-        self.client = FakeGmailClient(messages, attachments=attachments, clock=clock, email="student@gmail.example")
-
-    def factory(self, _source: Source) -> FakeGmailClient:
-        return self.client
-
-
-@pytest.fixture
-def gmail(clock: Clock) -> FakeGmailRegistry:
-    return FakeGmailRegistry(clock)
-
-
 @pytest.fixture
 def calendar_client() -> FakeCalendarClient:
     return FakeCalendarClient()
 
 
 @pytest.fixture
+def toasts() -> list[tuple[str, str]]:
+    """Windows notifications the services sent (title, body), instead of real ones."""
+    return []
+
+
+@pytest.fixture
 def make_container(
-    config: AppConfig, clock: Clock, gmail: FakeGmailRegistry, calendar_client: FakeCalendarClient
+    config: AppConfig, clock: Clock, calendar_client: FakeCalendarClient, toasts: list[tuple[str, str]]
 ) -> Iterator[Callable[..., Container]]:
     created: list[Container] = []
 
-    def _make(
-        *, llm: LLMProvider | None = None, secrets: MemorySecretStore | None = None, ocr: Any = None, **overrides: Any
-    ) -> Container:
+    def toast(title: str, body: str) -> bool:
+        toasts.append((title, body))
+        return True
+
+    def _make(*, secrets: MemorySecretStore | None = None, **overrides: Any) -> Container:
         container = build_container(
             config,
             secrets=secrets or MemorySecretStore(),
             clock=clock,
-            llm_provider=llm,
-            # An explicit None selects the application's default factory (synthetic demo mailbox).
-            gmail_client_factory=overrides.pop("gmail_client_factory", gmail.factory),
             calendar_client_factory=overrides.pop("calendar_client_factory", lambda: calendar_client),
-            ocr=ocr or _OCR,
-            toast=overrides.pop("toast", lambda title, body: True),
-            sleep=lambda _seconds: None,
+            toast=overrides.pop("toast", toast),
             **overrides,
         )
         created.append(container)
@@ -110,46 +87,37 @@ def container(make_container: Callable[..., Container]) -> Container:
     return make_container()
 
 
-def enable_llm(container: Container) -> None:
-    """Configure settings so the (mock) LLM is permitted: provider + consent + key."""
-    container.secrets.set(sk.OPENAI_API_KEY, "sk-test-0000000000000000")
-    container.settings.update({"llm": {"provider": "openai", "cloud_consent": True}})
-
-
-def make_input(
-    text: str,
+def add_task(
+    c: Container,
+    title: str = "交房租",
     *,
-    title: str | None = None,
-    sent_at: dt.datetime | None = FIXED_NOW,
-    doc_date: dt.date | None = None,
-    origin_kind: str = "message",
-    labels: list[str] | None = None,
-    is_bulk: bool = False,
-) -> ExtractionInput:
-    full = f"{title}\n\n{text}" if title else text
-    return ExtractionInput(
-        origin_kind=origin_kind,  # type: ignore[arg-type]
-        origin_id=1,
-        title=title,
-        text=full,
-        segments=[TextSegment(text=full, page=1 if origin_kind == "document" else None, offset=0)],
-        sent_at=sent_at,
-        doc_date=doc_date,
-        received_at=FIXED_NOW,
-        labels=labels or [],
-        is_bulk=is_bulk,
-    )
+    due: dt.date | None = None,
+    time: dt.time | None = None,
+    sample: bool = False,
+) -> str:
+    """A to-do as the user creates it (counts and reminds at once)."""
+    with transaction(c.factory) as session:
+        task = c.tasks.create(
+            session, title=title, due=DueInfo(date=due, time=time), timezone="Europe/Berlin", sample=sample
+        )
+        return task.id
 
 
 @pytest.fixture
-def api(make_container: Callable[..., Container]) -> Iterator[Any]:
+def api(make_container: Callable[..., Container], tmp_path: Path) -> Iterator[Any]:
     from fastapi.testclient import TestClient
 
     from taskradar.api.app import create_app
-    from taskradar.services.system import AutostartManager
+    from taskradar.services.system import AutostartManager, StartMenuEntry
 
-    container = make_container(gmail_client_factory=None)  # real demo-mailbox factory (honours demo settings)
-    app = create_app(container, extra_hosts={"testserver"}, autostart=AutostartManager(startup_dir=None))
+    container = make_container()
+    app = create_app(
+        container,
+        extra_hosts={"testserver"},
+        autostart=AutostartManager(startup_dir=None),
+        # A Start menu of its own, never the user's.
+        start_menu=StartMenuEntry(programs_dir=tmp_path / "Start Menu"),
+    )
     with TestClient(app) as client:
         token = client.get("/api/session").json()["csrf_token"]
         client.headers.update({"X-TaskRadar-CSRF": token})

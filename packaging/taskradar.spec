@@ -2,8 +2,8 @@
 # first and then the installer (packaging/installer.spec) around the result.
 #
 # The result runs without Python or Node.js: the backend, the built web UI, the window (pywebview on the Microsoft
-# Edge WebView2 runtime that is part of Windows 11), the database migrations and the synthetic demo files are
-# inside. Data stays in %LOCALAPPDATA%\TaskRadar (as when running from source); nothing personal is packed.
+# Edge WebView2 runtime that is part of Windows 11) and the database migrations are inside. Data stays in
+# %LOCALAPPDATA%\TaskRadar (as when running from source); nothing personal is packed.
 # TASKRADAR_ONEFILE=1 makes one self-unpacking TaskRadar.exe instead of a folder.
 
 import os
@@ -37,11 +37,9 @@ datas = [
     (str(PKG / "migrations" / "env.py"), "taskradar/migrations"),
     (str(PKG / "migrations" / "script.py.mako"), "taskradar/migrations"),
     *[(str(p), "taskradar/migrations/versions") for p in sorted((PKG / "migrations" / "versions").glob("*.py"))],
-    *[(str(p), "taskradar/demo/samples") for p in sorted((PKG / "demo" / "samples").iterdir()) if p.is_file()],
-    (str(PKG / "demo" / "eval_dataset.json"), "taskradar/demo"),
-    (str(PKG / "demo" / "eval_holdout.json"), "taskradar/demo"),
-    # The window's icon (title bar, Alt+Tab).
+    # The window's icon (title bar, Alt+Tab, tray) and the one Windows shows on TaskRadar's notifications.
     (str(PKG / "desktop" / "taskradar.ico"), "taskradar/desktop"),
+    (str(PKG / "desktop" / "taskradar.png"), "taskradar/desktop"),
     # Entry points: APScheduler finds its triggers and executors, keyring its Windows backend, through them.
     *copy_metadata("apscheduler"),
     *copy_metadata("keyring"),
@@ -63,21 +61,23 @@ hiddenimports = [
     "webview.platforms.winforms",
     "webview.platforms.edgechromium",
     "clr",
+    # Windows notifications: the WinRT bindings, whose native modules load each other by name.
+    *collect_submodules("winrt"),
 ]
 
 a = Analysis(  # noqa: F821
     [str(ROOT / "packaging" / "launcher.py")],
     pathex=[str(ROOT / "backend" / "src")],
-    binaries=collect_dynamic_libs("pymupdf"),
+    binaries=collect_dynamic_libs("winrt"),
     datas=datas,
     hiddenimports=hiddenimports,
-    excludes=["tkinter", "pytest", "_pytest", "mypy", "ruff", "IPython", "PyQt5", "PyQt6", "PySide2", "PySide6", "gi"],
+    # Pillow is only a development tool here (screenshots); it would come in through mako's Pygments plugin.
+    excludes=["tkinter", "pytest", "_pytest", "mypy", "ruff", "IPython", "PyQt5", "PyQt6", "PySide2", "PySide6", "gi", "PIL"],
     noarchive=False,
 )
 
-# Google's discovery documents: only Gmail and Calendar are used (static discovery); the other ~500 files are
-# about 100 MB.
-KEEP_DISCOVERY = {"gmail.v1.json", "calendar.v3.json"}
+# Google's discovery documents: only Calendar is used (static discovery); the other ~500 files are about 100 MB.
+KEEP_DISCOVERY = {"calendar.v3.json"}
 a.datas = [
     entry
     for entry in a.datas
@@ -96,7 +96,7 @@ version_info = VSVersionInfo(
                     "040904B0",
                     [
                         StringStruct("CompanyName", "TaskRadar contributors"),
-                        StringStruct("FileDescription", "TaskRadar - personal obligation radar"),
+                        StringStruct("FileDescription", "TaskRadar - local to-do app"),
                         StringStruct("FileVersion", version),
                         StringStruct("InternalName", "TaskRadar"),
                         StringStruct("LegalCopyright", "MIT License"),
@@ -115,7 +115,7 @@ exe_options = dict(
     name="TaskRadar",
     icon=str(ROOT / "packaging" / "taskradar.ico"),
     version=version_info,
-    console=False,  # a windowed program: the TaskRadar window shows that it runs; closing it stops TaskRadar
+    console=False,  # a windowed program: the TaskRadar window, or its icon in the tray, shows that it runs
     upx=False,  # compressed executables are flagged by virus scanners more often
     debug=False,
     strip=False,

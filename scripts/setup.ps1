@@ -6,8 +6,6 @@
     1. Finds Python 3.12+ and creates backend\.venv with the backend installed in it.
     2. Installs the frontend dependencies (npm ci) and builds the web UI into the backend.
     3. Creates / migrates the local database (%LOCALAPPDATA%\TaskRadar by default).
-    4. Checks whether the OCR engine (Tesseract) is available. If not, it asks before downloading it
-       (or installs it directly with -InstallOcr) via scripts\install-tesseract.ps1.
 
     Nothing outside the project folder and %LOCALAPPDATA%\TaskRadar is modified. The Windows
     autostart entry is never created by this script.
@@ -18,8 +16,7 @@
 [CmdletBinding()]
 param(
     [switch]$SkipFrontend,
-    [switch]$Dev,        # also install the backend's test / lint tools
-    [switch]$InstallOcr  # install Tesseract without asking (runs scripts\install-tesseract.ps1)
+    [switch]$Dev  # also install the backend's test / lint tools
 )
 
 $ErrorActionPreference = "Stop"
@@ -93,27 +90,6 @@ if (-not $SkipFrontend) {
 Write-Step "Preparing the local database"
 & $VenvPython -m taskradar migrate
 if ($LASTEXITCODE -ne 0) { Fail "Database migration failed." }
-
-Write-Step "Checking the OCR engine"
-$ocr = & $VenvPython -c "from taskradar.config import load_config; from taskradar.parsing.ocr import TesseractEngine; c = load_config(); print('yes' if TesseractEngine(c.tesseract_cmd, tools_dir=c.tools_dir).available() else 'no')"
-if ("$ocr".Trim() -eq "yes") {
-    Write-Host "Tesseract found - scanned PDFs and screenshots can be read."
-} else {
-    Write-Host "Tesseract was not found. Text PDFs work, but scans and screenshots need OCR." -ForegroundColor Yellow
-    $installer = Join-Path $PSScriptRoot "install-tesseract.ps1"
-    $install = [bool]$InstallOcr
-    if (-not $install -and -not [Console]::IsInputRedirected) {
-        $answer = Read-Host "Download and install Tesseract now (about 110 MB, checksums verified, no admin rights)? [y/N]"
-        $install = $answer -match "^(y|yes|j|ja)$"
-    }
-    if ($install) {
-        & powershell -NoProfile -ExecutionPolicy Bypass -File $installer
-        if ($LASTEXITCODE -ne 0) { Write-Host "OCR installation failed; see the messages above." -ForegroundColor Yellow }
-    } else {
-        Write-Host "Install it later with:" -ForegroundColor Yellow
-        Write-Host "    powershell -ExecutionPolicy Bypass -File scripts\install-tesseract.ps1" -ForegroundColor Yellow
-    }
-}
 
 Write-Host ""
 Write-Host "Setup complete. Start TaskRadar with TaskRadar.cmd (or scripts\start.ps1)." -ForegroundColor Green

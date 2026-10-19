@@ -1,434 +1,147 @@
-"""Task lifecycle through the real services and database: dedup, updates, completion, undo."""
+"""Task lifecycle through the real services and database: creation, status, edits, undo, reminders."""
 
 from __future__ import annotations
 
 import datetime as dt
-import itertools
 from collections.abc import Callable
 
 import pytest
 from sqlalchemy import func, select
 
 from taskradar.container import Container
-from taskradar.db.models import ExtractionRun, Message, Notification, Task, TaskEvent, TaskSource, TaskSuggestion
+from taskradar.db.models import Notification, Task, TaskEvent
 from taskradar.db.session import transaction
-from taskradar.domain.enums import Actor, JobKind, JobStatus, JobTrigger, SourceKind, TaskStatus
-from taskradar.domain.schemas import NormalizedMessage
-from taskradar.services.documents import get_or_create_source
-from taskradar.services.ingest import IngestOutcome
+from taskradar.domain.enums import Actor, JobKind, JobStatus, JobTrigger, TaskStatus
 from taskradar.services.jobs import JobAlreadyRunning, JobContext
-from taskradar.services.tasks import DueChoiceRequired
+from taskradar.services.tasks import NotRevertible, RevertConflict
 
-from .conftest import FIXED_NOW
-
-_ids = itertools.count(1)
+from .conftest import add_task
 
 
-def ingest_mail(
-    c: Container,
-    subject: str,
-    body: str,
-    *,
-    sent_at: dt.datetime = FIXED_NOW,
-    thread: str | None = None,
-    external_id: str | None = None,
-) -> tuple[IngestOutcome, int]:
+def task(c: Container, task_id: str) -> Task:
     with transaction(c.factory) as session:
-        source = get_or_create_source(session, SourceKind.UPLOAD, "tests")
-        message, _ = c.documents.store_message(
-            session,
-            NormalizedMessage(
-                external_id=external_id or f"m{next(_ids)}",
-                thread_id=thread,
-                subject=subject,
-                sender="Office <office@uni.example>",
-                sender_domain="uni.example",
-                sent_at=sent_at,
-                body_text=body,
-            ),
-            source=source,
-            web_link=None,
-        )
-        message_id = message.id
-    return c.ingest.process_message(message_id), message_id
+        found = session.get(Task, task_id)
+        assert found is not None
+        session.expunge(found)
+        return found
 
 
-def tasks(c: Container) -> list[Task]:
+def set_status(c: Container, task_id: str, status: TaskStatus) -> int | None:
     with transaction(c.factory) as session:
-        return list(session.scalars(select(Task).order_by(Task.created_at)))
+        event = c.tasks.change_status(session, c.tasks.get(session, task_id), status, actor=Actor.USER)
+        return event.id if event else None
 
 
-def set_status(c: Container, task_id: str, status: TaskStatus) -> None:
+def undo(c: Container, event_id: int) -> None:
     with transaction(c.factory) as session:
-        c.tasks.change_status(session, c.tasks.get(session, task_id), status, actor=Actor.USER)
+        c.tasks.revert_event(session, event_id)
 
 
-NOTICE = (
-    "学生证明提交通知",
-    "各位同学：\n请于2026年11月20日前通过TUMonline上传在读证明（Immatrikulationsbescheinigung）。",
-)
-REMINDER = ("提醒：提交学生证明", "提醒您：请在11月20日前提交学生证明。如果您已经提交，请忽略此邮件。")
-
-
-def test_first_notice_creates_candidate_with_evidence(container: Container) -> None:
-    outcome, _ = ingest_mail(container, *NOTICE)
-    assert outcome.tasks_created == 1
-    [task] = tasks(container)
-    assert task.status == "candidate"
-    assert task.due_date == dt.date(2026, 11, 20) and task.due_time is None and task.due_precision == "date"
+def test_a_new_todo_counts_at_once(container: Container) -> None:
+    task_id = add_task(container, "交房租", due=dt.date(2026, 10, 16))
+    created = task(container, task_id)
+    assert created.manual and created.status == "confirmed" and created.confirmed_at is not None
+    assert created.confidence == 1.0 and created.action_required == "交房租"
+    assert (created.due_date, created.due_precision) == (dt.date(2026, 10, 16), "date")
     with transaction(container.factory) as session:
-        task = session.get(Task, task.id)
-        assert task is not None
-        assert task.sources[0].relation == "origin"
-        assert "2026年11月20日" in task.sources[0].evidence[0]["quote"]
-        assert [e.event_type for e in task.events] == ["created"]
+        [event] = session.scalars(select(TaskEvent).where(TaskEvent.task_id == task_id)).all()
+        assert (event.event_type, event.actor) == ("created", "user")
 
 
-def test_reprocessing_is_idempotent(container: Container) -> None:
-    _, message_id = ingest_mail(container, *NOTICE)
-    again = container.ingest.process_message(message_id, force=True)
-    assert again.tasks_created == 0 and again.unchanged == 1
-    assert len(tasks(container)) == 1
-    assert container.ingest.process_message(message_id).skipped  # not forced: skipped entirely
-
-
-def test_reminder_is_merged_not_duplicated(container: Container) -> None:
-    ingest_mail(container, *NOTICE)
-    outcome, _ = ingest_mail(container, *REMINDER, sent_at=FIXED_NOW + dt.timedelta(days=5))
-    assert outcome.tasks_created == 0 and outcome.duplicates_merged == 1
-    [task] = tasks(container)
-    with transaction(container.factory) as session:
-        sources = session.scalars(select(TaskSource).where(TaskSource.task_id == task.id)).all()
-        assert sorted(s.relation for s in sources) == ["duplicate", "origin"]
-
-
-def test_cross_language_reminder_is_recognised(container: Container) -> None:
-    ingest_mail(container, *NOTICE)
-    outcome, _ = ingest_mail(
-        container,
-        "Erinnerung",
-        "Bitte denken Sie daran, Ihre Immatrikulationsbescheinigung bis zum 20.11.2026 hochzuladen.",
-    )
-    assert outcome.tasks_created == 0 and outcome.duplicates_merged == 1
-
-
-def test_different_obligation_creates_new_task(container: Container) -> None:
-    ingest_mail(container, *NOTICE)
-    outcome, _ = ingest_mail(
-        container, "Semesterbeitrag", "Bitte überweisen Sie den Semesterbeitrag bis zum 20.11.2026."
-    )
-    assert outcome.tasks_created == 1
-    assert len(tasks(container)) == 2
-
-
-def test_shared_platform_name_does_not_make_tasks_duplicates(container: Container) -> None:
-    # Both mails say "register in TUMonline", but for different things with different deadlines.
-    ingest_mail(container, "【教务处】选课通知", "各位同学：\n请于2026年10月22日前在TUMonline完成本学期选课。")
-    outcome, _ = ingest_mail(
-        container,
-        "Prüfungsanmeldung",
-        "Bitte melden Sie sich bis zum 19.10.2026 in TUMonline zur Prüfung 'Analysis 2' an.",
-    )
-    assert outcome.tasks_created == 1
-    assert outcome.duplicates_merged == 0 and outcome.suggestions_created == 0
-    assert len(tasks(container)) == 2
-
-
-def test_shared_payment_verb_does_not_make_different_payments_duplicates(container: Container) -> None:
-    # Two payment requests for different things: the shared verb is not a shared object.
-    ingest_mail(container, "Mahngebühr", "Bitte überweisen Sie die Mahngebühr der Stadtbibliothek bis zum 12.11.2026.")
-    outcome, _ = ingest_mail(
-        container,
-        "Mitgliedsbeitrag",
-        "Bitte überweisen Sie den Mitgliedsbeitrag für den Ruderclub bis zum 30.11.2026.",
-        sent_at=FIXED_NOW + dt.timedelta(days=1),
-    )
-    assert outcome.tasks_created == 1
-    assert (outcome.duplicates_merged, outcome.suggestions_created, outcome.tasks_updated) == (0, 0, 0)
-    assert len(tasks(container)) == 2
-    outcome, _ = ingest_mail(
-        container,
-        "Photo for the student card",
-        "Please upload your photo for the student card by 20 November 2026.",
-    )
-    other, _ = ingest_mail(
-        container,
-        "Consent form",
-        "Please upload the signed consent form for the lab course by 25 November 2026.",
-        sent_at=FIXED_NOW + dt.timedelta(days=1),
-    )
-    assert (other.tasks_created, other.duplicates_merged, other.suggestions_created) == (1, 0, 0)
-
-
-def test_explicit_deadline_change_is_applied_and_revertible(container: Container) -> None:
-    ingest_mail(container, *NOTICE)
-    outcome, _ = ingest_mail(
-        container,
-        "截止日期延期",
-        "通知：学生证明的提交截止日期延长至11月27日。",
-        sent_at=FIXED_NOW + dt.timedelta(days=2),
-    )
-    assert outcome.tasks_updated == 1 and outcome.tasks_created == 0
-    [task] = tasks(container)
-    assert task.due_date == dt.date(2026, 11, 27)
-    assert task.due_version == 1
-    # Applied, but not silently: the task asks for a look and a notification says what changed.
-    assert task.needs_review and "deadline_changed" in task.review_reasons
-    with transaction(container.factory) as session:
-        [note] = session.scalars(select(Notification)).all()
-        assert note.task_id == task.id and note.level == "info" and "2026-11-20 → 2026-11-27" in note.body
-        event = session.scalars(select(TaskEvent).where(TaskEvent.event_type == "fields_updated")).one()
-        assert event.actor == "agent" and event.revertible
-        container.tasks.revert_event(session, event.id)
-    [task] = tasks(container)
-    assert task.due_date == dt.date(2026, 11, 20)
-    assert "deadline_changed" not in task.review_reasons and not task.needs_review  # the flag goes with it
-
-
-def test_user_keeps_an_automatically_changed_deadline(container: Container) -> None:
-    ingest_mail(container, *NOTICE)
-    [task] = tasks(container)
-    set_status(container, task.id, TaskStatus.CONFIRMED)
-    ingest_mail(
-        container,
-        "截止日期延期",
-        "通知：学生证明的提交截止日期延长至11月27日。",
-        sent_at=FIXED_NOW + dt.timedelta(days=2),
-    )
-    [task] = tasks(container)
-    assert task.status == "confirmed" and task.needs_review  # a confirmed task is flagged as well
-    with transaction(container.factory) as session:
-        event = container.tasks.resolve_review(session, container.tasks.get(session, task.id), ["deadline_changed"])
-        assert event is not None and event.revertible
-        event_id = event.id
-    [task] = tasks(container)
-    assert task.due_date == dt.date(2026, 11, 27) and not task.needs_review
-    assert "deadline_changed" not in task.review_reasons
-    with transaction(container.factory) as session:
-        container.tasks.revert_event(session, event_id)
-    [task] = tasks(container)
-    assert task.needs_review and "deadline_changed" in task.review_reasons
-
-
-def test_editing_the_date_clears_the_deadline_changed_flag(container: Container) -> None:
-    ingest_mail(container, *NOTICE)
-    ingest_mail(
-        container,
-        "截止日期延期",
-        "通知：学生证明的提交截止日期延长至11月27日。",
-        sent_at=FIXED_NOW + dt.timedelta(days=2),
-    )
-    [task] = tasks(container)
-    with transaction(container.factory) as session:
-        container.tasks.update_fields(
-            session, container.tasks.get(session, task.id), {"due_date": "2026-11-26"}, actor=Actor.USER, lock=True
-        )
-    [task] = tasks(container)
-    assert "deadline_changed" not in task.review_reasons
-
-
-def test_different_deadline_without_explicit_change_is_never_merged_automatically(container: Container) -> None:
-    ingest_mail(container, *NOTICE)
-    outcome, _ = ingest_mail(
-        container,
-        "Nachricht",
-        "Bitte laden Sie Ihre Immatrikulationsbescheinigung bis zum 25.11.2026 in TUMonline hoch.",
-        sent_at=FIXED_NOW + dt.timedelta(days=1),
-    )
-    # Same obligation, other date, nothing says which one is right: both stay, the user decides.
-    assert (outcome.tasks_created, outcome.duplicates_merged, outcome.tasks_updated) == (1, 0, 0)
-    assert outcome.suggestions_created == 1
-    original, second = tasks(container)
-    assert (original.due_date, second.due_date) == (dt.date(2026, 11, 20), dt.date(2026, 11, 25))
-    assert "possible_duplicate" in second.review_reasons
-    with transaction(container.factory) as session:
-        suggestion = session.scalars(select(TaskSuggestion)).one()
-        assert suggestion.kind == "possible_duplicate" and suggestion.related_task_id == original.id
-        assert "conflicting_deadline_needs_review" in suggestion.reason
-        with pytest.raises(DueChoiceRequired):
-            container.tasks.accept_suggestion(session, suggestion.id)
-    with transaction(container.factory) as session:
-        container.tasks.accept_suggestion(session, suggestion.id, due_choice="new")
-    kept, merged = tasks(container)
-    assert kept.due_date == dt.date(2026, 11, 25) and merged.status == "dismissed"
-
-
-def test_reminder_in_the_same_thread_with_another_date_is_not_merged_silently(container: Container) -> None:
-    ingest_mail(container, *NOTICE, thread="t-cert")
-    outcome, _ = ingest_mail(
-        container,
-        "Re: 学生证明提交通知",
-        "提醒您：请在11月22日前上传在读证明（Immatrikulationsbescheinigung）。",
-        sent_at=FIXED_NOW + dt.timedelta(days=3),
-        thread="t-cert",
-    )
-    assert (outcome.tasks_created, outcome.duplicates_merged, outcome.tasks_updated) == (1, 0, 0)
-    assert outcome.suggestions_created == 1
-    assert tasks(container)[0].due_date == dt.date(2026, 11, 20)
-
-
-def test_same_day_with_another_time_is_a_conflict_too(container: Container) -> None:
-    ingest_mail(container, "Abgabe", "Bitte reichen Sie den Projektbericht bis zum 20.11.2026, 12:00 Uhr ein.")
-    outcome, _ = ingest_mail(
-        container,
-        "Abgabe Projektbericht",
-        "Bitte reichen Sie den Projektbericht bis zum 20.11.2026, 23:59 Uhr ein.",
-        sent_at=FIXED_NOW + dt.timedelta(days=1),
-    )
-    assert (outcome.tasks_created, outcome.duplicates_merged, outcome.suggestions_created) == (1, 0, 1)
-    assert [t.due_time for t in tasks(container)] == ["12:00", "23:59"]
-
-
-def test_same_deadline_is_still_merged(container: Container) -> None:
-    ingest_mail(container, "Abgabe", "Bitte reichen Sie den Projektbericht bis zum 20.11.2026, 12:00 Uhr ein.")
-    outcome, _ = ingest_mail(
-        container,
-        "Erinnerung: Projektbericht",
-        "Erinnerung: Bitte reichen Sie den Projektbericht bis zum 20.11.2026 um 12:00 Uhr ein.",
-        sent_at=FIXED_NOW + dt.timedelta(days=1),
-    )
-    assert (outcome.tasks_created, outcome.duplicates_merged) == (0, 1)
-
-
-def test_user_edited_deadline_is_never_overwritten(container: Container) -> None:
-    ingest_mail(container, *NOTICE)
-    [task] = tasks(container)
-    with transaction(container.factory) as session:
-        container.tasks.update_fields(
-            session, container.tasks.get(session, task.id), {"due_date": "2026-11-18"}, actor=Actor.USER, lock=True
-        )
-    outcome, _ = ingest_mail(
-        container,
-        "截止日期延期",
-        "通知：学生证明的提交截止日期延长至11月27日。",
-        sent_at=FIXED_NOW + dt.timedelta(days=2),
-    )
-    assert outcome.tasks_updated == 0 and outcome.suggestions_created == 1
-    assert tasks(container)[0].due_date == dt.date(2026, 11, 18)
-
-
-def test_explicit_completion_completes_confirmed_task_and_can_be_undone(container: Container) -> None:
-    ingest_mail(container, *NOTICE)
-    [task] = tasks(container)
-    set_status(container, task.id, TaskStatus.CONFIRMED)
-    outcome, _ = ingest_mail(
-        container, "回执", "您好，我们已收到您的学生证明，谢谢。", sent_at=FIXED_NOW + dt.timedelta(days=3)
-    )
-    assert outcome.completions_applied == 1
-    [task] = tasks(container)
-    assert task.status == "completed" and task.completed_at is not None
-    with transaction(container.factory) as session:
-        event = session.scalars(
-            select(TaskEvent).where(TaskEvent.event_type == "status_changed", TaskEvent.actor == "agent")
-        ).one()
-        assert event.revertible
-        container.tasks.revert_event(session, event.id)
-    assert tasks(container)[0].status == "confirmed"
-
-
-def test_completion_for_unconfirmed_task_is_only_a_suggestion(container: Container) -> None:
-    ingest_mail(container, *NOTICE)
-    outcome, _ = ingest_mail(container, "回执", "您好，我们已收到您的学生证明，谢谢。")
-    assert outcome.completions_applied == 0 and outcome.suggestions_created == 1
-    assert tasks(container)[0].status == "candidate"
-
-
-def test_uncertain_completion_never_auto_completes(container: Container) -> None:
-    ingest_mail(container, *NOTICE)
-    set_status(container, tasks(container)[0].id, TaskStatus.CONFIRMED)
-    outcome, _ = ingest_mail(container, "材料情况", "关于您的学生证明：我们可能已收到部分材料，但仍需核实。")
-    assert outcome.completions_applied == 0 and outcome.suggestions_created == 1
-    [task] = tasks(container)
-    assert task.status == "confirmed"
-    with transaction(container.factory) as session:
-        assert session.scalars(select(TaskSuggestion.kind)).one() == "mark_completed"
-
-
-def test_undoing_a_merge_splits_the_task(container: Container) -> None:
-    ingest_mail(container, *NOTICE)
-    ingest_mail(container, *REMINDER)
-    with transaction(container.factory) as session:
-        event = session.scalars(select(TaskEvent).where(TaskEvent.event_type == "source_attached")).one()
-        revert = container.tasks.revert_event(session, event.id)
-        assert revert.data["split_task_id"]
-    assert len(tasks(container)) == 2
-
-
-def test_possible_duplicate_suggestion_and_merge(container: Container) -> None:
-    ingest_mail(container, "Mietvertrag", "Bitte unterschreiben Sie den Mietvertrag bis 30.10.2026.")
-    outcome, _ = ingest_mail(
-        container, "Vertrag", "Bitte senden Sie mir den unterschriebenen Vertrag bis 30.10.2026 zurück."
-    )
-    assert outcome.tasks_created == 1
-    with transaction(container.factory) as session:
-        suggestion = session.scalars(select(TaskSuggestion).where(TaskSuggestion.kind == "possible_duplicate")).first()
-        if suggestion is None:
-            pytest.skip("rules judged the two notices as different obligations")
-        container.tasks.accept_suggestion(session, suggestion.id)
-    statuses = sorted(t.status for t in tasks(container))
-    assert statuses == ["candidate", "dismissed"]
-
-
-def test_manual_status_changes_are_recorded(container: Container) -> None:
-    ingest_mail(container, *NOTICE)
-    task_id = tasks(container)[0].id
-    for status in (TaskStatus.CONFIRMED, TaskStatus.IN_PROGRESS, TaskStatus.WAITING_FOR_REPLY, TaskStatus.COMPLETED):
+def test_status_changes_are_recorded_and_the_last_one_can_be_undone(container: Container) -> None:
+    task_id = add_task(container)
+    events = [
         set_status(container, task_id, status)
+        for status in (TaskStatus.IN_PROGRESS, TaskStatus.WAITING_FOR_REPLY, TaskStatus.COMPLETED)
+    ]
+    assert set_status(container, task_id, TaskStatus.COMPLETED) is None  # no change, no event
     with transaction(container.factory) as session:
-        events = session.scalars(
+        changes = session.scalars(
             select(TaskEvent).where(TaskEvent.task_id == task_id, TaskEvent.event_type == "status_changed")
         ).all()
-        assert [e.data["after"]["status"] for e in events] == [
-            "confirmed",
-            "in_progress",
-            "waiting_for_reply",
-            "completed",
+        assert [e.data["after"]["status"] for e in changes] == ["in_progress", "waiting_for_reply", "completed"]
+        assert [e.summary for e in changes] == [
+            "状态：待办 → 进行中",
+            "状态：进行中 → 等待回复",
+            "状态：等待回复 → 已完成",
         ]
-        assert {e.actor for e in events} == {"user"}
+    assert task(container, task_id).completed_at is not None
+
+    assert events[-1] is not None
+    undo(container, events[-1])
+    back = task(container, task_id)
+    assert back.status == "waiting_for_reply" and back.completed_at is None
+    with pytest.raises(RevertConflict):
+        undo(container, events[-1])  # already undone
+
+    # An older change cannot be undone once the status moved on.
+    assert events[0] is not None
+    with pytest.raises(RevertConflict):
+        undo(container, events[0])
 
 
-def test_failed_apply_rolls_back_everything(container: Container, monkeypatch: pytest.MonkeyPatch) -> None:
-    def boom(*args: object, **kwargs: object) -> None:
-        raise RuntimeError("database write failed")
-
-    monkeypatch.setattr(container.tasks, "create_from_candidate", boom)
-    with pytest.raises(RuntimeError):
-        ingest_mail(container, *NOTICE)
+def test_edits_lock_the_field_and_can_be_undone(container: Container) -> None:
+    task_id = add_task(container, due=dt.date(2026, 10, 20))
     with transaction(container.factory) as session:
-        assert session.scalar(select(func.count()).select_from(ExtractionRun)) == 0
-        assert session.scalar(select(func.count()).select_from(Task)) == 0
-        assert session.scalars(select(Message.status)).one() == "pending"  # will be retried
+        t = container.tasks.get(session, task_id)
+        event = container.tasks.update_fields(
+            session, t, {"due_date": dt.date(2026, 10, 22), "due_time": "09:30"}, actor=Actor.USER, lock=True
+        )
+        assert event is not None
+        event_id = event.id
+    edited = task(container, task_id)
+    assert (edited.due_date, edited.due_time, edited.due_precision) == (dt.date(2026, 10, 22), "09:30", "datetime")
+    assert edited.due_version == 1 and edited.user_locked_fields == ["due"]
+    undo(container, event_id)
+    restored = task(container, task_id)
+    assert (restored.due_date, restored.due_time, restored.due_version) == (dt.date(2026, 10, 20), None, 2)
+
+
+def test_changes_of_earlier_versions_stay_in_the_history(container: Container) -> None:
+    """Merges and suggestions came from imported mails; they are shown but cannot be undone any more."""
+    task_id = add_task(container)
+    with transaction(container.factory) as session:
+        old = TaskEvent(
+            task_id=task_id,
+            event_type="merged",
+            actor="user",
+            summary="合并了任务「旧的提醒」",
+            data={"merged_task_id": "gone"},
+            revertible=True,
+            created_at=container.clock(),
+        )
+        session.add(old)
+        session.flush()
+        old_id = old.id
+    with pytest.raises(NotRevertible):
+        undo(container, old_id)
 
 
 def test_data_survives_restart(make_container: Callable[..., Container]) -> None:
     first = make_container()
-    ingest_mail(first, *NOTICE)
-    set_status(first, tasks(first)[0].id, TaskStatus.CONFIRMED)
+    task_id = add_task(first, due=dt.date(2026, 11, 20))
+    set_status(first, task_id, TaskStatus.IN_PROGRESS)
     first.dispose()
     second = make_container()
-    [task] = tasks(second)
-    assert task.status == "confirmed" and task.due_date == dt.date(2026, 11, 20)
+    again = task(second, task_id)
+    assert again.status == "in_progress" and again.due_date == dt.date(2026, 11, 20)
     with transaction(second.factory) as session:
         assert session.scalar(select(func.count()).select_from(TaskEvent)) == 2
 
 
 def test_job_lock_prevents_concurrent_runs(container: Container) -> None:
-    job_id = container.jobs.start(JobKind.GMAIL_SYNC, lock_key="gmail:1", source_id=None, trigger=JobTrigger.MANUAL)
+    kind, key = JobKind.REMINDER_SCAN, "reminders"
+    job_id = container.jobs.start(kind, lock_key=key, source_id=None, trigger=JobTrigger.MANUAL)
     with pytest.raises(JobAlreadyRunning):
-        container.jobs.start(JobKind.GMAIL_SYNC, lock_key="gmail:1", source_id=None, trigger=JobTrigger.MANUAL)
+        container.jobs.start(kind, lock_key=key, source_id=None, trigger=JobTrigger.MANUAL)
     container.jobs.finish(job_id, JobContext(job_id), status=JobStatus.SUCCEEDED)
     # After finishing, the lock is free again.
-    container.jobs.start(JobKind.GMAIL_SYNC, lock_key="gmail:1", source_id=None, trigger=JobTrigger.MANUAL)
+    container.jobs.start(kind, lock_key=key, source_id=None, trigger=JobTrigger.MANUAL)
     assert container.jobs.recover_interrupted() == 1
 
 
 def test_reminders_are_deduplicated_and_stop_after_completion(container: Container) -> None:
-    ingest_mail(container, "Zahlung", "Bitte überweisen Sie den Semesterbeitrag bis zum 16.10.2026.")
-    task_id = tasks(container)[0].id
-    container.notifications.scan()
-    with transaction(container.factory) as session:
-        assert session.scalar(select(func.count()).select_from(Notification)) == 0  # candidate + only "high": quiet
-    set_status(container, task_id, TaskStatus.CONFIRMED)
+    task_id = add_task(container, "Semesterbeitrag überweisen", due=dt.date(2026, 10, 16))
     container.notifications.scan()
     container.notifications.scan()
     with transaction(container.factory) as session:
@@ -441,13 +154,24 @@ def test_reminders_are_deduplicated_and_stop_after_completion(container: Contain
         assert session.scalar(select(func.count()).select_from(Notification)) == 1
 
 
-def test_an_unclear_date_keeps_the_reason_it_is_unclear(container: Container) -> None:
-    # 4.11.2026 is a Wednesday: the UI should say that the weekday and the date disagree.
-    ingest_mail(
-        container,
-        "Einverständniserklärung",
-        "Bitte laden Sie die unterschriebene Einverständniserklärung bis Freitag, 4.11.2026 hoch.",
-    )
-    [task] = tasks(container)
-    assert task.needs_review and task.due_needs_confirmation
-    assert "ambiguous_date" in task.review_reasons and "weekday_mismatch" in task.review_reasons
+def test_unconfirmed_tasks_of_earlier_versions_stay_quiet_until_urgent(container: Container) -> None:
+    task_id = add_task(container, due=dt.date(2026, 10, 16))
+    set_status(container, task_id, TaskStatus.CANDIDATE)
+    container.notifications.scan()
+    with transaction(container.factory) as session:
+        assert session.scalar(select(func.count()).select_from(Notification)) == 0  # only "high": quiet
+    container.clock.advance(days=2)  # type: ignore[attr-defined]  # 14 hours left
+    container.notifications.scan()
+    with transaction(container.factory) as session:
+        [note] = session.scalars(select(Notification)).all()
+        assert note.level == "urgent" and note.title.endswith("（待确认）")
+
+
+def test_windows_notifications_only_when_switched_on(container: Container, toasts: list[tuple[str, str]]) -> None:
+    add_task(container, "交房租", due=dt.date(2026, 10, 15))
+    container.notifications.scan()
+    assert toasts == []  # off by default: the reminder is only in TaskRadar's own list
+    container.settings.update({"notifications": {"desktop_enabled": True}})
+    add_task(container, "交作业", due=dt.date(2026, 10, 15))
+    container.notifications.scan()
+    assert toasts == [("3 天内截止：交作业", "截止：2026-10-15")]

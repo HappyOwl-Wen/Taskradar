@@ -28,6 +28,7 @@ from pathlib import Path, PurePosixPath
 from typing import Any
 
 from taskradar.desktop import win32
+from taskradar.notify import windows as notifications
 
 APP_NAME = "TaskRadar"
 EXE_NAME = "TaskRadar.exe"
@@ -55,6 +56,7 @@ class InstallPaths:
     desktop_dir: Path
     startup_dir: Path | None
     registry_key: str = UNINSTALL_KEY
+    notification_key: str = notifications.REGISTRY_KEY  # written by TaskRadar itself on its first start
 
     @property
     def exe(self) -> Path:
@@ -106,6 +108,27 @@ def known_folder(folder_id: str) -> Path | None:
 CLSID_SHELL_LINK = "{00021401-0000-0000-C000-000000000046}"
 IID_ISHELL_LINK_W = "{000214F9-0000-0000-C000-000000000046}"
 IID_IPERSIST_FILE = "{0000010B-0000-0000-C000-000000000046}"
+IID_IPROPERTY_STORE = "{886D8EEB-8CF2-4446-8D02-CDBA1DBDCF99}"
+# System.AppUserModel.ID: the app a Start menu entry stands for. Windows shows an app's notifications as banners
+# (not only in the notification centre) when a Start menu entry carries its ID.
+PKEY_APP_USER_MODEL_ID = ("{9F4C2855-9F79-4B39-A8D0-E1D42DE1D5F3}", 5)
+VT_LPWSTR = 31
+
+
+class _PropertyKey(ctypes.Structure):
+    _fields_ = [("fmtid", _GUID), ("pid", ctypes.c_uint32)]
+
+
+class _PropVariant(ctypes.Structure):
+    # The header and the first pointer of the union; the padding gives the 24 bytes of a PROPVARIANT.
+    _fields_ = [
+        ("vt", ctypes.c_ushort),
+        ("reserved1", ctypes.c_ushort),
+        ("reserved2", ctypes.c_ushort),
+        ("reserved3", ctypes.c_ushort),
+        ("value", ctypes.c_wchar_p),
+        ("padding", ctypes.c_void_p),
+    ]
 
 
 def _method(obj: ctypes.c_void_p, index: int, *argtypes: Any) -> Callable[..., Any]:
@@ -150,7 +173,15 @@ def _shell_link() -> Iterator[tuple[ctypes.c_void_p, ctypes.c_void_p]]:
             ole32.CoUninitialize()
 
 
-def create_shortcut(path: Path, target: Path, *, description: str = "", arguments: str = "") -> None:
+def create_shortcut(
+    path: Path,
+    target: Path,
+    *,
+    description: str = "",
+    arguments: str = "",
+    app_id: str | None = None,
+    icon: Path | None = None,
+) -> None:
     from ctypes import wintypes
 
     with _shell_link() as (link, persist):
@@ -158,9 +189,60 @@ def create_shortcut(path: Path, target: Path, *, description: str = "", argument
         _method(link, 11, wintypes.LPCWSTR)(arguments)  # SetArguments
         _method(link, 9, wintypes.LPCWSTR)(str(target.parent))  # SetWorkingDirectory
         _method(link, 7, wintypes.LPCWSTR)(description)  # SetDescription
-        _method(link, 17, wintypes.LPCWSTR, ctypes.c_int)(str(target), 0)  # SetIconLocation
+        _method(link, 17, wintypes.LPCWSTR, ctypes.c_int)(str(icon or target), 0)  # SetIconLocation
+        if app_id:
+            _set_app_id(link, app_id)
         path.parent.mkdir(parents=True, exist_ok=True)
         _method(persist, 6, wintypes.LPCWSTR, wintypes.BOOL)(str(path), True)  # IPersistFile::Save
+
+
+def set_shortcut_app_id(path: Path, app_id: str) -> None:
+    """Give an existing shortcut an app ID, keeping everything else (target, icon, arguments)."""
+    from ctypes import wintypes
+
+    with _shell_link() as (link, persist):
+        _method(persist, 5, wintypes.LPCWSTR, wintypes.DWORD)(str(path), 2)  # IPersistFile::Load, read/write
+        _set_app_id(link, app_id)
+        _method(persist, 6, wintypes.LPCWSTR, wintypes.BOOL)(str(path), True)  # IPersistFile::Save
+
+
+def _set_app_id(link: ctypes.c_void_p, app_id: str) -> None:
+    store = ctypes.c_void_p()
+    _method(link, 0, ctypes.c_void_p, ctypes.c_void_p)(ctypes.byref(_GUID(IID_IPROPERTY_STORE)), ctypes.byref(store))
+    try:
+        key = _PropertyKey(_GUID(PKEY_APP_USER_MODEL_ID[0]), PKEY_APP_USER_MODEL_ID[1])
+        value = _PropVariant(vt=VT_LPWSTR, value=app_id)
+        _method(store, 6, ctypes.c_void_p, ctypes.c_void_p)(ctypes.byref(key), ctypes.byref(value))  # SetValue
+        _method(store, 7)()  # Commit
+    finally:
+        _release(store)
+
+
+def shortcut_app_id(path: Path) -> str | None:
+    """The System.AppUserModel.ID of a shortcut (None without one)."""
+    from ctypes import wintypes
+
+    if sys.platform != "win32" or not path.is_file():
+        return None
+    try:
+        with _shell_link() as (link, persist):
+            _method(persist, 5, wintypes.LPCWSTR, wintypes.DWORD)(str(path), 0)  # IPersistFile::Load, read only
+            store = ctypes.c_void_p()
+            _method(link, 0, ctypes.c_void_p, ctypes.c_void_p)(
+                ctypes.byref(_GUID(IID_IPROPERTY_STORE)), ctypes.byref(store)
+            )
+            try:
+                key = _PropertyKey(_GUID(PKEY_APP_USER_MODEL_ID[0]), PKEY_APP_USER_MODEL_ID[1])
+                value = _PropVariant()
+                _method(store, 5, ctypes.c_void_p, ctypes.c_void_p)(ctypes.byref(key), ctypes.byref(value))  # GetValue
+                text = value.value if value.vt == VT_LPWSTR else None
+                if value.vt:
+                    ctypes.windll.ole32.PropVariantClear(ctypes.byref(value))
+                return text
+            finally:
+                _release(store)
+    except OSError:
+        return None
 
 
 def shortcut_target(path: Path) -> str | None:
@@ -327,10 +409,12 @@ def install(
     shutil.rmtree(previous, ignore_errors=True)
 
     description = DESCRIPTION["en" if language == "en" else "zh-CN"]
-    create_shortcut(Path(str(shortcuts["start_menu"])), paths.exe, description=description)
+    # The app ID makes the entry stand for TaskRadar's window and notifications: Windows shows an app's notifications
+    # as banners (not only in the notification centre) when a Start menu entry carries its ID.
+    create_shortcut(Path(str(shortcuts["start_menu"])), paths.exe, description=description, app_id=notifications.APP_ID)
     old_desktop = paths.desktop_dir / f"{APP_NAME}.lnk"
     if desktop_shortcut:
-        create_shortcut(old_desktop, paths.exe, description=description)
+        create_shortcut(old_desktop, paths.exe, description=description, app_id=notifications.APP_ID)
     elif _inside(shortcut_target(old_desktop), target):
         old_desktop.unlink()  # an update without the desktop shortcut removes the one an earlier install made
     register(paths, version=version, size_kb=size // 1024)
@@ -363,7 +447,7 @@ def paths_for(program_dir: Path, manifest: dict[str, Any]) -> InstallPaths:
 
 
 def remove_integration(paths: InstallPaths) -> list[str]:
-    """Shortcuts, the Apps entry and our autostart entry; returns what was removed."""
+    """Shortcuts, the Apps entry, our autostart entry and our notification identity; returns what was removed."""
     from taskradar.services.system import AutostartManager
 
     removed = []
@@ -373,6 +457,8 @@ def remove_integration(paths: InstallPaths) -> list[str]:
             removed.append(str(shortcut))
     if unregister(paths):
         removed.append(paths.registry_key)
+    if notifications.unregister(key=paths.notification_key):
+        removed.append(paths.notification_key)
     autostart = AutostartManager(startup_dir=paths.startup_dir, python_exe=str(paths.exe))
     if autostart.enabled() and autostart.path is not None:
         content = autostart.path.read_text(encoding="utf-8", errors="ignore")

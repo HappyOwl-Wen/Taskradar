@@ -6,8 +6,8 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vite
 import { TooltipProvider } from "@/components/ui/menu";
 import i18n from "@/i18n";
 import { api, type TaskQuery } from "@/lib/api";
-import type { Dashboard, Settings, TaskStatus, TaskSummary } from "@/lib/types";
-import { makeDetail, makeTask } from "@/test/fixtures";
+import type { Settings, TaskStatus, TaskSummary } from "@/lib/types";
+import { makeDashboard, makeDetail, makeTask } from "@/test/fixtures";
 import TasksPage from "./TasksPage";
 
 // The server's state: the list asks for the statuses of its view.
@@ -40,7 +40,7 @@ describe("TasksPage", () => {
       const items = tasks.filter((t) => !query.status?.length || query.status.includes(t.status));
       return { items, total: items.length };
     });
-    vi.spyOn(api, "dashboard").mockResolvedValue({ counts: { active: 2, candidates: 0 } } as unknown as Dashboard);
+    vi.spyOn(api, "dashboard").mockResolvedValue(makeDashboard({ counts: { ...makeDashboard().counts, active: 2, todo: 2 } }));
     vi.spyOn(api, "settings").mockResolvedValue({ general: { timezone: "Europe/Berlin" } } as Settings);
     vi.spyOn(api, "setStatus").mockImplementation(async (id: string, status: string) => {
       tasks = tasks.map((t) => (t.id === id ? { ...t, status: status as TaskStatus } : t));
@@ -69,7 +69,7 @@ describe("TasksPage", () => {
 
   it("does not fade a task that stays in the list (all tasks), nor later in the open view", async () => {
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-    renderTasks(client, "/tasks?view=all");
+    renderTasks(client, "/tasks?status=all");
     await userEvent.click(await screen.findByRole("checkbox", { name: "把「Miete zahlen」标记为已完成" }));
     await waitFor(() => expect(screen.getByRole("checkbox", { name: "把「Miete zahlen」恢复为未完成" })).toBeEnabled());
     await userEvent.click(screen.getByRole("checkbox", { name: "把「Miete zahlen」恢复为未完成" }));

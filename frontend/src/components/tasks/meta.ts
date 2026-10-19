@@ -1,36 +1,24 @@
 import {
   Ban,
-  CalendarClock,
-  CalendarX2,
   Circle,
   CircleCheck,
   CircleDashed,
   CircleDot,
-  CircleHelp,
-  Copy,
-  FileQuestion,
   FlaskConical,
   Folder,
   GraduationCap,
-  HandHelping,
   Hourglass,
   Landmark,
   Mail,
-  Megaphone,
   PenLine,
   Plane,
-  ScanText,
-  ShieldAlert,
-  Split,
   Tag,
-  TriangleAlert,
   Upload,
   User,
   Wallet,
   type LucideIcon,
 } from "lucide-react";
 import type { BadgeTone } from "@/components/ui/variants";
-import type { IssueKind } from "@/lib/review";
 import type { Category, TaskStatus, Urgency } from "@/lib/types";
 
 export const STATUS_ICON: Record<TaskStatus, LucideIcon> = {
@@ -83,38 +71,23 @@ export const SOURCE_ICON: Record<string, LucideIcon> = {
 
 /**
  * One look per lifecycle status, used everywhere a status is shown: unconfirmed is tentative (neutral, dashed),
- * the user's own open work brand indigo, done green; waiting and dismissed are neutral (nothing to do right now).
+ * to do is neutral, being worked on blue, waiting for someone else amber, done green, dismissed grey.
  */
 export const STATUS_TONE: Record<TaskStatus, BadgeTone> = {
   candidate: "tentative",
-  confirmed: "primary",
-  in_progress: "primary",
-  waiting_for_reply: "normal",
+  confirmed: "neutral",
+  in_progress: "progress",
+  waiting_for_reply: "waiting",
   completed: "success",
   dismissed: "normal",
-};
-
-export const ISSUE_ICON: Record<IssueKind, LucideIcon> = {
-  date_conflict: CalendarX2,
-  date_changed: CalendarClock,
-  duplicate: Copy,
-  date_unclear: CircleHelp,
-  content_unclear: FileQuestion,
-  suspicious: ShieldAlert,
-  not_in_source: ScanText,
-  marketing: Megaphone,
-  optional: HandHelping,
-  ocr_quality: ScanText,
-  low_certainty: TriangleAlert,
-  split: Split,
 };
 
 /** Text colour per status (status icons in lists and menus). */
 export const STATUS_TEXT: Record<TaskStatus, string> = {
   candidate: "text-tentative",
-  confirmed: "text-primary",
-  in_progress: "text-primary",
-  waiting_for_reply: "text-muted-foreground",
+  confirmed: "text-muted-foreground",
+  in_progress: "text-progress",
+  waiting_for_reply: "text-waiting",
   completed: "text-success",
   dismissed: "text-muted-foreground",
 };

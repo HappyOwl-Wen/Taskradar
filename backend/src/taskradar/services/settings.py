@@ -26,6 +26,8 @@ class GeneralSettings(_Section):
     timezone: str = "Europe/Berlin"
     language: Literal["zh-CN", "en"] = "zh-CN"
     theme: Literal["system", "light", "dark"] = "system"
+    # Desktop app: the close button hides the window in the notification area (reminders and timers go on).
+    close_to_tray: bool = True
 
     @field_validator("timezone")
     @classmethod
@@ -35,48 +37,6 @@ class GeneralSettings(_Section):
         except (ZoneInfoNotFoundError, ValueError) as exc:
             raise ValueError(f"Unknown time zone: {v}") from exc
         return v
-
-
-class LLMSettings(_Section):
-    provider: Literal["none", "openai", "openai_compatible"] = "none"
-    model: str = Field(default="gpt-5-mini", min_length=1, max_length=120)
-    base_url: str | None = None
-    structured_mode: Literal["json_schema", "json_object"] = "json_schema"
-    reasoning_effort: Literal["minimal", "low", "medium", "high"] | None = None
-    cloud_consent: bool = False
-    consent_at: str | None = None
-    redact_identifiers: bool = True
-    prefilter: bool = True
-    max_input_chars: int = Field(default=12000, ge=1000, le=100000)
-    timeout_seconds: float = Field(default=45.0, ge=5, le=300)
-    max_retries: int = Field(default=2, ge=0, le=5)
-    use_semantic_dedup: bool = True
-    price_input_per_mtok: float | None = Field(default=None, ge=0)
-    price_output_per_mtok: float | None = Field(default=None, ge=0)
-
-    @field_validator("base_url")
-    @classmethod
-    def _valid_url(cls, v: str | None) -> str | None:
-        if v in (None, ""):
-            return None
-        if not v.startswith(("https://", "http://127.0.0.1", "http://localhost", "http://[::1]")):
-            raise ValueError("base_url must use https (or a local http endpoint)")
-        return v.rstrip("/")
-
-
-class GmailSettings(_Section):
-    auto_sync: bool = True
-    lookback_days: int = Field(default=30, ge=1, le=365)
-    sync_interval_minutes: int = Field(default=30, ge=5, le=1440)
-    query_extra: str = Field(default="", max_length=300)
-    process_attachments: bool = True
-    max_attachment_mb: int = Field(default=15, ge=1, le=25)
-    max_messages_per_sync: int = Field(default=500, ge=10, le=5000)
-
-
-class FolderSettings(_Section):
-    scan_interval_minutes: int = Field(default=5, ge=1, le=1440)
-    max_file_mb: int = Field(default=25, ge=1, le=100)
 
 
 class ReminderSettings(_Section):
@@ -99,31 +59,29 @@ class CalendarSettings(_Section):
     auto_sync_enabled: bool = False
     auto_sync_categories: list[Category] = Field(default_factory=list)
     reminder_minutes: int = Field(default=1440, ge=0, le=40320)
-    # When the user dismisses, merges away or deletes a task, remove its event as well.
+    # When the user dismisses or deletes a task, remove its event as well.
     remove_on_dismiss: bool = True
 
 
-class PolicySettings(_Section):
-    review_confidence_threshold: float = Field(default=0.6, ge=0, le=1)
-    auto_complete_on_explicit_confirmation: bool = True
-    auto_complete_min_confidence: float = Field(default=0.85, ge=0.5, le=1)
-    auto_apply_explicit_deadline_changes: bool = True
-
-
-class DemoSettings(_Section):
-    gmail_failure_mode: Literal["none", "rate_limit", "server_error", "auth", "network"] = "none"
+class TimerSettings(_Section):
+    focus_minutes: int = Field(default=25, ge=1, le=180)
+    short_break_minutes: int = Field(default=5, ge=1, le=60)
+    long_break_minutes: int = Field(default=15, ge=1, le=120)
+    # After this many focus sessions the break is a long one.
+    long_break_every: int = Field(default=4, ge=2, le=12)
+    auto_start_breaks: bool = False
+    auto_start_focus: bool = False
+    # A Windows notification when a Pomodoro phase or a countdown ends: that is what a timer is for.
+    notify: bool = True
 
 
 class AppSettings(BaseModel):
+    # Sections of removed features (llm, gmail, folders, policy, demo) may still be stored; they are ignored.
     general: GeneralSettings = Field(default_factory=GeneralSettings)
-    llm: LLMSettings = Field(default_factory=LLMSettings)
-    gmail: GmailSettings = Field(default_factory=GmailSettings)
-    folders: FolderSettings = Field(default_factory=FolderSettings)
     reminders: ReminderSettings = Field(default_factory=ReminderSettings)
     notifications: NotificationSettings = Field(default_factory=NotificationSettings)
     calendar: CalendarSettings = Field(default_factory=CalendarSettings)
-    policy: PolicySettings = Field(default_factory=PolicySettings)
-    demo: DemoSettings = Field(default_factory=DemoSettings)
+    timers: TimerSettings = Field(default_factory=TimerSettings)
 
 
 SECTIONS = tuple(AppSettings.model_fields)

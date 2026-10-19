@@ -1,7 +1,7 @@
 """Google API error mapping, including an API that is switched off in the user's Cloud project.
 
-Seen with a real account: Gmail worked, but writing to the calendar failed with 403 accessNotConfigured
-because the Google Calendar API had not been enabled - and the app called it a retryable Gmail error.
+Seen with a real account: writing to the calendar failed with 403 accessNotConfigured because the Google
+Calendar API had not been enabled - and the app called it a retryable error of another API.
 """
 
 from __future__ import annotations
@@ -10,8 +10,13 @@ import json
 from typing import Any
 
 from taskradar.connectors.calendar import FakeCalendarClient
-from taskradar.connectors.errors import ApiNotEnabledError, PermanentError, RateLimitedError, TransientError
-from taskradar.connectors.gmail import map_http_error
+from taskradar.connectors.errors import (
+    ApiNotEnabledError,
+    PermanentError,
+    RateLimitedError,
+    TransientError,
+    map_http_error,
+)
 from taskradar.security import secrets as sk
 
 ACTIVATION = "https://console.developers.google.com/apis/api/calendar-json.googleapis.com/overview?project=123456789012"
@@ -68,7 +73,7 @@ def test_other_errors_name_the_api_that_failed() -> None:
     assert isinstance(limited, RateLimitedError) and "Google Calendar API" in str(limited)
     assert isinstance(map_http_error(503, b"", api="Google Calendar API"), TransientError)
     other = map_http_error(400, json.dumps({"error": {"errors": [{"reason": "badRequest"}]}}))
-    assert isinstance(other, PermanentError) and str(other) == "Gmail API request failed (400 badRequest)"
+    assert isinstance(other, PermanentError) and str(other) == "Google API request failed (400 badRequest)"
 
 
 def test_disabled_calendar_api_is_explained_and_writing_works_once_enabled(

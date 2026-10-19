@@ -1,5 +1,5 @@
 import { useQueryClient } from "@tanstack/react-query";
-import { CalendarCheck, Check, ChevronRight, ExternalLink, FileJson, Link2, LoaderCircle, Mail, Unplug } from "lucide-react";
+import { CalendarCheck, Check, ChevronRight, ExternalLink, FileJson, Link2, LoaderCircle, Unplug } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
@@ -22,7 +22,7 @@ import { InfoRow, NumberField, SaveBar, SettingsCard } from "./common";
  * comes back to the settings page. The desktop window opens it in the system browser instead (where the user is
  * signed in to Google; Google does not allow signing in inside embedded windows) and waits here for the result.
  */
-function useConnect(service: "gmail" | "calendar") {
+function useConnect(service: "calendar") {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
   const { data: google } = useGoogle();
@@ -36,7 +36,7 @@ function useConnect(service: "gmail" | "calendar") {
       const last = status?.last_authorization;
       if (!last || last.seq <= waitingSince) return;
       setWaitingSince(null);
-      if (last.ok) toast.success(t(`settings.oauthConnected.${last.service ?? service}`));
+      if (last.ok) toast.success(t("settings.calendar.connectedToast"));
       else toast.error(t("settings.oauthError", { code: translateKey(`errors.${last.error}`, last.error ?? "") }), { duration: 10000 });
       void refreshAll(queryClient);
     }, 1500);
@@ -66,20 +66,20 @@ function BrowserWait({ connect }: { connect: ReturnType<typeof useConnect> }) {
       <LoaderCircle className="size-4 shrink-0 animate-spin" aria-hidden />
       <span className="min-w-0 flex-1 basis-56">
         <ExternalLink className="mr-1 inline size-3.5 align-[-2px]" aria-hidden />
-        {t("settings.gmail.waitingBrowser")}
+        {t("settings.google.waitingBrowser")}
       </span>
       <Button variant="ghost" size="xs" onClick={connect.stopWaiting}>
-        {t("settings.gmail.stopWaiting")}
+        {t("settings.google.stopWaiting")}
       </Button>
     </div>
   );
 }
 
-function Disconnect({ service, label }: { service: "gmail" | "calendar"; label: string }) {
+function Disconnect({ label }: { label: string }) {
   const { t } = useTranslation();
   const [open, setOpen] = useState(false);
-  const disconnect = useAction(() => api.disconnectGoogle(service), {
-    success: service === "gmail" ? t("settings.gmail.disconnected") : t("settings.calendar.disconnected"),
+  const disconnect = useAction(() => api.disconnectGoogle("calendar"), {
+    success: t("settings.calendar.disconnected"),
     onSuccess: () => setOpen(false),
   });
   return (
@@ -91,7 +91,7 @@ function Disconnect({ service, label }: { service: "gmail" | "calendar"; label: 
         open={open}
         onOpenChange={setOpen}
         title={label}
-        description={service === "gmail" ? t("settings.gmail.disconnect") : t("settings.calendar.disconnect")}
+        description={t("settings.calendar.disconnectHint")}
         confirmLabel={label}
         cancelLabel={t("common.cancel")}
         destructive
@@ -102,11 +102,11 @@ function Disconnect({ service, label }: { service: "gmail" | "calendar"; label: 
   );
 }
 
-/** Pick the OAuth client JSON (step 1 of connecting Gmail). */
+/** Pick the OAuth client JSON (step 1 of connecting Google Calendar). */
 function ClientUpload() {
   const { t } = useTranslation();
   const input = useRef<HTMLInputElement>(null);
-  const upload = useAction((file: File) => api.uploadClientConfig(file), { success: t("settings.gmail.clientSaved") });
+  const upload = useAction((file: File) => api.uploadClientConfig(file), { success: t("settings.google.clientSaved") });
   return (
     <div>
       <input
@@ -121,7 +121,7 @@ function ClientUpload() {
         }}
       />
       <Button size="sm" onClick={() => input.current?.click()} disabled={upload.isPending}>
-        <FileJson /> {t("settings.gmail.uploadClient")}
+        <FileJson /> {t("settings.google.uploadClient")}
       </Button>
     </div>
   );
@@ -132,18 +132,18 @@ function ClientConfig() {
   const { data: google } = useGoogle();
   const input = useRef<HTMLInputElement>(null);
   const [removeOpen, setRemoveOpen] = useState(false);
-  const upload = useAction((file: File) => api.uploadClientConfig(file), { success: t("settings.gmail.clientSaved") });
+  const upload = useAction((file: File) => api.uploadClientConfig(file), { success: t("settings.google.clientSaved") });
   const remove = useAction(() => api.deleteClientConfig(), { onSuccess: () => setRemoveOpen(false) });
   const client = google?.client;
   return (
     <div className="grid gap-2 rounded-lg bg-card p-4">
-      <p className="text-sm font-semibold">{t("settings.gmail.clientTitle")}</p>
-      <p className="text-[13px] leading-relaxed text-muted-foreground">{t("settings.gmail.clientHint")}</p>
+      <p className="text-sm font-semibold">{t("settings.google.clientTitle")}</p>
+      <p className="text-[13px] leading-relaxed text-muted-foreground">{t("settings.google.clientHint")}</p>
       <p className="text-sm">
         {client?.configured ? (
-          <span className="text-success">{t("settings.gmail.clientConfigured", { hint: client.client_id_hint ?? "" })}</span>
+          <span className="text-success">{t("settings.google.clientConfigured", { hint: client.client_id_hint ?? "" })}</span>
         ) : (
-          <span className="text-muted-foreground">{t("settings.gmail.clientMissing")}</span>
+          <span className="text-muted-foreground">{t("settings.google.clientMissing")}</span>
         )}
       </p>
       <input
@@ -159,17 +159,17 @@ function ClientConfig() {
       />
       <div className="flex flex-wrap gap-2">
         <Button variant="outline" size="sm" onClick={() => input.current?.click()} disabled={upload.isPending}>
-          <FileJson /> {t("settings.gmail.uploadClient")}
+          <FileJson /> {t("settings.google.uploadClient")}
         </Button>
         {client?.configured ? (
           <Button variant="ghost" size="sm" onClick={() => setRemoveOpen(true)}>
-            {t("settings.gmail.removeClient")}
+            {t("settings.google.removeClient")}
           </Button>
         ) : null}
       </div>
       {google ? (
         <dl className="mt-1 grid gap-2">
-          <InfoRow label={t("settings.gmail.redirectUri")}>
+          <InfoRow label={t("settings.google.redirectUri")}>
             <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs">{google.redirect_uri}</code>
           </InfoRow>
         </dl>
@@ -177,9 +177,9 @@ function ClientConfig() {
       <ConfirmDialog
         open={removeOpen}
         onOpenChange={setRemoveOpen}
-        title={t("settings.gmail.removeClient")}
-        description={t("settings.gmail.clientHint")}
-        confirmLabel={t("settings.gmail.removeClient")}
+        title={t("settings.google.removeClient")}
+        description={t("settings.google.clientHint")}
+        confirmLabel={t("settings.google.removeClient")}
         cancelLabel={t("common.cancel")}
         destructive
         pending={remove.isPending}
@@ -192,7 +192,7 @@ function ClientConfig() {
 function Scopes({ scopes }: { scopes: string[] }) {
   const { t } = useTranslation();
   return (
-    <InfoRow label={t("settings.gmail.scopes")}>
+    <InfoRow label={t("settings.google.scopes")}>
       <span className="flex flex-wrap gap-1.5">
         {scopes.map((s) => (
           <code key={s} className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs">
@@ -204,7 +204,7 @@ function Scopes({ scopes }: { scopes: string[] }) {
   );
 }
 
-/** One step of connecting Gmail: what to do, how to tell it worked, and the action. */
+/** One step of connecting Google Calendar: what to do, how to tell it worked, and the action. */
 function Step({ index, state, title, hint, children }: { index: number; state: "done" | "current" | "todo"; title: string; hint: string; children?: ReactNode }) {
   return (
     <li className={cn("flex items-start gap-3 rounded-md border p-3", state === "current" && "border-primary/40 bg-selected/60")}>
@@ -226,103 +226,10 @@ function Step({ index, state, title, hint, children }: { index: number; state: "
 }
 
 /**
- * Gmail: until it is connected, three steps with what to do, how to tell it worked and what to do when it
- * fails; once connected, the connection and the sync options, with the technical details folded away.
+ * Google Calendar: until it is connected, two steps (the OAuth client file, then Google's consent page), each with
+ * what to do and how to tell it worked; once connected, the connection and the calendar options. TaskRadar only
+ * writes events into its own calendar (`calendar.app.created`), never into the user's other calendars.
  */
-export function GmailSection({ settings }: { settings: Settings }) {
-  const { t } = useTranslation();
-  const { data: google } = useGoogle();
-  const section = useSection(settings, "gmail");
-  const connect = useConnect("gmail");
-  const v = section.value;
-  const connected = Boolean(google?.gmail.connected);
-  const clientReady = Boolean(google?.client.configured);
-  const authProblem = google?.gmail.source?.status === "auth_required";
-  const account = google?.gmail.source?.account;
-  const ready = connected && !authProblem;
-  return (
-    <SettingsCard
-      id="gmail"
-      title={t("settings.sections.gmail")}
-      footer={<SaveBar dirty={section.dirty} saving={section.saving} onSave={section.save} onReset={section.reset} />}
-    >
-      {ready ? (
-        <div className="grid gap-3">
-          <div className="flex flex-wrap items-center gap-3">
-            <Badge tone="success">
-              <Mail /> {account ? t("settings.gmail.connectedAs", { account }) : t("settings.gmail.connected")}
-            </Badge>
-            <span className="text-[13px] text-muted-foreground">{t("settings.gmail.readonlyNote")}</span>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <Button variant="outline" size="sm" onClick={() => connect.mutate(undefined)} disabled={!clientReady || connect.waiting} loading={connect.isPending}>
-              <Link2 /> {t("settings.gmail.reconnect")}
-            </Button>
-            <Disconnect service="gmail" label={t("settings.gmail.disconnect")} />
-          </div>
-          <BrowserWait connect={connect} />
-        </div>
-      ) : google ? (
-        <ol className="grid gap-2" aria-label={t("settings.gmail.steps.title")}>
-          <Step
-            index={1}
-            state={clientReady ? "done" : "current"}
-            title={t("settings.gmail.steps.client")}
-            hint={clientReady ? t("settings.gmail.clientConfigured", { hint: google.client.client_id_hint ?? "" }) : t("settings.gmail.steps.clientHint")}
-          >
-            {clientReady ? null : <ClientUpload />}
-          </Step>
-          <Step
-            index={2}
-            state={!clientReady ? "todo" : "current"}
-            title={authProblem ? t("settings.gmail.steps.reauth") : t("settings.gmail.steps.authorize")}
-            hint={authProblem ? t("settings.gmail.steps.reauthHint") : t("settings.gmail.authHint")}
-          >
-            <div className="grid justify-items-start gap-2">
-              <Button size="sm" onClick={() => connect.mutate(undefined)} disabled={!clientReady || connect.waiting} loading={connect.isPending}>
-                <Link2 /> {authProblem ? t("settings.gmail.reconnect") : t("settings.gmail.connect")}
-              </Button>
-              <BrowserWait connect={connect} />
-            </div>
-          </Step>
-          <Step index={3} state="todo" title={t("settings.gmail.steps.sync")} hint={t("settings.gmail.steps.syncHint", { days: v.lookback_days })} />
-        </ol>
-      ) : null}
-      <div className="grid gap-4 border-t pt-4">
-        <SwitchRow id="set-gmail-auto" label={t("settings.gmail.autoSync")} checked={v.auto_sync} onCheckedChange={(c) => section.set("auto_sync", c)} />
-        <SwitchRow
-          id="set-gmail-att"
-          label={t("settings.gmail.attachments")}
-          checked={v.process_attachments}
-          onCheckedChange={(c) => section.set("process_attachments", c)}
-        />
-        <div className="grid gap-4 sm:grid-cols-2">
-          <NumberField id="set-gmail-interval" label={t("settings.gmail.interval")} value={v.sync_interval_minutes} min={5} max={1440} onChange={(n) => section.set("sync_interval_minutes", n)} />
-          <NumberField id="set-gmail-lookback" label={t("settings.gmail.lookback")} value={v.lookback_days} min={1} max={365} onChange={(n) => section.set("lookback_days", n)} />
-        </div>
-      </div>
-      <details className="group/adv border-t pt-4">
-        <summary className="flex w-fit cursor-pointer list-none items-center gap-1 text-sm font-medium text-muted-foreground outline-none select-none hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/40 [&::-webkit-details-marker]:hidden">
-          <ChevronRight className="size-4 transition-transform group-open/adv:rotate-90" aria-hidden />
-          {t("settings.gmail.advanced")}
-        </summary>
-        <div className="mt-4 grid gap-4">
-          <NumberField id="set-gmail-att-mb" label={t("settings.gmail.maxAttachment")} value={v.max_attachment_mb} min={1} max={25} onChange={(n) => section.set("max_attachment_mb", n)} />
-          <Field label={t("settings.gmail.queryExtra")} hint={t("settings.gmail.queryExtraHint")} htmlFor="set-gmail-query">
-            <Input id="set-gmail-query" value={v.query_extra} onChange={(e) => section.set("query_extra", e.target.value)} className="max-w-md font-mono" />
-          </Field>
-          <ClientConfig />
-          {google ? (
-            <dl className="grid gap-2">
-              <Scopes scopes={google.gmail.scopes} />
-            </dl>
-          ) : null}
-        </div>
-      </details>
-    </SettingsCard>
-  );
-}
-
 export function CalendarSection({ settings }: { settings: Settings }) {
   const { t } = useTranslation();
   const { data: google } = useGoogle();
@@ -331,6 +238,7 @@ export function CalendarSection({ settings }: { settings: Settings }) {
   const [confirmAuto, setConfirmAuto] = useState(false);
   const v = section.value;
   const connected = Boolean(google?.calendar.connected);
+  const clientReady = Boolean(google?.client.configured);
   return (
     <SettingsCard
       id="calendar"
@@ -338,25 +246,42 @@ export function CalendarSection({ settings }: { settings: Settings }) {
       description={t("settings.calendar.intro")}
       footer={<SaveBar dirty={section.dirty} saving={section.saving} onSave={section.save} onReset={section.reset} />}
     >
-      <div className="grid gap-3">
-        <Badge tone={connected ? "success" : "normal"}>
-          <CalendarCheck />
-          {connected ? t("settings.calendar.connected", { name: google?.calendar.calendar_name ?? v.calendar_name }) : t("settings.gmail.notConnected")}
-        </Badge>
-        {google ? (
-          <dl className="grid gap-2">
-            <Scopes scopes={google.calendar.scopes} />
-          </dl>
-        ) : null}
-        {!google?.client.configured ? <p className="text-[13px] text-muted-foreground">{t("errors.client_not_configured")}</p> : null}
-        <div className="flex flex-wrap gap-2">
-          <Button size="sm" onClick={() => connect.mutate(undefined)} disabled={!google?.client.configured || connect.waiting} loading={connect.isPending}>
-            <Link2 /> {connected ? t("settings.gmail.reconnect") : t("settings.calendar.connect")}
-          </Button>
-          {connected ? <Disconnect service="calendar" label={t("settings.calendar.disconnect")} /> : null}
+      {connected ? (
+        <div className="grid gap-3">
+          <div className="flex flex-wrap items-center gap-3">
+            <Badge tone="success">
+              <CalendarCheck /> {t("settings.calendar.connected", { name: google?.calendar.calendar_name ?? v.calendar_name })}
+            </Badge>
+            <span className="text-[13px] text-muted-foreground">{t("settings.calendar.ownCalendarOnly")}</span>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button variant="outline" size="sm" onClick={() => connect.mutate(undefined)} disabled={!clientReady || connect.waiting} loading={connect.isPending}>
+              <Link2 /> {t("settings.calendar.reconnect")}
+            </Button>
+            <Disconnect label={t("settings.calendar.disconnect")} />
+          </div>
+          <BrowserWait connect={connect} />
         </div>
-        <BrowserWait connect={connect} />
-      </div>
+      ) : google ? (
+        <ol className="grid gap-2" aria-label={t("settings.calendar.steps.title")}>
+          <Step
+            index={1}
+            state={clientReady ? "done" : "current"}
+            title={t("settings.google.steps.client")}
+            hint={clientReady ? t("settings.google.clientConfigured", { hint: google.client.client_id_hint ?? "" }) : t("settings.google.steps.clientHint")}
+          >
+            {clientReady ? null : <ClientUpload />}
+          </Step>
+          <Step index={2} state={clientReady ? "current" : "todo"} title={t("settings.calendar.steps.authorize")} hint={t("settings.calendar.steps.authorizeHint")}>
+            <div className="grid justify-items-start gap-2">
+              <Button size="sm" onClick={() => connect.mutate(undefined)} disabled={!clientReady || connect.waiting} loading={connect.isPending}>
+                <Link2 /> {t("settings.calendar.connect")}
+              </Button>
+              <BrowserWait connect={connect} />
+            </div>
+          </Step>
+        </ol>
+      ) : null}
       <div className="grid gap-4 border-t pt-4">
         <div className="grid gap-4 sm:grid-cols-2">
           <Field label={t("settings.calendar.calendarName")} htmlFor="set-cal-name">
@@ -421,6 +346,20 @@ export function CalendarSection({ settings }: { settings: Settings }) {
           </fieldset>
         ) : null}
       </div>
+      <details className="group/adv border-t pt-4">
+        <summary className="flex w-fit cursor-pointer list-none items-center gap-1 text-sm font-medium text-muted-foreground outline-none select-none hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/40 [&::-webkit-details-marker]:hidden">
+          <ChevronRight className="size-4 transition-transform group-open/adv:rotate-90" aria-hidden />
+          {t("settings.google.advanced")}
+        </summary>
+        <div className="mt-4 grid gap-4">
+          <ClientConfig />
+          {google ? (
+            <dl className="grid gap-2">
+              <Scopes scopes={google.calendar.scopes} />
+            </dl>
+          ) : null}
+        </div>
+      </details>
     </SettingsCard>
   );
 }

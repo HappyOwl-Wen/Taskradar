@@ -6,44 +6,19 @@ import { beforeAll, describe, expect, it, vi } from "vitest";
 import { TooltipProvider } from "@/components/ui/menu";
 import i18n from "@/i18n";
 import { markJustAdded } from "@/lib/justAdded";
-import type { TaskSummary } from "@/lib/types";
+import { makeTask } from "@/test/fixtures";
 import { TaskListItem } from "./TaskRow";
 
-const task: TaskSummary = {
-  id: "t1",
-  title: "提交在读证明",
-  category: "administrative",
-  action_type: "submit",
-  status: "candidate",
-  priority: "medium",
-  confidence: 0.72,
+const task = makeTask({
+  title: "交房租",
+  category: "financial",
   due_at: "2026-11-20",
   due_date: "2026-11-20",
-  due_time: null,
   due_precision: "date",
-  due_text: "11月20日前",
-  due_is_relative: false,
-  due_needs_confirmation: true,
-  time_semantics: "deadline",
-  timezone: "Europe/Berlin",
   urgency: "normal",
   effective_deadline: "2026-11-20T22:59:59+00:00",
   remaining_seconds: 3_000_000,
-  needs_review: true,
-  review_reasons: ["date_needs_confirmation"],
-  source_count: 2,
-  source_kinds: ["upload"],
-  pending_suggestions: 0,
-  calendar_status: null,
-  detected_at: null,
-  source_published_at: null,
-  source_published_day: null,
-  created_at: null,
-  updated_at: null,
-  confirmed_at: null,
-  completed_at: null,
-  manual: false,
-};
+});
 
 function renderRow(props: Partial<Parameters<typeof TaskListItem>[0]> = {}) {
   return render(
@@ -62,16 +37,13 @@ describe("TaskListItem", () => {
     await i18n.changeLanguage("zh-CN");
   });
 
-  it("links to the task and names its problem in plain language, without a confidence percentage", () => {
+  it("links to the task and keeps the row to title and date", () => {
     renderRow();
-    expect(screen.getByRole("link", { name: "提交在读证明" })).toHaveAttribute("href", "/tasks/t1");
-    expect(screen.getByText("日期需确认")).toBeInTheDocument();
-    expect(screen.queryByText("72%")).not.toBeInTheDocument();
-    expect(screen.queryByText(/置信度/)).not.toBeInTheDocument();
-    // The date is rendered for narrow and wide lists (CSS shows one of them).
-    expect(screen.getAllByLabelText("日期需要确认").length).toBeGreaterThan(0);
-    // Category and sources live in the task itself, not in every row.
-    expect(screen.queryByText("行政事务")).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "交房租" })).toHaveAttribute("href", "/tasks/t1");
+    // A to-do is the normal case: no status badge, no category, no confidence.
+    expect(screen.queryByText("待办")).not.toBeInTheDocument();
+    expect(screen.queryByText("财务")).not.toBeInTheDocument();
+    expect(screen.queryByText(/100%|置信度/)).not.toBeInTheDocument();
   });
 
   it("shows a date-only deadline without inventing a time", () => {
@@ -80,78 +52,60 @@ describe("TaskListItem", () => {
     expect(container.textContent).not.toMatch(/23:59/);
   });
 
+  it("shows when a task is being worked on or waits for a reply, wherever it is listed", () => {
+    const { rerender } = renderRow({ task: { ...task, status: "in_progress" } });
+    expect(screen.getByText("进行中")).toBeInTheDocument();
+    rerender(
+      <QueryClientProvider client={new QueryClient()}>
+        <TooltipProvider>
+          <MemoryRouter>
+            <TaskListItem task={{ ...task, status: "waiting_for_reply" }} />
+          </MemoryRouter>
+        </TooltipProvider>
+      </QueryClientProvider>,
+    );
+    expect(screen.getByText("等待回复")).toBeInTheDocument();
+    expect(screen.queryByText("进行中")).not.toBeInTheDocument();
+  });
+
+  it("leaves the status out where the context already says it (a lane of the board)", () => {
+    renderRow({ task: { ...task, status: "in_progress" }, hideStatus: true });
+    expect(screen.queryByText("进行中")).not.toBeInTheDocument();
+  });
+
+  it("marks tasks of earlier versions that were never confirmed", () => {
+    renderRow({ task: { ...task, status: "candidate", manual: false } });
+    expect(screen.getByText("待确认")).toBeInTheDocument();
+  });
+
   it("offers a selection checkbox when selectable", () => {
     renderRow({ selected: false, onSelectedChange: () => undefined });
-    expect(screen.getByRole("checkbox", { name: "选择「提交在读证明」" })).toBeInTheDocument();
+    expect(screen.getByRole("checkbox", { name: "选择「交房租」" })).toBeInTheDocument();
   });
 
-  it("shows an internal review code only as a human label", () => {
-    renderRow({ task: { ...task, review_reasons: ["title_incomplete"], due_needs_confirmation: false } });
-    expect(screen.getByText("内容待核实")).toBeInTheDocument();
-    expect(screen.queryByText("title_incomplete")).not.toBeInTheDocument();
-  });
-
-  it("keeps a missing deadline quiet and does not flag reviewed tasks", () => {
-    renderRow({
-      task: {
-        ...task,
-        status: "confirmed",
-        needs_review: false,
-        due_date: null,
-        due_at: null,
-        effective_deadline: null,
-        due_needs_confirmation: false,
-        urgency: "no_deadline",
-      },
-    });
+  it("keeps a missing deadline quiet", () => {
+    renderRow({ task: { ...task, due_date: null, due_at: null, effective_deadline: null, urgency: "no_deadline" } });
     expect(screen.getAllByText("无截止日期").length).toBeGreaterThan(0);
-    expect(screen.queryByText("日期需确认")).not.toBeInTheDocument();
   });
 
   it("shows at most two key states; the rest opens with a click, not only on hover", async () => {
-    renderRow({
-      task: { ...task, sample: true, review_reasons: ["possible_duplicate", "title_incomplete"], due_needs_confirmation: false },
-      showUnconfirmed: true,
-    });
-    // Unconfirmed and test data come first; the two problems are summed up.
-    expect(screen.getByText("待确认")).toBeInTheDocument();
+    renderRow({ task: { ...task, status: "in_progress", sample: true, calendar_status: "failed" } });
+    expect(screen.getByText("进行中")).toBeInTheDocument();
     expect(screen.getByText("测试数据")).toBeInTheDocument();
-    expect(screen.queryByText("疑似重复")).not.toBeInTheDocument();
-    await userEvent.click(screen.getByRole("button", { name: "另有 2 项" }));
-    expect(await screen.findByText("疑似重复")).toBeInTheDocument();
-    expect(screen.getByText("内容待核实")).toBeInTheDocument();
-  });
-
-  it("names an open suggestion, so new tasks and changes can share one queue", () => {
-    renderRow({ task: { ...task, status: "confirmed", needs_review: false, due_needs_confirmation: false, pending_suggestions: 1, pending_suggestion_kinds: ["update_due"] } });
-    expect(screen.getByText("截止日期可能有变")).toBeInTheDocument();
-  });
-
-  it("names a possible duplicate once, even when it is both a doubt and a suggestion", () => {
-    renderRow({
-      task: { ...task, review_reasons: ["possible_duplicate"], due_needs_confirmation: false, pending_suggestions: 1, pending_suggestion_kinds: ["possible_duplicate"] },
-    });
-    expect(screen.getAllByText("疑似重复")).toHaveLength(1);
+    expect(screen.queryByText("日历写入失败")).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "另有 1 项" }));
+    expect(await screen.findByText("日历写入失败")).toBeInTheDocument();
   });
 
   it("shows a calendar event that needs the user as a state", () => {
-    renderRow({ task: { ...task, status: "confirmed", needs_review: false, due_needs_confirmation: false, calendar_status: "failed" } });
+    renderRow({ task: { ...task, calendar_status: "failed" } });
     expect(screen.getByText("日历写入失败")).toBeInTheDocument();
-  });
-
-  it("does not repeat a problem that the context already names", () => {
-    renderRow({
-      task: { ...task, status: "confirmed", review_reasons: ["possible_duplicate"], due_needs_confirmation: false },
-      states: [{ key: "conflict", tone: "urgent", label: "截止日期冲突" }],
-    });
-    expect(screen.getByText("截止日期冲突")).toBeInTheDocument();
-    expect(screen.queryByText("疑似重复")).not.toBeInTheDocument();
   });
 
   it("can select the task in place instead of navigating", () => {
     let opened = 0;
     renderRow({ onSelect: () => (opened += 1), active: true });
-    const button = screen.getByRole("button", { name: "提交在读证明" });
+    const button = screen.getByRole("button", { name: "交房租" });
     expect(button).toHaveAttribute("aria-current", "true");
     button.click();
     expect(opened).toBe(1);

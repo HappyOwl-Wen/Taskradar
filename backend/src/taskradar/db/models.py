@@ -444,6 +444,35 @@ class Notification(Base):
     desktop_sent_at: Mapped[dt.datetime | None] = mapped_column(default=None)
 
 
+class Timer(Base):
+    """A Pomodoro phase or a countdown, run by the server so it ends on time while the window is hidden or closed.
+
+    Every Pomodoro phase is a row of its own, so the finished ones are the day's history. A countdown runs for a
+    duration (it can be paused) or until a moment (``mode`` "until").
+    """
+
+    __tablename__ = "timers"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    kind: Mapped[str] = mapped_column(String(16), index=True)  # pomodoro | countdown
+    phase: Mapped[str | None] = mapped_column(String(16), default=None)  # focus | short_break | long_break
+    mode: Mapped[str] = mapped_column(String(16), default="duration")  # duration | until
+    label: Mapped[str] = mapped_column(String(200), default="")
+    task_id: Mapped[str | None] = mapped_column(ForeignKey("tasks.id", ondelete="SET NULL"), default=None, index=True)
+    cycle: Mapped[int] = mapped_column(Integer, default=0)  # the focus session's number in its set
+    status: Mapped[str] = mapped_column(String(16), default="running", index=True)
+    duration_seconds: Mapped[int] = mapped_column(Integer)
+    remaining_seconds: Mapped[int | None] = mapped_column(Integer, default=None)  # while paused
+    ends_at: Mapped[dt.datetime | None] = mapped_column(default=None, index=True)  # while running
+    started_at: Mapped[dt.datetime] = mapped_column(default=utcnow)
+    finished_at: Mapped[dt.datetime | None] = mapped_column(default=None)
+    notified_at: Mapped[dt.datetime | None] = mapped_column(default=None)
+    created_at: Mapped[dt.datetime] = mapped_column(default=utcnow)
+    updated_at: Mapped[dt.datetime] = mapped_column(default=utcnow, onupdate=utcnow)
+
+    task: Mapped[Task | None] = relationship()
+
+
 class Setting(Base):
     __tablename__ = "settings"
 

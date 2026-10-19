@@ -35,3 +35,10 @@ export function useNavMode(): [NavMode, (mode: NavMode) => void] {
   };
   return [mode, set];
 }
+
+/** Which of the task views a task list address shows (`/tasks?scope=…`); a task's own page belongs to "all". */
+export function taskScope(location: { pathname: string; search: string }): "all" | "mine" | "calendar" | null {
+  if (!location.pathname.startsWith("/tasks")) return null;
+  const scope = new URLSearchParams(location.search).get("scope");
+  return scope === "mine" || scope === "calendar" ? scope : "all";
+}

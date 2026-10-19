@@ -1,7 +1,7 @@
 """Entry point of TaskRadar.exe, the desktop app: double-clicked it opens the TaskRadar window.
 
 With a command it runs the same command line as ``python -m taskradar`` (``TaskRadar.exe --version``, ``migrate``,
-``eval``, ``serve`` ...); its output goes to the terminal it was started from. TaskRadar.exe is a windowed program
+``serve`` ...); its output goes to the terminal it was started from. TaskRadar.exe is a windowed program
 (no console of its own), so a failure is shown in a message box and written to the log.
 """
 
@@ -15,7 +15,7 @@ from taskradar.__main__ import main
 from taskradar.desktop import win32
 
 # Commands that print something: they write to the terminal TaskRadar.exe was started from.
-CONSOLE_COMMANDS = {"serve", "migrate", "demo-files", "eval", "--version", "-h", "--help"}
+CONSOLE_COMMANDS = {"serve", "migrate", "--version", "-h", "--help"}
 
 
 def run() -> int:

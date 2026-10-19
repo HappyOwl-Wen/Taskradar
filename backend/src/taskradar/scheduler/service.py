@@ -3,28 +3,25 @@
 Jobs (intervals come from user settings and are re-applied when settings change):
 
 * reminder scan          - deterministic urgency evaluation + deduplicated notifications
-* watched-folder scan    - incremental change detection
-* Gmail sync             - only when Gmail is connected and auto-sync is enabled
-* retry of failed jobs   - exponential backoff, bounded attempts
+* timer-<id>             - a wake-up at the end of each running Pomodoro phase or countdown
 
 Every job is guarded by a database lock (see :mod:`taskradar.services.jobs`), so overlapping
-runs are skipped rather than duplicated. Checkpoints live in the database, so a restart resumes.
+runs are skipped rather than duplicated.
 """
 
 from __future__ import annotations
 
+import contextlib
 import datetime as dt
 import logging
 from typing import Any
 
+from apscheduler.jobstores.base import JobLookupError
 from apscheduler.schedulers.background import BackgroundScheduler
-from sqlalchemy import select
 
 from taskradar.container import Container
-from taskradar.db.models import Source
-from taskradar.db.session import transaction
-from taskradar.domain.enums import JobKind, JobTrigger, SourceKind
-from taskradar.services.jobs import MAX_ATTEMPTS, JobAlreadyRunning
+from taskradar.domain.enums import JobTrigger
+from taskradar.services.jobs import JobAlreadyRunning
 from taskradar.services.settings import AppSettings
 
 log = logging.getLogger(__name__)
@@ -51,6 +48,12 @@ class SchedulerService:
         self.c.settings.subscribe(self._on_settings_changed)
         self.scheduler.start()
         self._started = True
+        self.c.timers.on_schedule = self._schedule_timer
+        self.c.timers.on_unschedule = self._unschedule_timer
+        try:
+            self.c.timers.resume_schedule()
+        except Exception:
+            log.exception("Could not resume the running timers")
         # A first reminder pass shortly after start-up.
         self.scheduler.add_job(
             self._safe(self.reminders),
@@ -63,19 +66,32 @@ class SchedulerService:
 
     def shutdown(self) -> None:
         if self._started:
+            self.c.timers.on_schedule = None
+            self.c.timers.on_unschedule = None
             self.scheduler.shutdown(wait=False)
             self._started = False
 
+    def _schedule_timer(self, timer_id: int, at: dt.datetime) -> None:
+        def due() -> None:
+            self.c.timers.on_due(timer_id)
+
+        due.__name__ = f"timer-{timer_id}"
+        # However late (the computer slept): the timer still ends, and its notification says when it ended.
+        self.scheduler.add_job(
+            self._safe(due), "date", run_date=at, id=f"timer-{timer_id}", replace_existing=True, misfire_grace_time=None
+        )
+
+    def _unschedule_timer(self, timer_id: int) -> None:
+        with contextlib.suppress(JobLookupError):
+            self.scheduler.remove_job(f"timer-{timer_id}")
+
     def _on_settings_changed(self, settings: AppSettings, sections: set[str]) -> None:
-        if sections & {"reminders", "folders", "gmail"}:
+        if "reminders" in sections:
             self._configure(settings)
 
     def _configure(self, settings: AppSettings) -> None:
         jobs = [
             ("reminders", self.reminders, settings.reminders.scan_interval_minutes),
-            ("folders", self.folders, settings.folders.scan_interval_minutes),
-            ("gmail", self.gmail, settings.gmail.sync_interval_minutes),
-            ("retries", self.retries, 2),
         ]
         for job_id, fn, minutes in jobs:
             self.scheduler.add_job(
@@ -97,53 +113,13 @@ class SchedulerService:
             except Exception:
                 log.exception("Scheduled job %s failed", fn.__name__)
 
-        wrapper.__name__ = getattr(fn, "__name__", "job")
+        wrapper.__name__ = wrapper.__qualname__ = getattr(fn, "__name__", "job")  # the job's name in the log
         return wrapper
 
     # ------------------------------------------------------------------------------------------
 
     def reminders(self) -> None:
         self.c.notifications.scan(JobTrigger.SCHEDULED)
-
-    def folders(self) -> None:
-        self.c.folders.scan_all(JobTrigger.SCHEDULED)
-
-    def gmail(self) -> None:
-        if not self.c.settings.get().gmail.auto_sync or not self.c.oauth.connected("gmail"):
-            return
-        with transaction(self.c.factory) as session:
-            ids = [
-                s.id
-                for s in session.scalars(
-                    select(Source).where(Source.kind == SourceKind.GMAIL.value, Source.enabled.is_(True))
-                )
-            ]
-        for source_id in ids:
-            try:
-                self.c.gmail.sync(source_id, trigger=JobTrigger.SCHEDULED)
-            except JobAlreadyRunning:
-                continue
-
-    def retries(self) -> None:
-        for job in self.c.jobs.due_retries():
-            attempt = int(job["attempt"]) + 1
-            if attempt > MAX_ATTEMPTS or job["source_id"] is None:
-                self.c.jobs.mark_retried(job["id"], None)
-                continue
-            try:
-                if job["kind"] == JobKind.GMAIL_SYNC.value:
-                    result = self.c.gmail.sync(job["source_id"], trigger=JobTrigger.RETRY, attempt=attempt)
-                elif job["kind"] == JobKind.FOLDER_SCAN.value:
-                    result = self.c.folders.scan(job["source_id"], trigger=JobTrigger.RETRY, attempt=attempt)
-                else:
-                    self.c.jobs.mark_retried(job["id"], None)
-                    continue
-            except JobAlreadyRunning:
-                continue
-            except LookupError:
-                self.c.jobs.mark_retried(job["id"], None)
-                continue
-            self.c.jobs.mark_retried(job["id"], result.get("id"))
 
     # ------------------------------------------------------------------------------------------
 

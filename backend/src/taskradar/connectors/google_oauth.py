@@ -1,9 +1,8 @@
 """Google OAuth 2.0 for installed (desktop) apps with PKCE and loopback redirect.
 
-Gmail and Calendar are authorized *separately* with the minimum scopes:
-
-* Gmail: ``gmail.readonly`` (read mail; cannot send, delete or modify anything)
-* Calendar: ``calendar.app.created`` (can only manage calendars/events TaskRadar itself creates)
+Only Google Calendar is authorized, with the minimum scope ``calendar.app.created`` (TaskRadar can only manage
+the calendar and events it creates itself). Earlier versions could also read Gmail (``gmail.readonly``); such a
+stored sign-in is only ever deleted (and revoked at Google), never used.
 
 Tokens are stored in the OS credential store via :mod:`taskradar.security.secrets`.
 """
@@ -28,10 +27,8 @@ log = logging.getLogger(__name__)
 # The token endpoint may return scopes in a different order; we verify scopes ourselves.
 os.environ.setdefault("OAUTHLIB_RELAX_TOKEN_SCOPE", "1")
 
-GMAIL_SCOPES = ["https://www.googleapis.com/auth/gmail.readonly"]
 CALENDAR_SCOPES = ["https://www.googleapis.com/auth/calendar.app.created"]
 SERVICES: dict[str, tuple[list[str], str]] = {
-    "gmail": (GMAIL_SCOPES, sk.GOOGLE_TOKEN_GMAIL),
     "calendar": (CALENDAR_SCOPES, sk.GOOGLE_TOKEN_CALENDAR),
 }
 PENDING_TTL = dt.timedelta(minutes=15)
@@ -195,7 +192,10 @@ class GoogleOAuthManager:
         return creds
 
     def disconnect(self, service: str, *, revoke: bool = True) -> None:
-        _, token_key = SERVICES[service]
+        self.forget(SERVICES[service][1], revoke=revoke)
+
+    def forget(self, token_key: str, *, revoke: bool = True) -> None:
+        """Delete a stored Google sign-in and, by default, ask Google to revoke it as well (best effort)."""
         raw = self.secrets.get(token_key)
         self.secrets.delete(token_key)
         if raw and revoke:

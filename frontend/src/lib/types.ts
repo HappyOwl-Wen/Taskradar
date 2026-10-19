@@ -7,14 +7,12 @@ export type Urgency = "overdue" | "urgent" | "high" | "upcoming" | "normal" | "n
 export type DuePrecision = "none" | "date" | "datetime";
 export type TimeSemantics = "deadline" | "appointment";
 
-export const TASK_STATUSES: TaskStatus[] = [
-  "candidate",
-  "confirmed",
-  "in_progress",
-  "waiting_for_reply",
-  "completed",
-  "dismissed",
-];
+/**
+ * The statuses the user chooses from. "candidate" (unconfirmed) only exists on tasks that earlier versions found in
+ * mails and files; it is shown on such tasks but never offered as a choice.
+ */
+export const TASK_STATUSES: TaskStatus[] = ["confirmed", "in_progress", "waiting_for_reply", "completed", "dismissed"];
+export const OPEN_STATUSES: TaskStatus[] = ["candidate", "confirmed", "in_progress", "waiting_for_reply"];
 export const CATEGORIES: Category[] = ["academic", "administrative", "financial", "travel", "personal", "other"];
 export const PRIORITIES: Priority[] = ["high", "medium", "low"];
 export const URGENCIES: Urgency[] = ["overdue", "urgent", "high", "upcoming", "normal", "no_deadline"];
@@ -42,10 +40,8 @@ export interface TaskSummary {
   needs_review: boolean;
   review_reasons: string[];
   source_count: number;
+  /** "manual" for the user's own to-dos, else the kind of mail or file an earlier version found the task in. */
   source_kinds: string[];
-  pending_suggestions: number;
-  /** What the open suggestions are about (absent on servers from before this field existed). */
-  pending_suggestion_kinds?: Suggestion["kind"][];
   calendar_status: string | null;
   detected_at: string | null;
   source_published_at: string | null;
@@ -56,7 +52,7 @@ export interface TaskSummary {
   confirmed_at: string | null;
   completed_at: string | null;
   manual: boolean;
-  /** Demo or test data: marked, but never counted, reminded or written to the calendar (older servers omit it). */
+  /** Test data: marked, but never counted, reminded or written to the calendar. */
   sample?: boolean;
 }
 
@@ -69,6 +65,7 @@ export interface Evidence {
   kind: "action" | "deadline" | "completion" | "context";
 }
 
+/** A mail an earlier version imported (kept until the user deletes the imported content). */
 export interface MessageBrief {
   id: number;
   subject: string;
@@ -80,6 +77,7 @@ export interface MessageBrief {
   thread_id: string | null;
 }
 
+/** A file an earlier version imported. */
 export interface DocumentBrief {
   id: number;
   name: string;
@@ -87,26 +85,15 @@ export interface DocumentBrief {
   mime_type: string;
   size_bytes: number;
   page_count: number | null;
-  extraction_method: string | null;
-  ocr_engine: string | null;
-  language: string | null;
   doc_date: string | null;
-  status: string;
-  error_code: string | null;
-  error_message: string | null;
-  warnings: string[];
-  sha256: string;
   imported_at: string | null;
-  processed_at: string | null;
-  processing_ms: number | null;
   source_kind: string | null;
   original_path: string | null;
   has_stored_copy: boolean;
   message_id: number | null;
-  text_chars: number;
-  task_count?: number;
 }
 
+/** Where an earlier version found a task: the mail or file (null once deleted), with the quoted sentences. */
 export interface TaskSourceEntry {
   id: number;
   relation: "origin" | "duplicate" | "deadline_update" | "completion_evidence" | "related" | "manual_merge";
@@ -133,30 +120,6 @@ export interface TaskEvent {
   data: Record<string, unknown>;
 }
 
-export interface Suggestion {
-  id: number;
-  task_id: string;
-  kind: "mark_completed" | "mark_dismissed" | "update_due" | "possible_duplicate" | "mark_waiting";
-  payload: Record<string, unknown>;
-  evidence: Evidence[];
-  confidence: number;
-  reason: string;
-  status: string;
-  created_at: string | null;
-  related_task_id: string | null;
-  task_title?: string;
-  task_status?: TaskStatus;
-  task_due_date?: string | null;
-  task_due_time?: string | null;
-  task_sample?: boolean;
-  related_task_title?: string | null;
-  related_task_status?: TaskStatus | null;
-  related_due_date?: string | null;
-  related_due_time?: string | null;
-  /** Possible duplicate whose two tasks have different deadlines (the user has to pick one). */
-  deadlines_differ?: boolean;
-}
-
 export interface CalendarLink {
   calendar_id: string;
   event_id: string;
@@ -169,7 +132,7 @@ export interface CalendarLink {
   synced_due_version: number;
 }
 
-/** A one-line to-do parsed by the server ("周五前交房租"); nothing is saved until the user confirms. */
+/** What one sentence ("周五前交房租") was recognised as; nothing is saved yet. */
 export interface QuickParse {
   title: string;
   category: Category;
@@ -199,162 +162,48 @@ export interface TaskDetail extends TaskSummary {
   due_version: number;
   sources: TaskSourceEntry[];
   events: TaskEvent[];
-  suggestions: Suggestion[];
   calendar: CalendarLink | null;
   links: TaskLinkEntry[];
-  split_task_id?: string | null;
-  /** Set on responses to a change (status, merge, suggestion decision): undoing this event reverts it. */
+  /** The change just made (status, test data), for an "undo" button. */
   undo_event_id?: number | null;
+  calendar_warning?: string;
 }
 
-export interface SyncJob {
-  id: number;
-  source_id: number | null;
-  kind: string;
-  trigger: string;
-  status: "running" | "succeeded" | "partial" | "failed" | "interrupted";
-  started_at: string | null;
-  finished_at: string | null;
-  items_seen: number;
-  items_processed: number;
-  items_skipped: number;
-  items_failed: number;
-  tasks_created: number;
-  tasks_updated: number;
-  error_code: string | null;
-  error_message: string | null;
-  recoverable: boolean;
-  attempt: number;
-  next_retry_at: string | null;
-  details: Record<string, unknown>;
-}
-
-/** Why a task is in "needs attention": its time group first; a conflict or changed date only when not due soon. */
-export type AttentionReason = "overdue" | "due_today" | "due_tomorrow" | "due_soon" | "date_changed" | "conflict";
-export type AttentionFlag = "unconfirmed" | "conflict" | "date_changed";
+/** How soon an open task is due: the order of "needs attention" on the home page. */
+export type AttentionReason = "overdue" | "due_today" | "due_tomorrow" | "due_soon";
 
 export interface AttentionTask extends TaskSummary {
-  attention: AttentionReason | "unconfirmed_due";
-  attention_flags?: AttentionFlag[];
+  attention: AttentionReason;
 }
+
+/** The three lanes of the home page's board. */
+export type Lane = "todo" | "in_progress" | "waiting_for_reply";
+export const LANES: Lane[] = ["todo", "in_progress", "waiting_for_reply"];
 
 export interface Dashboard {
   today: string;
   counts: {
     overdue: number;
-    today_focus: number;
-    upcoming_7d: number;
-    candidates: number;
-    needs_review: number;
+    due_today: number;
+    due_tomorrow: number;
+    due_soon: number;
+    /** Open tasks (not test data). */
     active: number;
+    todo: number;
+    in_progress: number;
+    waiting_for_reply: number;
+    /** Unconfirmed tasks of earlier versions (part of "to do"). */
+    unconfirmed: number;
     completed_7d: number;
-    pending_suggestions: number;
-    // The fields below are newer; a server that has not been restarted after an update omits them.
-    /** Distinct tasks waiting for the user: candidates plus tasks with an open suggestion. */
-    needs_action?: number;
-    /** Confirmed tasks due within 7 days (not overdue). */
-    due_soon?: number;
-    /** Unconfirmed candidates due within 7 days (not overdue). */
-    due_soon_candidates?: number;
-    overdue_candidates?: number;
-    /** Tasks with an open deadline conflict (changed date or duplicate with another date). */
-    conflicts?: number;
-    /** Open demo/test tasks, which are not counted anywhere on the dashboard. */
-    sample_open?: number;
-    /** Whether the user has ever confirmed or completed a task (the first-run guide stays until then). */
-    ever_confirmed?: boolean;
+    /** Open test data (not counted anywhere else). */
+    sample_open: number;
   };
-  /** What needs attention now, most pressing first. */
-  attention?: AttentionTask[];
-  attention_total?: number;
-  attention_counts?: Partial<Record<AttentionReason, number>>;
-  attention_unconfirmed?: number;
-  today_focus: TaskSummary[];
-  upcoming: TaskSummary[];
-  overdue: TaskSummary[];
-  candidates: TaskSummary[];
-  suggestions: Suggestion[];
-  recent_jobs: SyncJob[];
+  attention: AttentionTask[];
+  attention_total: number;
+  /** The first few tasks of each lane (the counts say how many there are). */
+  lanes: Record<Lane, TaskSummary[]>;
+  completed_recent: TaskSummary[];
   notifications_unread: number;
-  agent_mode: "rules" | "llm";
-}
-
-export interface Source {
-  id: number;
-  kind: "gmail" | "demo_mail" | "upload" | "folder" | "sample_upload";
-  name: string;
-  account: string | null;
-  folder_path: string | null;
-  recursive: boolean;
-  enabled: boolean;
-  status: string;
-  last_sync_at: string | null;
-  last_success_at: string | null;
-  last_error_code: string | null;
-  last_error_message: string | null;
-  documents?: number;
-  messages?: number;
-  last_job?: SyncJob | null;
-  running?: boolean;
-}
-
-export interface MessageListItem extends MessageBrief {
-  task_count: number;
-  content_type: string | null;
-  skip_reason: string | null;
-  error_code: string | null;
-}
-
-export interface LinkedTask {
-  id: string;
-  title: string;
-  status: TaskStatus;
-  relation: TaskSourceEntry["relation"];
-}
-
-export interface DocumentDetail extends DocumentBrief {
-  pages: { page: number; text: string; method: string; ocr_confidence: number | null }[];
-  tasks: LinkedTask[];
-  runs: AgentRun[];
-}
-
-export interface MessageDetail extends MessageBrief {
-  recipients: string | null;
-  labels: string[];
-  body_text: string;
-  skip_reason: string | null;
-  error_code: string | null;
-  attachments: DocumentBrief[];
-  tasks: LinkedTask[];
-  runs: AgentRun[];
-}
-
-export interface ImportResult {
-  filename: string;
-  status: string;
-  created: boolean;
-  document_id: number | null;
-  message_id: number | null;
-  error_code: string | null;
-  error_message: string | null;
-  tasks_created: number;
-  duplicates_merged: number;
-  suggestions_created: number;
-  completions_applied: number;
-  tasks_updated: number;
-  content_type: string | null;
-}
-
-/** What processing a mail again produced (tasks created, merged, suggested...). */
-export interface IngestOutcome {
-  tasks_created: number;
-  tasks_updated: number;
-  duplicates_merged: number;
-  suggestions_created: number;
-  completions_applied: number;
-  skipped: boolean;
-  skip_reason: string | null;
-  content_type: string | null;
 }
 
 export interface NotificationItem {
@@ -367,57 +216,8 @@ export interface NotificationItem {
   read: boolean;
 }
 
-export interface AgentRun {
-  id: number;
-  message_id: number | null;
-  document_id: number | null;
-  extractor: string;
-  provider: string | null;
-  model: string | null;
-  status: string;
-  content_type: string | null;
-  attempts: number;
-  input_chars: number;
-  redactions: number;
-  input_tokens: number | null;
-  output_tokens: number | null;
-  cost_usd: number | null;
-  latency_ms: number;
-  candidates_count: number;
-  error: string | null;
-  trace: Record<string, unknown>[];
-  created_at: string | null;
-}
-
 export interface Settings {
-  general: { timezone: string; language: "zh-CN" | "en"; theme: "system" | "light" | "dark" };
-  llm: {
-    provider: "none" | "openai" | "openai_compatible";
-    model: string;
-    base_url: string | null;
-    structured_mode: "json_schema" | "json_object";
-    reasoning_effort: "minimal" | "low" | "medium" | "high" | null;
-    cloud_consent: boolean;
-    consent_at: string | null;
-    redact_identifiers: boolean;
-    prefilter: boolean;
-    max_input_chars: number;
-    timeout_seconds: number;
-    max_retries: number;
-    use_semantic_dedup: boolean;
-    price_input_per_mtok: number | null;
-    price_output_per_mtok: number | null;
-  };
-  gmail: {
-    auto_sync: boolean;
-    lookback_days: number;
-    sync_interval_minutes: number;
-    query_extra: string;
-    process_attachments: boolean;
-    max_attachment_mb: number;
-    max_messages_per_sync: number;
-  };
-  folders: { scan_interval_minutes: number; max_file_mb: number };
+  general: { timezone: string; language: "zh-CN" | "en"; theme: "system" | "light" | "dark"; close_to_tray: boolean };
   reminders: {
     urgent_hours: number;
     high_days: number;
@@ -435,13 +235,15 @@ export interface Settings {
     reminder_minutes: number;
     remove_on_dismiss: boolean;
   };
-  policy: {
-    review_confidence_threshold: number;
-    auto_complete_on_explicit_confirmation: boolean;
-    auto_complete_min_confidence: number;
-    auto_apply_explicit_deadline_changes: boolean;
+  timers: {
+    focus_minutes: number;
+    short_break_minutes: number;
+    long_break_minutes: number;
+    long_break_every: number;
+    auto_start_breaks: boolean;
+    auto_start_focus: boolean;
+    notify: boolean;
   };
-  demo: { gmail_failure_mode: "none" | "rate_limit" | "server_error" | "auth" | "network" };
 }
 
 export interface SystemStatus {
@@ -449,30 +251,20 @@ export interface SystemStatus {
   /** Running as TaskRadar.exe (not from the project folder). */
   packaged?: boolean;
   data_dir: string;
-  ocr: {
-    engine: string;
-    available: boolean;
-    languages: string[];
-    version: string | null;
-    /** Documents imported while OCR was unavailable (their images were not read). */
-    backlog: number;
-    /** A job is reading the backlog again right now. */
-    reprocessing: boolean;
-  };
   secret_store: { backend: string; available: boolean };
   scheduler: { running: boolean; jobs: { id: string; next_run_time: string | null }[] };
-  agent_mode: "rules" | "llm";
-  llm: { provider: string; model: string; api_key_configured: boolean; api_key_source: string | null; cloud_consent: boolean };
-  google: { client_configured: boolean; gmail_connected: boolean; calendar_connected: boolean };
+  google: { client_configured: boolean; calendar_connected: boolean };
   autostart: { supported: boolean; enabled: boolean };
+  /** TaskRadar in the Start menu: Windows shows its notifications as banners only with this entry. */
+  start_menu?: { supported: boolean; present: boolean; banners: boolean; ours: boolean };
   desktop_notifications_supported: boolean;
   now: string;
 }
 
 export type StatusLevel = "error" | "warning" | "info";
 
-/** Where a status item can be fixed (the server never sends anything else). */
-export type StatusAction = "gmail_settings" | "ai_settings" | "sources" | "records" | "tasks" | "ocr_help";
+/** Where a status item can be fixed: the calendar or notification settings, or the task list. */
+export type StatusAction = "calendar" | "notifications" | "tasks";
 
 /** One runtime problem in plain terms (the UI translates `code` with `params`). */
 export interface StatusItem {
@@ -490,30 +282,12 @@ export interface SystemSummary {
   items: StatusItem[];
 }
 
-export type RecheckVerdict = "not_found" | "overmerged" | "doubtful";
-
-export interface RecheckItem {
-  task: TaskSummary;
-  verdict: RecheckVerdict;
-  doubts: string[];
-  sources_total: number;
-  sources_supporting: number;
-  extracted_by: string[];
-}
-
-export interface RecheckResult {
-  rules_version: string;
-  checked: number;
-  items: RecheckItem[];
-}
-
 export interface GoogleStatus {
   client: { configured: boolean; client_id_hint?: string };
   redirect_uri: string;
-  gmail: { connected: boolean; scopes: string[]; source: Source | null };
   calendar: { connected: boolean; calendar_id: string | null; calendar_name: string; scopes: string[] };
   /** How the last authorization ended (``seq`` grows with each one); null before the first. */
-  last_authorization?: { seq: number; service: "gmail" | "calendar" | null; ok: boolean; error: string | null } | null;
+  last_authorization?: { seq: number; service: "calendar" | null; ok: boolean; error: string | null } | null;
 }
 
 export interface CalendarPreview {
@@ -533,37 +307,49 @@ export interface CalendarPreview {
   warnings: string[];
 }
 
-export interface Metrics {
-  documents: { total: number; by_status: Record<string, number>; success_rate: number | null; avg_processing_ms: number | null };
-  messages: { total: number; by_status: Record<string, number>; success_rate: number | null };
-  agent: {
-    runs: number;
-    avg_latency_ms: number | null;
-    llm_runs: number;
-    llm_fallbacks: number;
-    input_tokens: number;
-    output_tokens: number;
-    estimated_cost_usd: number;
-    by_extractor: { extractor: string; runs: number; avg_latency_ms: number }[];
+/** What earlier versions left behind: imported mails and files, a Gmail sign-in, a model API key. */
+export interface LegacyData {
+  messages: number;
+  documents: number;
+  credentials: ("gmail" | "llm_api_key")[];
+}
+
+export type TimerPhase = "focus" | "short_break" | "long_break";
+export const TIMER_PHASES: TimerPhase[] = ["focus", "short_break", "long_break"];
+
+/** A Pomodoro phase or a countdown; the server runs it (it ends on time while the window is in the tray). */
+export interface TimerView {
+  id: number;
+  kind: "pomodoro" | "countdown";
+  phase: TimerPhase | null;
+  /** "until": a countdown to a moment (it cannot be paused). */
+  mode: "duration" | "until";
+  label: string;
+  task_id: string | null;
+  task_title: string | null;
+  /** Which focus session of the set (Pomodoro). */
+  cycle: number;
+  status: "running" | "paused" | "finished" | "skipped" | "cancelled";
+  duration_seconds: number;
+  /** At the moment of `TimersOverview.now`. */
+  remaining_seconds: number;
+  ends_at: string | null;
+  started_at: string | null;
+  finished_at: string | null;
+}
+
+export interface TimersOverview {
+  /** The server's clock, to count down without drifting from it. */
+  now: string;
+  pomodoro: {
+    current: TimerView | null;
+    /** The phase that ended last (within the hour), while nothing runs. */
+    last: TimerView | null;
+    /** What a start begins, while nothing runs. */
+    next: { phase: TimerPhase; cycle: number; duration_seconds: number } | null;
+    long_break_every: number;
+    today: { focus_sessions: number; focus_minutes: number };
   };
-  dedup: {
-    duplicates_merged: number;
-    merges_undone: number;
-    wrong_merge_rate: number | null;
-    possible_duplicate_suggestions: Record<string, number>;
-    duplicate_rate: number | null;
-  };
-  feedback: {
-    agent_tasks: number;
-    by_status: Record<string, number>;
-    accepted: number;
-    /** Dismissed by the user, not counting tasks merged into another task. */
-    dismissed: number;
-    /** Dismissed because the user merged them into another task (missed duplicates). */
-    merged_into_other: number;
-    precision_proxy: number | null;
-    automatic_status_changes: number;
-    automatic_status_changes_undone: number;
-  };
-  agent_mode: "rules" | "llm";
+  /** Running and paused ones first (the nearest end first), then the finished ones. */
+  countdowns: TimerView[];
 }

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import contextlib
+import dataclasses
 import json
 import os
 import socket
@@ -162,6 +163,87 @@ def test_reporting_unsaved_changes_needs_the_csrf_token(desktop_api: Any) -> Non
     assert bad.status_code == 422
 
 
+def test_a_second_start_brings_the_window_out_of_the_tray(desktop_api: Any, api: Any) -> None:
+    # The new process asks the running one through the local API, with the CSRF token like any change.
+    assert desktop_api.post("/api/desktop/activate").status_code == 403
+    assert desktop_api.activated == []
+    token = desktop_api.get("/api/session").json()["csrf_token"]
+    assert desktop_api.post("/api/desktop/activate", headers={"X-TaskRadar-CSRF": token}).json() == {"ok": True}
+    assert desktop_api.activated == [True]
+    token = api.get("/api/session").json()["csrf_token"]
+    assert api.post("/api/desktop/activate", headers={"X-TaskRadar-CSRF": token}).status_code == 404
+
+
+def test_going_back_never_returns_to_the_start_screen() -> None:
+    from taskradar.desktop.shell import leaves_the_app
+
+    start_screen = "data:text/html;charset=utf-8;base64,PCFkb2N0eXBl"
+    # While TaskRadar starts, its own start and error screens show.
+    assert not leaves_the_app(start_screen, app_shown=False)
+    assert not leaves_the_app("about:blank", app_shown=False)
+    # Once the web UI is shown, "Back" on its first page would show "Starting..." for ever: it stays closed.
+    assert leaves_the_app(start_screen, app_shown=True)
+    assert leaves_the_app("about:blank", app_shown=True)
+    assert leaves_the_app("https://example.org/", app_shown=True)
+
+
+def test_the_closing_hint_is_remembered(tmp_path: Path) -> None:
+    path = tmp_path / "desktop.json"
+    prefs = DesktopPrefs.load(path)
+    assert prefs.tray_hint_shown is False
+    prefs.tray_hint_shown = True
+    prefs.save()
+    assert DesktopPrefs.load(path).tray_hint_shown is True
+
+
+def test_closing_the_window_keeps_taskradar_in_the_tray_by_default() -> None:
+    from taskradar.services.settings import AppSettings
+
+    assert AppSettings().general.close_to_tray is True
+
+
+def test_the_tray_tooltip_fits_windows_limit() -> None:
+    from taskradar.desktop.tray import TOOLTIP_LIMIT, tooltip
+
+    assert tooltip(None) == "TaskRadar"
+    assert tooltip("专注 18:42") == "TaskRadar · 专注 18:42"
+    long = tooltip("x" * 200)
+    assert len(long) == TOOLTIP_LIMIT and long.endswith("…")
+
+
+def test_notification_text_is_data_not_markup() -> None:
+    from taskradar.notify.windows import toast_xml
+
+    xml = toast_xml('Pay <rent> & "deposit"', "</text><text>injected")
+    assert "<rent>" not in xml and "&lt;rent&gt;" in xml and "&amp;" in xml
+    assert xml.count("<text>") == 2  # the body could not open a third element
+
+
+@windows_only
+def test_notifications_carry_taskradar_s_own_name() -> None:
+    import winreg
+
+    from taskradar.notify import windows as notifications
+
+    key = rf"Software\TaskRadarTests\notify-{uuid.uuid4().hex}"
+    try:
+        assert notifications.register(key=key)
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, key) as handle:
+            assert winreg.QueryValueEx(handle, "DisplayName")[0] == "TaskRadar"
+            assert Path(winreg.QueryValueEx(handle, "IconUri")[0]).is_file()
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, key, 0, winreg.KEY_WRITE) as handle:
+            winreg.SetValueEx(handle, "DisplayName", 0, winreg.REG_SZ, "Another app")
+        assert not notifications.unregister(key=key)  # someone else's registration stays
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, key, 0, winreg.KEY_WRITE) as handle:
+            winreg.SetValueEx(handle, "DisplayName", 0, winreg.REG_SZ, "TaskRadar")
+        assert notifications.unregister(key=key)
+        assert not notifications.unregister(key=key)
+    finally:
+        for name in (key, r"Software\TaskRadarTests"):
+            with contextlib.suppress(OSError):
+                winreg.DeleteKey(winreg.HKEY_CURRENT_USER, name)
+
+
 def test_the_browser_version_has_no_window_to_report_to(api: Any) -> None:
     response = api.put("/api/desktop/state", json={"unsaved": True})
     assert response.status_code == 404
@@ -255,17 +337,19 @@ def _payload(path: Path, files: dict[str, bytes]) -> Path:
 @pytest.fixture
 def paths(tmp_path: Path) -> Iterator[install.InstallPaths]:
     key = rf"Software\TaskRadarTests\{uuid.uuid4().hex}"
+    notification_key = rf"Software\TaskRadarTests\notify-{uuid.uuid4().hex}"
     yield install.InstallPaths(
         program_dir=tmp_path / "Programs" / "TaskRadar",
         start_menu_dir=tmp_path / "Start Menu",
         desktop_dir=tmp_path / "Desktop",
         startup_dir=tmp_path / "Startup",
         registry_key=key,
+        notification_key=notification_key,
     )
     if sys.platform == "win32":
         import winreg
 
-        for name in (key, r"Software\TaskRadarTests"):
+        for name in (key, notification_key, r"Software\TaskRadarTests"):
             with contextlib.suppress(OSError):
                 winreg.DeleteKey(winreg.HKEY_CURRENT_USER, name)
 
@@ -282,6 +366,9 @@ def test_install_update_and_remove(tmp_path: Path, paths: install.InstallPaths) 
     start_menu, desktop = paths.start_menu_dir / "TaskRadar.lnk", paths.desktop_dir / "TaskRadar.lnk"
     assert install.shortcut_target(start_menu) == str(exe)
     assert install.shortcut_target(desktop) == str(exe)
+    # With TaskRadar's app ID, so Windows shows its notifications as banners.
+    assert install.shortcut_app_id(start_menu) == install.notifications.APP_ID
+    assert install.shortcut_app_id(desktop) == install.notifications.APP_ID
     entry = install.registered(paths.registry_key)
     assert entry == {"DisplayVersion": "0.1.0", "InstallLocation": str(paths.program_dir)}
 
@@ -296,11 +383,13 @@ def test_install_update_and_remove(tmp_path: Path, paths: install.InstallPaths) 
     AutostartManager(startup_dir=paths.startup_dir, python_exe=str(paths.exe)).enable()
     foreign = tmp_path / "Other Desktop"
     install.create_shortcut(foreign / "TaskRadar.lnk", tmp_path / "elsewhere" / "TaskRadar.exe")
-    other = install.InstallPaths(
-        paths.program_dir, paths.start_menu_dir, foreign, paths.startup_dir, paths.registry_key
-    )
+    other = dataclasses.replace(paths, desktop_dir=foreign)
+    from taskradar.notify import windows as notifications
+
+    notifications.register(key=paths.notification_key)  # what TaskRadar writes on its first start
     removed = install.remove_integration(other)
     assert str(start_menu) in removed and paths.registry_key in removed
+    assert paths.notification_key in removed  # the notification identity goes too
     assert not start_menu.exists()
     assert (foreign / "TaskRadar.lnk").exists()
     assert install.registered(paths.registry_key) is None

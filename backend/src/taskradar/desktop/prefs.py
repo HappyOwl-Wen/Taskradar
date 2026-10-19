@@ -63,6 +63,8 @@ class DesktopPrefs:
         self.path = path
         self.window: SavedWindow | None = None
         self.appearance = Appearance()
+        # Whether the user was told once that closing the window leaves TaskRadar running in the tray.
+        self.tray_hint_shown = False
 
     @classmethod
     def load(cls, path: Path) -> DesktopPrefs:
@@ -74,6 +76,7 @@ class DesktopPrefs:
         if not isinstance(data, dict):
             return prefs
         prefs.window = _window_from(data.get("window"))
+        prefs.tray_hint_shown = data.get("tray_hint_shown") is True
         appearance = data.get("appearance")
         if isinstance(appearance, dict):
             theme, language = appearance.get("theme"), appearance.get("language")
@@ -96,6 +99,7 @@ class DesktopPrefs:
                 "maximized": self.window.maximized,
             }
         data["appearance"] = {"theme": self.appearance.theme, "language": self.appearance.language}
+        data["tray_hint_shown"] = self.tray_hint_shown
         tmp = self.path.with_name(self.path.name + ".tmp")
         try:
             self.path.parent.mkdir(parents=True, exist_ok=True)

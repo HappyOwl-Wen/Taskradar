@@ -1,14 +1,16 @@
-import { BellRing, Download, Power, RefreshCw, Trash2 } from "lucide-react";
+import { Archive, BellRing, Download, KeyRound, Power, RefreshCw, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
+import { SystemStatusList } from "@/components/layout/SystemStatus";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/dialog";
 import { Checkbox, Input, Label, Switch, SwitchRow } from "@/components/ui/form";
 import { api } from "@/lib/api";
-import { useAction, useSystemStatus } from "@/lib/queries";
+import { useAction, useLegacyData, useSystemStatus } from "@/lib/queries";
 import { useSection } from "@/lib/settings";
 import type { Settings } from "@/lib/types";
+import { NotificationBanners } from "./Banners";
 import { InfoRow, NumberField, SaveBar, SettingsCard } from "./common";
 
 export function RemindersSection({ settings }: { settings: Settings }) {
@@ -57,7 +59,6 @@ export function RemindersSection({ settings }: { settings: Settings }) {
         </div>
       </div>
       <SwitchRow id="set-rem-upc" label={t("settings.reminders.notifyUpcoming")} checked={r.notify_upcoming} onCheckedChange={(c) => reminders.set("notify_upcoming", c)} />
-      <SwitchRow id="set-rem-cand" label={t("settings.reminders.notifyCandidates")} checked={r.notify_candidates} onCheckedChange={(c) => reminders.set("notify_candidates", c)} />
       <div className="grid gap-4 sm:grid-cols-2">
         <NumberField id="set-rem-repeat" label={t("settings.reminders.overdueRepeat")} value={r.overdue_repeat_hours} min={1} max={720} onChange={(n) => reminders.set("overdue_repeat_hours", n)} />
         <NumberField id="set-rem-scan" label={t("settings.reminders.scanInterval")} value={r.scan_interval_minutes} min={1} max={240} onChange={(n) => reminders.set("scan_interval_minutes", n)} />
@@ -82,54 +83,8 @@ export function RemindersSection({ settings }: { settings: Settings }) {
             <BellRing /> {t("settings.reminders.testDesktop")}
           </Button>
         ) : null}
+        <NotificationBanners />
       </div>
-    </SettingsCard>
-  );
-}
-
-export function PolicySection({ settings }: { settings: Settings }) {
-  const { t } = useTranslation();
-  const section = useSection(settings, "policy");
-  const v = section.value;
-  return (
-    <SettingsCard
-      id="policy"
-      title={t("settings.sections.policy")}
-      description={t("settings.policy.intro")}
-      footer={<SaveBar dirty={section.dirty} saving={section.saving} onSave={section.save} onReset={section.reset} />}
-    >
-      <NumberField
-        id="set-pol-review"
-        label={t("settings.policy.reviewThreshold")}
-        value={v.review_confidence_threshold}
-        min={0}
-        max={1}
-        step={0.05}
-        onChange={(n) => section.set("review_confidence_threshold", n)}
-      />
-      <SwitchRow
-        id="set-pol-autocomplete"
-        label={t("settings.policy.autoComplete")}
-        checked={v.auto_complete_on_explicit_confirmation}
-        onCheckedChange={(c) => section.set("auto_complete_on_explicit_confirmation", c)}
-      />
-      {v.auto_complete_on_explicit_confirmation ? (
-        <NumberField
-          id="set-pol-min"
-          label={t("settings.policy.autoCompleteMin")}
-          value={v.auto_complete_min_confidence}
-          min={0.5}
-          max={1}
-          step={0.05}
-          onChange={(n) => section.set("auto_complete_min_confidence", n)}
-        />
-      ) : null}
-      <SwitchRow
-        id="set-pol-deadline"
-        label={t("settings.policy.autoDeadline")}
-        checked={v.auto_apply_explicit_deadline_changes}
-        onCheckedChange={(c) => section.set("auto_apply_explicit_deadline_changes", c)}
-      />
     </SettingsCard>
   );
 }
@@ -145,19 +100,14 @@ export function SystemSection() {
   if (!status) return null;
   return (
     <SettingsCard id="system" title={t("settings.sections.system")}>
-      <dl className="grid gap-3">
+      <div className="grid gap-2">
+        <p className="text-sm font-semibold">{t("systemStatus.title")}</p>
+        <SystemStatusList />
+      </div>
+      <dl className="grid gap-3 border-t pt-4">
         <InfoRow label={t("settings.system.version")}>{status.version}</InfoRow>
         <InfoRow label={t("settings.system.dataDir")}>
           <code className="font-mono text-xs">{status.data_dir}</code>
-        </InfoRow>
-        <InfoRow label={t("settings.system.ocr")}>
-          {status.ocr.available ? (
-            <span className="text-success">
-              {t("settings.system.ocrAvailable", { version: status.ocr.version ?? status.ocr.engine, languages: status.ocr.languages.join(", ") })}
-            </span>
-          ) : (
-            <span className="text-high">{t(status.packaged ? "settings.system.ocrMissingPackaged" : "settings.system.ocrMissing")}</span>
-          )}
         </InfoRow>
         <InfoRow label={t("settings.system.secretStore")}>
           <Badge tone={status.secret_store.available ? "success" : "destructive"}>{status.secret_store.backend}</Badge>
@@ -196,6 +146,67 @@ export function SystemSection() {
   );
 }
 
+/**
+ * What earlier versions left behind: the mails and files they imported (the tasks found in them stay) and sign-ins
+ * that only removed features used. Shown only while something is there; everything is deleted on request only.
+ */
+function LegacyData() {
+  const { t } = useTranslation();
+  const { data } = useLegacyData();
+  const [confirm, setConfirm] = useState(false);
+  const removeImported = useAction(() => api.deleteImported(), {
+    success: t("settings.data.legacy.importedDeleted"),
+    onSuccess: () => setConfirm(false),
+  });
+  const removeCredential = useAction((name: "gmail" | "llm_api_key") => api.deleteLegacyCredential(name), {
+    success: t("settings.data.legacy.credentialDeleted"),
+  });
+  if (!data) return null;
+  const imported = data.messages + data.documents;
+  if (imported === 0 && data.credentials.length === 0) return null;
+  return (
+    <div className="grid gap-3 rounded-lg bg-subtle p-4">
+      <div className="grid gap-1">
+        <p className="flex items-center gap-2 text-sm font-semibold">
+          <Archive className="size-4 text-muted-foreground" aria-hidden /> {t("settings.data.legacy.title")}
+        </p>
+        <p className="text-[13px] leading-relaxed text-muted-foreground">{t("settings.data.legacy.hint")}</p>
+      </div>
+      {imported ? (
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+          <span className="min-w-0 flex-1 basis-56 text-[13px]">
+            {t("settings.data.legacy.imported", { messages: data.messages, documents: data.documents })}
+          </span>
+          <Button variant="outline" size="sm" onClick={() => setConfirm(true)}>
+            <Trash2 /> {t("settings.data.legacy.deleteImported")}
+          </Button>
+        </div>
+      ) : null}
+      {data.credentials.map((name) => (
+        <div key={name} className="flex flex-wrap items-center gap-x-3 gap-y-2">
+          <span className="flex min-w-0 flex-1 basis-56 items-center gap-2 text-[13px]">
+            <KeyRound className="size-3.5 shrink-0 text-muted-foreground" aria-hidden /> {t(`settings.data.legacy.credential.${name}`)}
+          </span>
+          <Button variant="outline" size="sm" onClick={() => removeCredential.mutate(name)} disabled={removeCredential.isPending}>
+            <Trash2 /> {t("settings.data.legacy.deleteCredential")}
+          </Button>
+        </div>
+      ))}
+      <ConfirmDialog
+        open={confirm}
+        onOpenChange={setConfirm}
+        title={t("settings.data.legacy.deleteImportedTitle")}
+        description={t("settings.data.legacy.deleteImportedBody")}
+        confirmLabel={t("settings.data.legacy.deleteImported")}
+        cancelLabel={t("common.cancel")}
+        destructive
+        pending={removeImported.isPending}
+        onConfirm={() => removeImported.mutate(undefined)}
+      />
+    </div>
+  );
+}
+
 export function DataSection() {
   const { t } = useTranslation();
   const [withContent, setWithContent] = useState(false);
@@ -223,6 +234,7 @@ export function DataSection() {
           </a>
         </Button>
       </div>
+      <LegacyData />
       <div className="grid gap-2 rounded-lg bg-destructive/6 p-4">
         <p className="text-sm font-semibold text-destructive">{t("settings.data.deleteAll")}</p>
         <p className="text-[13px] leading-relaxed text-muted-foreground">{t("settings.data.deleteAllHint")}</p>

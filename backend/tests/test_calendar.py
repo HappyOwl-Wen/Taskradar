@@ -12,10 +12,9 @@ from taskradar.connectors.errors import TransientError
 from taskradar.container import Container
 from taskradar.db.session import transaction
 from taskradar.domain.enums import Actor, TaskStatus
-from taskradar.domain.schemas import CandidateTask, DueInfo
+from taskradar.domain.schemas import DueInfo
 from taskradar.security import secrets as sk
 from taskradar.services.calendar_sync import CalendarSyncError, event_id_for
-from taskradar.services.tasks import Origin
 
 
 def make_task(
@@ -26,22 +25,15 @@ def make_task(
     semantics: str = "deadline",
     status: TaskStatus = TaskStatus.CONFIRMED,
 ) -> str:
-    cand = CandidateTask(
-        title="提交在读证明",
-        action_required="通过TUMonline上传在读证明",
-        confidence=0.9,
-        due=DueInfo(date=due, time=time, semantics=semantics),
-    )  # type: ignore[arg-type]
     with transaction(c.factory) as session:
-        task = c.tasks.create_from_candidate(
+        task = c.tasks.create(
             session,
-            cand,
-            origin=Origin(key="manual", label="test"),
-            candidate_row=None,
+            title="提交在读证明",
+            action_required="通过TUMonline上传在读证明",
+            due=DueInfo(date=due, time=time, semantics=semantics),  # type: ignore[arg-type]
             timezone="Europe/Berlin",
-            review_reasons=[],
         )
-        c.tasks.change_status(session, task, status, actor=Actor.USER)
+        c.tasks.change_status(session, task, status, actor=Actor.USER)  # e.g. back to "unconfirmed" (old data)
         return task.id
 
 
@@ -259,10 +251,10 @@ def _synced_task(api: Any, title: str) -> str:
     return str(task["id"])
 
 
-def test_dismissing_merging_or_deleting_a_task_removes_its_event(api: Any, calendar_client: FakeCalendarClient) -> None:
+def test_dismissing_or_deleting_a_task_removes_its_event(api: Any, calendar_client: FakeCalendarClient) -> None:
     api.container.secrets.set(sk.GOOGLE_TOKEN_CALENDAR, '{"token": "fake"}')
-    dismissed, merged, kept, deleted, batch_a, batch_b = (
-        _synced_task(api, name) for name in ("Dismiss", "Merge", "Keep", "Delete", "Batch A", "Batch B")
+    dismissed, batch_deleted, kept, deleted, batch_a, batch_b = (
+        _synced_task(api, name) for name in ("Dismiss", "Batch delete", "Keep", "Delete", "Batch A", "Batch B")
     )
     assert len(live_events(calendar_client)) == 6
 
@@ -270,8 +262,10 @@ def test_dismissing_merging_or_deleting_a_task_removes_its_event(api: Any, calen
         api.post(f"/api/tasks/{dismissed}/status", json={"status": "dismissed"}).json()["calendar"]["status"]
         == "removed"
     )
-    assert api.post(f"/api/tasks/{merged}/merge", json={"into_task_id": kept}).status_code == 200
+    gone = api.post("/api/tasks/batch", json={"ids": [batch_deleted], "action": "delete"}).json()
+    assert gone == {"deleted": [batch_deleted], "count": 1, "calendar_not_removed": []}
     assert api.delete(f"/api/tasks/{deleted}").json() == {"deleted": deleted}
+    assert api.get(f"/api/tasks/{deleted}").status_code == 404
     batch = api.post("/api/tasks/batch", json={"ids": [batch_a, batch_b], "action": "dismiss"}).json()
     assert batch["count"] == 2 and batch["calendar_not_removed"] == []
     remaining = live_events(calendar_client)
@@ -296,3 +290,26 @@ def test_removal_rule_can_be_switched_off_and_failures_are_reported(
     calendar_client.fail_with = TransientError("offline")
     deleted = api.delete(f"/api/tasks/{offline}").json()
     assert deleted == {"deleted": offline, "calendar_warning": "event_not_removed"}  # the task is gone anyway
+
+
+def test_the_automatic_rule_adds_new_tasks_once_and_respects_a_removal(
+    api: Any, calendar_client: FakeCalendarClient
+) -> None:
+    api.container.secrets.set(sk.GOOGLE_TOKEN_CALENDAR, '{"token": "fake"}')
+    # Off by default: a new task stays out of the calendar.
+    quiet = api.post("/api/tasks", json={"title": "Quiet", "due_date": "2026-11-20"}).json()
+    assert quiet["calendar"] is None and calendar_client.events == {}
+
+    api.put("/api/settings", json={"calendar": {"auto_sync_enabled": True}})
+    auto = api.post("/api/tasks", json={"title": "Auto", "due_date": "2026-11-21"}).json()
+    assert auto["calendar"]["status"] == "synced" and len(live_events(calendar_client)) == 1
+    no_date = api.post("/api/tasks", json={"title": "Some day"}).json()
+    assert no_date["calendar"] is None  # nothing to put in a calendar
+
+    # The user takes it out again: working on it later does not bring it back.
+    api.post(f"/api/tasks/{auto['id']}/calendar/remove", json={"confirm": True})
+    moved = api.post(f"/api/tasks/{auto['id']}/status", json={"status": "in_progress"}).json()
+    assert moved["calendar"]["status"] == "removed" and live_events(calendar_client) == []
+    # Test data never reaches the real calendar.
+    sample = api.post("/api/tasks", json={"title": "Test", "due_date": "2026-11-22", "sample": True}).json()
+    assert sample["calendar"] is None

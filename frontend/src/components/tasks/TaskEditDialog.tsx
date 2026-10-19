@@ -1,4 +1,4 @@
-import { ChevronRight, Quote } from "lucide-react";
+import { ChevronRight } from "lucide-react";
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router";
@@ -12,38 +12,24 @@ import { useUnsavedChanges } from "@/lib/desktop";
 import { formatDate } from "@/lib/format";
 import { markJustAdded } from "@/lib/justAdded";
 import { useAction } from "@/lib/queries";
-import { dateSpan } from "@/lib/review";
 import { diffPatch, initialState, type FormState } from "@/lib/task-form";
 import { CATEGORIES, PRIORITIES, type Category, type Priority, type QuickParse, type TaskDetail, type TimeSemantics } from "@/lib/types";
-import { cn } from "@/lib/utils";
 
-/** "edit": change fields and save; "confirm": the candidate is confirmed together with the changes. */
-export type EditIntent = "edit" | "confirm";
-/** The field the dialog starts in (a "fix the date" button opens it at the date). */
+/** The field the dialog starts in. */
 export type EditFocus = "title" | "date";
-/** The source's own sentence, shown above the fields when one of them is being fixed; `mark` is the part in question. */
-export interface EditContext {
-  text: string;
-  mark?: string | null;
-}
 
 export function TaskEditDialog({
   open,
   onOpenChange,
   task,
-  intent = "edit",
   focus = "title",
-  context,
   onSaved,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  /** Absent → add a new (manual, confirmed) to-do. */
+  /** Absent → add a new to-do. */
   task?: TaskDetail;
-  intent?: EditIntent;
   focus?: EditFocus;
-  /** The source's own wording, shown above the fields when the dialog is opened to fix one of them. */
-  context?: EditContext | null;
   onSaved?: (task: TaskDetail) => void;
 }) {
   const { t } = useTranslation();
@@ -59,7 +45,7 @@ export function TaskEditDialog({
       <Dialog open={open} onOpenChange={(o) => (o ? onOpenChange(true) : requestClose())}>
         <DialogContent className="max-sm:pb-0 sm:max-w-xl">
           {task ? (
-            <EditForm task={task} intent={intent} focus={focus} context={context} onCancel={requestClose} onClose={() => onOpenChange(false)} onSaved={onSaved} onDirtyChange={setDirty} />
+            <EditForm task={task} focus={focus} onCancel={requestClose} onClose={() => onOpenChange(false)} onSaved={onSaved} onDirtyChange={setDirty} />
           ) : (
             <AddForm onCancel={requestClose} onClose={() => onOpenChange(false)} onSaved={onSaved} onDirtyChange={setDirty} />
           )}
@@ -79,31 +65,6 @@ export function TaskEditDialog({
         }}
       />
     </>
-  );
-}
-
-/** The source's sentence above the fields, with the part being fixed (a date and its weekday) marked. */
-function SourceSentence({ context }: { context: EditContext }) {
-  const { t } = useTranslation();
-  const { text, mark } = context;
-  const span = dateSpan(text, mark);
-  return (
-    <p className="flex items-start gap-2 rounded-md bg-muted px-3 py-2 text-[13px] leading-relaxed [overflow-wrap:anywhere]">
-      <Quote className="mt-0.5 size-3.5 shrink-0 text-muted-foreground" aria-hidden />
-      <span className="min-w-0">
-        <span className="text-muted-foreground">{t("due.original")}: </span>“
-        {span ? (
-          <>
-            {text.slice(0, span[0])}
-            <mark className="rounded-sm bg-urgent/15 px-0.5 font-medium text-foreground">{text.slice(span[0], span[1])}</mark>
-            {text.slice(span[1])}
-          </>
-        ) : (
-          text
-        )}
-        ”
-      </span>
-    </p>
   );
 }
 
@@ -351,24 +312,17 @@ function AddForm({
   );
 }
 
-/**
- * Editing an existing task: title and deadline first, the rest collapsed. Opened from "edit and confirm",
- * the main button saves and confirms in one step; "save changes only" stays available.
- */
+/** Editing an existing task: title and deadline first, the rest collapsed. */
 function EditForm({
   task,
-  intent,
   focus,
-  context,
   onCancel,
   onClose,
   onSaved,
   onDirtyChange,
 }: {
   task: TaskDetail;
-  intent: EditIntent;
   focus: EditFocus;
-  context?: EditContext | null;
   onCancel: () => void;
   onClose: () => void;
   onSaved?: (task: TaskDetail) => void;
@@ -381,23 +335,17 @@ function EditForm({
     onDirtyChange(dirty);
     return () => onDirtyChange(false);
   }, [dirty, onDirtyChange]);
-  const confirming = intent === "confirm" && task.status === "candidate";
 
   const save = useAction(
-    async ({ confirm }: { confirm: boolean }) => {
+    async () => {
       const patch = diffPatch(task, form);
-      let updated: TaskDetail = task;
-      if (Object.keys(patch).length > 0) updated = await api.updateTask(task.id, patch);
-      if (confirm) updated = await api.setStatus(task.id, "confirmed");
-      return { task: updated, confirmed: confirm };
+      return Object.keys(patch).length > 0 ? api.updateTask(task.id, patch) : task;
     },
     {
-      success: (r) => (r.confirmed ? t("detail.savedAndConfirmed") : t("common.saved")),
-      // Undo takes back the confirmation; the edits stay (they are in the history and can be undone there).
-      undo: (r) => (r.confirmed ? r.task.undo_event_id : undefined),
-      onSuccess: (r) => {
+      success: t("common.saved"),
+      onSuccess: (updated) => {
         onClose();
-        onSaved?.(r.task);
+        onSaved?.(updated);
       },
     },
   );
@@ -406,16 +354,14 @@ function EditForm({
   const submit = (e: FormEvent) => {
     e.preventDefault();
     if (!form.title.trim()) return;
-    save.mutate({ confirm: confirming });
+    save.mutate(undefined);
   };
 
   return (
     <form onSubmit={submit} className="grid gap-4">
       <DialogHeader>
-        <DialogTitle>{confirming ? t("detail.confirmEditTitle") : t("detail.edit")}</DialogTitle>
-        {confirming ? <DialogDescription>{t("detail.confirmEditDescription")}</DialogDescription> : null}
+        <DialogTitle>{t("detail.edit")}</DialogTitle>
       </DialogHeader>
-      {context ? <SourceSentence context={context} /> : null}
       <Field label={t("field.title")} htmlFor="task-title">
         <Input id="task-title" value={form.title} maxLength={200} required onChange={(e) => set("title", e.target.value)} autoFocus={focus === "title"} />
       </Field>
@@ -438,16 +384,11 @@ function EditForm({
         <CategoryPriority category={form.category} priority={form.priority} onCategory={(v) => set("category", v)} onPriority={(v) => set("priority", v)} />
       </MoreOptions>
       <DialogActions>
-        <Button type="button" variant="outline" onClick={onCancel} disabled={save.isPending} className={cn(confirming && "max-sm:order-2")}>
+        <Button type="button" variant="outline" onClick={onCancel} disabled={save.isPending}>
           {t("common.cancel")}
         </Button>
-        {confirming ? (
-          <Button type="button" variant="outline" onClick={() => form.title.trim() && save.mutate({ confirm: false })} disabled={save.isPending || !dirty} className="max-sm:order-3">
-            {t("detail.saveOnly")}
-          </Button>
-        ) : null}
-        <Button type="submit" disabled={save.isPending || !form.title.trim()} className={cn(confirming && "max-sm:order-1 max-sm:col-span-2")}>
-          {save.isPending ? t("common.saving") : confirming ? t("detail.saveAndConfirm") : t("common.save")}
+        <Button type="submit" disabled={save.isPending || !form.title.trim()}>
+          {save.isPending ? t("common.saving") : t("common.save")}
         </Button>
       </DialogActions>
     </form>

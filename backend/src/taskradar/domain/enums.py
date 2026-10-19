@@ -103,32 +103,6 @@ class ContentType(StrEnum):
     OTHER = "other"
 
 
-class RelationHint(StrEnum):
-    NEW = "new"
-    REMINDER = "reminder"
-    DEADLINE_CHANGE = "deadline_change"
-    COMPLETION = "completion"
-    CANCELLATION = "cancellation"
-
-
-class MatchRelation(StrEnum):
-    NEW = "new"
-    SAME_ORIGIN = "same_origin"
-    DUPLICATE = "duplicate"
-    DEADLINE_UPDATE = "deadline_update"
-    POSSIBLE_DUPLICATE = "possible_duplicate"
-    RELATED = "related"
-
-
-class SourceRelation(StrEnum):
-    ORIGIN = "origin"
-    DUPLICATE = "duplicate"
-    DEADLINE_UPDATE = "deadline_update"
-    COMPLETION_EVIDENCE = "completion_evidence"
-    RELATED = "related"
-    MANUAL_MERGE = "manual_merge"
-
-
 class CompletionKind(StrEnum):
     RECEIVED = "received"
     COMPLETED = "completed"
@@ -136,21 +110,6 @@ class CompletionKind(StrEnum):
     APPROVED = "approved"
     CANCELLED = "cancelled"
     IN_REVIEW = "in_review"
-
-
-class SuggestionKind(StrEnum):
-    MARK_COMPLETED = "mark_completed"
-    MARK_DISMISSED = "mark_dismissed"
-    UPDATE_DUE = "update_due"
-    POSSIBLE_DUPLICATE = "possible_duplicate"
-    MARK_WAITING = "mark_waiting"
-
-
-class SuggestionStatus(StrEnum):
-    PENDING = "pending"
-    ACCEPTED = "accepted"
-    REJECTED = "rejected"
-    OBSOLETE = "obsolete"
 
 
 class SourceKind(StrEnum):
@@ -163,21 +122,6 @@ class SourceKind(StrEnum):
 
 SAMPLE_SOURCE_KINDS: frozenset[str] = frozenset({SourceKind.DEMO_MAIL.value, SourceKind.SAMPLE_UPLOAD.value})
 """Sources whose items are demo or test data: their tasks are marked as samples."""
-
-
-class SourceStatus(StrEnum):
-    IDLE = "idle"
-    OK = "ok"
-    ERROR = "error"
-    AUTH_REQUIRED = "auth_required"
-    DISCONNECTED = "disconnected"
-
-
-class ItemStatus(StrEnum):
-    PENDING = "pending"
-    PROCESSED = "processed"
-    SKIPPED = "skipped"
-    FAILED = "failed"
 
 
 class JobKind(StrEnum):

@@ -3,46 +3,30 @@
 from __future__ import annotations
 
 import datetime as dt
-import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
 
-from sqlalchemy import Engine, select
+from sqlalchemy import Engine
 from sqlalchemy.orm import Session, sessionmaker
 
 from taskradar.config import AppConfig
 from taskradar.connectors.calendar import CalendarClient, GoogleCalendarClient
-from taskradar.connectors.fake_gmail import FakeGmailClient
-from taskradar.connectors.gmail import GmailClient, GoogleGmailClient
 from taskradar.connectors.google_oauth import GoogleOAuthManager
 from taskradar.db.base import utcnow
 from taskradar.db.migrate import upgrade_to_head
-from taskradar.db.models import Source, SyncCheckpoint
-from taskradar.db.session import create_sqlite_engine, make_session_factory, transaction
-from taskradar.demo.mailbox import build_demo_mailbox, demo_completion_message
-from taskradar.domain.enums import SourceKind
-from taskradar.llm.base import LLMProvider
-from taskradar.notify.desktop import show_toast
-from taskradar.parsing.ocr import OCREngine, TesseractEngine
+from taskradar.db.session import create_sqlite_engine, make_session_factory
+from taskradar.notify import windows as windows_notifications
 from taskradar.security.permissions import PermissionGuard
 from taskradar.security.secrets import KeyringSecretStore, SecretStore
-from taskradar.services.agent import AgentFactory
 from taskradar.services.calendar_sync import CalendarSyncService
 from taskradar.services.data import DataService
-from taskradar.services.documents import DocumentService
-from taskradar.services.folders import FolderService
-from taskradar.services.gmail_sync import GmailSyncService
-from taskradar.services.ingest import IngestService
 from taskradar.services.jobs import JobRunner
-from taskradar.services.metrics import MetricsService
 from taskradar.services.notifications import NotificationService
-from taskradar.services.recheck import RecheckService
 from taskradar.services.settings import SettingsService
 from taskradar.services.status_summary import StatusSummaryService
 from taskradar.services.tasks import TaskService
-
-DEMO_ACCOUNT = "demo@taskradar.example"
+from taskradar.services.timers import TimerService
 
 
 @dataclass
@@ -55,20 +39,13 @@ class Container:
     settings: SettingsService
     guard: PermissionGuard
     tasks: TaskService
-    agent: AgentFactory
-    ingest: IngestService
-    ocr: OCREngine
-    documents: DocumentService
-    folders: FolderService
     jobs: JobRunner
     oauth: GoogleOAuthManager
-    gmail: GmailSyncService
     calendar: CalendarSyncService
     notifications: NotificationService
     data: DataService
-    metrics: MetricsService
     status: StatusSummaryService
-    recheck: RecheckService
+    timers: TimerService
     extras: dict[str, Any] = field(default_factory=dict)
 
     def dispose(self) -> None:
@@ -80,12 +57,8 @@ def build_container(
     *,
     secrets: SecretStore | None = None,
     clock: Callable[[], dt.datetime] | None = None,
-    llm_provider: LLMProvider | None = None,
-    gmail_client_factory: Callable[[Source], GmailClient] | None = None,
     calendar_client_factory: Callable[[], CalendarClient] | None = None,
-    ocr: OCREngine | None = None,
     toast: Callable[[str, str], bool] | None = None,
-    sleep: Callable[[float], None] | None = None,
     run_migrations: bool = True,
 ) -> Container:
     config.ensure_dirs()
@@ -96,52 +69,14 @@ def build_container(
     factory = make_session_factory(engine)
     secrets = secrets or KeyringSecretStore()
     settings = SettingsService(factory)
-    guard = PermissionGuard(factory, settings, secrets, app_data_dir=config.data_dir)
+    guard = PermissionGuard(factory, settings, secrets)
     tasks = TaskService(clock)
-    agent = AgentFactory(settings, guard, provider_override=llm_provider)
-    ingest = IngestService(factory, settings=settings, agent=agent, tasks=tasks, clock=clock)
-    ocr_engine = ocr or TesseractEngine(config.tesseract_cmd, tools_dir=config.tools_dir)
-    documents = DocumentService(
-        factory, config=config, settings=settings, ingest=ingest, tasks=tasks, ocr=ocr_engine, clock=clock
-    )
     jobs = JobRunner(factory, clock)
-    folders = FolderService(factory, settings=settings, documents=documents, guard=guard, jobs=jobs, clock=clock)
     oauth = GoogleOAuthManager(secrets, redirect_uri=f"{config.base_url}/api/oauth/google/callback", clock=clock)
-
-    def default_gmail_factory(source: Source) -> GmailClient:
-        if source.kind == SourceKind.DEMO_MAIL.value:
-            messages, attachments = build_demo_mailbox(clock())
-            client = FakeGmailClient(
-                messages,
-                attachments=attachments,
-                clock=clock,
-                email=DEMO_ACCOUNT,
-                failure_mode=settings.get().demo.gmail_failure_mode,
-            )
-            with transaction(factory) as session:
-                stage = session.scalar(
-                    select(SyncCheckpoint.value).where(
-                        SyncCheckpoint.source_id == source.id, SyncCheckpoint.key == "demo_stage"
-                    )
-                )
-            if stage and int(stage) >= 2:
-                client.add_message(demo_completion_message(clock()))
-            return client
-        return GoogleGmailClient(oauth.credentials("gmail"))
 
     def default_calendar_factory() -> CalendarClient:
         return GoogleCalendarClient(oauth.credentials("calendar"))
 
-    gmail = GmailSyncService(
-        factory,
-        settings=settings,
-        documents=documents,
-        jobs=jobs,
-        guard=guard,
-        client_factory=gmail_client_factory or default_gmail_factory,
-        clock=clock,
-        sleep=sleep or time.sleep,
-    )
     calendar = CalendarSyncService(
         factory,
         settings=settings,
@@ -152,28 +87,8 @@ def build_container(
         base_url=config.base_url,
         clock=clock,
     )
-    notifications = NotificationService(
-        factory, settings=settings, guard=guard, jobs=jobs, clock=clock, toast=toast or show_toast
-    )
-
-    def llm_configured() -> tuple[bool, bool]:
-        provider = settings.get().llm.provider
-        if provider != "openai":
-            return False, False  # off, or a compatible endpoint that may not need a key
-        try:
-            return True, bool(guard.llm_api_key())
-        except Exception:
-            return True, False
-
-    status = StatusSummaryService(
-        factory,
-        gmail_connected=lambda: oauth.connected("gmail"),
-        gmail_auto_sync=lambda: (settings.get().gmail.auto_sync, settings.get().gmail.sync_interval_minutes),
-        ocr_available=ocr_engine.available,
-        ocr_backlog=lambda: len(documents.ocr_backlog()),
-        llm_configured=llm_configured,
-        clock=clock,
-    )
+    toast = toast or windows_notifications.show
+    notifications = NotificationService(factory, settings=settings, guard=guard, jobs=jobs, clock=clock, toast=toast)
     return Container(
         config=config,
         engine=engine,
@@ -183,18 +98,11 @@ def build_container(
         settings=settings,
         guard=guard,
         tasks=tasks,
-        agent=agent,
-        ingest=ingest,
-        ocr=ocr_engine,
-        documents=documents,
-        folders=folders,
         jobs=jobs,
         oauth=oauth,
-        gmail=gmail,
         calendar=calendar,
         notifications=notifications,
         data=DataService(factory, config=config, clock=clock),
-        metrics=MetricsService(factory),
-        status=status,
-        recheck=RecheckService(factory, ingest=ingest, timezone=lambda: settings.get().general.timezone),
+        status=StatusSummaryService(factory, calendar_connected=lambda: oauth.connected("calendar"), clock=clock),
+        timers=TimerService(factory, settings=settings, guard=guard, toast=toast, clock=clock),
     )

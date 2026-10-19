@@ -1,121 +1,93 @@
-# TaskRadar — personal obligation radar
+# TaskRadar — a local to-do app for Windows
 
 [![CI](https://github.com/HappyOwl-Wen/Taskradar/actions/workflows/ci.yml/badge.svg)](https://github.com/HappyOwl-Wen/Taskradar/actions/workflows/ci.yml)
 ![Windows 10/11](https://img.shields.io/badge/Windows-10%20%7C%2011-0078D4)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
-TaskRadar is a local agent for Windows. It reads your e-mail (Gmail, read-only), PDFs and screenshots,
-finds what you have to do and by when, shows you the sentence it based that on, and reminds you once you
-have confirmed the task. It is a desktop app: installed for your Windows account, it opens in its own window
-from the Start menu, and its local service (bound to `127.0.0.1` only) starts and stops with that window.
-Everything runs on your own computer.
+TaskRadar is a to-do app for Windows that keeps everything on your own computer. You write a to-do as one sentence
+("周五前交房租", "Freitag 10 Uhr Zahnarzt", "submit report by Oct 20 5pm") and the date and time are recognised
+locally. Tasks move through *to do → in progress → waiting for reply → done*, and the home page shows them by status.
+A Pomodoro timer and countdowns run in the sidebar; reminders and timers announce themselves with Windows
+notifications, also while the window is closed to the tray. Tasks with a date can go into TaskRadar's own Google
+calendar if you connect one.
 
 > 中文简介见下方 [中文快速上手](#中文快速上手)。The UI is Chinese by default and switchable to English.
 
-![The TaskRadar window on Windows 11: To confirm, with the demo mailbox's synthetic mails (they count as test data)](docs/screenshots/desktop-window-light-zh.png)
+![TaskRadar on Windows 11: today's tasks by how soon they are due, the Pomodoro timer and a countdown running in the sidebar](docs/screenshots/today-light-zh.png)
 
-| Review inbox (browser version, 1440 px) | Possible duplicate: compare, choose the date | Dashboard (dark, English) | Phone |
+| The board by status | Pomodoro | Countdowns | Dark, English |
 | --- | --- | --- | --- |
-| ![Review inbox](docs/screenshots/inbox-light-zh.png) | ![Comparison dialog](docs/screenshots/compare-light-zh.png) | ![Dashboard](docs/screenshots/dashboard-dark-en.png) | ![Review on a phone](docs/screenshots/inbox-mobile-zh.png) |
+| ![Board](docs/screenshots/board-light-zh.png) | ![Pomodoro](docs/screenshots/focus-light-zh.png) | ![Countdowns](docs/screenshots/countdowns-light-zh.png) | ![Today in dark mode, English](docs/screenshots/today-dark-en.png) |
 
-All screenshots show synthetic data (demo mailbox, bundled samples, invented tasks); more in
-[docs/screenshots](docs/screenshots).
+All screenshots show invented tasks in a test data folder; more in [docs/screenshots](docs/screenshots).
 
 ---
 
-## The problem
+## What changed in this version
 
-Obligations arrive scattered over many channels and languages: a university office asks you to upload an
-enrollment certificate "by 20 November", the immigration office sends a German letter as a scan, the
-landlord writes "nächsten Freitag", a reminder repeats the first mail, and a payment confirmation means the
-task is done. Mail clients show *unread*, not *undone*. Calendars only contain what you typed in yourself.
+Earlier versions read Gmail, imported PDFs and screenshots and extracted tasks from them automatically, with a
+"To confirm" queue for what they found. That reading was not reliable enough: unrelated mails could end up as one
+task. This version is a plain to-do app instead:
 
-## Why an agent (and which kind)
-
-The job is a pipeline of judgements, not a single classification: Is this an obligation or marketing? What
-exactly must be done? Is "next Friday" relative to today or to the letter's date? Is this mail a reminder of
-something already known, a deadline change, or proof that it is done? Should that be applied automatically
-or asked?
-
-TaskRadar is therefore a **single, tool-using agent with a human in the loop**, deliberately not a swarm of
-LLM agents:
-
-* deterministic parsers do what they are good at (MIME, PDF text, OCR, dates in zh/de/en, time zones);
-* a rule-based extractor works offline; an optional LLM (OpenAI or any OpenAI-compatible endpoint) improves
-  extraction on hard text, always validated against the source (evidence grounding, date re-parsing);
-* a three-layer reconciler decides *new / duplicate / deadline update / completion / unsure*;
-* a policy layer decides what may be applied automatically (and makes it undoable) and what must be
-  confirmed by you. Nothing with an external side effect happens without your explicit action.
-
-## How it works
-
-```mermaid
-flowchart LR
-    A[Gmail read-only<br/>uploads · watched folders] --> B[Normalise & parse<br/>MIME · PDF text · OCR zh/de/en]
-    B --> C[Candidate extraction<br/>rules · optional LLM<br/>evidence grounding]
-    C --> D[Reconciliation<br/>exact → normalised → semantic]
-    D --> E[Deadline engine<br/>Europe/Berlin · DST · urgency]
-    E --> F[Review & policy<br/>confirm · suggest · auto + undo]
-    F --> G[Actions<br/>reminders · desktop toasts<br/>Google Calendar after preview]
-```
-
-Every automatic change is written to the task's history and can be undone; every task links back to the
-mail or document and quotes the sentence it came from. Details: [ARCHITECTURE.md](ARCHITECTURE.md).
+* **Removed:** reading Gmail, importing files (with OCR), the demo mailbox, watched folders, the "To confirm"
+  queue, automatic merging, and the optional LLM extraction.
+* **Kept:** your tasks, including the ones earlier versions found (listed under "全部任务" with the quotes they
+  were found by), and Google Calendar. The mails and files earlier versions imported, and the old Gmail sign-in
+  and API key, stay until you delete them in Settings → 数据与隐私 (nothing is deleted automatically).
+* **New:** the board by status on the home page, deleting tasks, task views in the sidebar, the Pomodoro timer,
+  countdowns, the tray icon, Windows notifications for timers, a status icon in the top bar, and the guide in the
+  settings.
 
 ## Features
 
 | Area | What it does | Status |
 | --- | --- | --- |
-| Your own to-dos | "Add to-do" on every page: one sentence in zh/de/en ("周五前交房租", "Freitag 10 Uhr Zahnarzt", "submit report by Oct 20 5pm"); the date and time are recognised locally and shown in editable fields before saving, category, priority and notes wait under "More options". Your own to-dos are active right away (no extra review), get reminders and calendar entries like any other task, and are briefly highlighted in the list after adding | implemented, tested, verified in a browser |
-| Uploads & folders | PDF, PNG, JPG, WebP, `.eml`; drag & drop; only folders you add are watched; originals are never modified | implemented, tested |
-| Parsing | text-first PDF extraction, OCR fallback per page (Tesseract, `chi_sim+eng`, `deu+eng`), MIME/HTML mail, quoted-reply stripping; files imported before OCR was installed can be read again from the Add content page | implemented, tested (real OCR in tests) |
-| Extraction | tasks with title, action, category, priority, deadline (date-only stays date-only), confidence, evidence; marketing/newsletters ignored; prompt-injection text treated as data | implemented, tested, evaluated |
-| Dates | absolute, relative and ambiguous dates in zh/de/en; relative dates resolved from the *source* date; unresolvable dates are flagged, never invented | implemented, tested |
-| Deduplication | same source / same thread, normalised similarity across languages, optional LLM judge; grey zone becomes a suggestion that you review side by side ("merge / keep separate / not now"); **a different deadline is never merged silently** (also not a reminder in the same thread): unless the new source explicitly says the deadline changed, both tasks stay and the pair is shown as "deadlines disagree" until you choose the date that stays; every decision is undoable | implemented, tested, evaluated |
-| Lifecycle | Candidate → Confirmed → In progress / Waiting for reply → Completed / Dismissed; completion evidence; an explicitly announced deadline change is applied, marked "deadline changed" with a notification, and you keep the new date or undo it | implemented, tested, verified in a browser with synthetic mails |
-| Test data | demo mailbox mails and files imported as test data are kept apart from your own data: not counted on the dashboard or in the activity figures, no reminders, never written to Google Calendar, never merged with real tasks, listed after real candidates; any task can be marked or unmarked as test data (undoable), and test data can be deleted as a whole from Add content | implemented, tested, verified in a browser with synthetic data |
-| System status | the dashboard (a single line while everything works) and Settings → Activity and diagnostics explain runtime problems in plain words with where to fix them (Gmail authorization expired or sync failing, mails or files that could not be read, an unavailable folder, calendar write failures, failing reminder checks, AI fallbacks, background jobs not running, OCR missing); no log reading needed | implemented, tested; in a browser only the "background jobs not running" state was seen (the others are covered by tests) |
-| Re-check | My tasks → More tools → "Re-check with current rules": the current rules are run again, read-only and locally, over the sources of open tasks; it lists tasks they would no longer find, tasks merged from many unrelated mails and tasks they would flag. You choose what to dismiss (undoable); nothing is deleted | implemented, tested, verified in a browser with synthetic data |
-| Reminders | Overdue / 24 h / 3 days / 7 days (configurable), date-only deadlines count until the end of the day, DST-safe, deduplicated, stop after completion | implemented, tested |
-| Gmail | OAuth (installed-app flow with PKCE), `gmail.readonly` only, last 30 days, incremental history sync, request pacing, retries with backoff, attachments | implemented, tested with a fake Gmail; **verified with one real account**: initial and incremental sync, attachments, automatic recovery from Google's rate limit (request pacing was added afterwards and is tested with fakes only) |
-| Google Calendar | separate OAuth (`calendar.app.created`), preview → confirm → write into a dedicated "TaskRadar" calendar, idempotent event IDs, no invitations | implemented, tested with a fake Calendar; **verified with one real account**: calendar created, all-day deadline written, updated in place after a date change (same event, no duplicate), unchanged re-write skipped; a disabled Calendar API is explained with Google's enable link. Events can be removed again (button, or automatically when a task is dismissed, merged or deleted - a setting, on by default); only TaskRadar's own events are ever deleted. Removal with the button verified with the real account; the automatic removal is tested with a fake Calendar |
-| LLM extraction | OpenAI structured outputs or OpenAI-compatible endpoint, strict schema validation, bounded retries, rules fallback, data minimisation, consent required | implemented, tested with a mocked provider; **real API not verified** (needs your key) |
-| User interface | Four places named by what you do there. **Today**: what needs attention (overdue / due today / tomorrow / within 7 days, then changed or disputed deadlines; unconfirmed tasks always marked), the next decisions with one "N things waiting for your decision" entry (a disputed date that waits there is pointed to, not listed twice), system status in one line while it is fine; a three-step guide until your first confirmation (can be reopened). **To confirm**: one queue for new tasks, deadline updates and possible duplicates, list + detail with "n of N", problems in plain language whose fix buttons open the field concerned with the whole source sentence (the date and a weekday next to it marked); "Edit & confirm" saves and confirms in one step ("Save only" is the secondary choice); the decisions stay at the bottom edge and toasts never cover them; after a decision the next task opens at its start, with the focus on its title. **My tasks**: open / to confirm / completed / dismissed / all; complete in one click (fades out, with undo), other statuses behind "…", "Select several" for batch actions, one search, "Showing 300 of N" with "Show more". **Add content**: one import button, with the last result kept (new tasks and suggestions counted in their own units, "go to confirm", each file's outcome, retry or another file when one failed), connected sources and processing records. **Settings** one category at a time, unsaved changes protected on any navigation, Gmail connected step by step, Activity and diagnostics. Undo after every decision; rows show title, date and at most two states (more behind "N more"). One visual system: a light frame around a white work surface, one indigo main action per page, colour only for meaning (red overdue, amber warnings, green done, a dashed outline for "unconfirmed"), Segoe UI Variable / Microsoft YaHei UI, 6/8/12 px radii, 32 px controls with hover, pressed, disabled and loading states. Short motion (120–200 ms fades and small shifts for pages, the sidebar, menus, dialogs and ticking off; it never blocks clicks or moves the layout, and it is off when Windows animations are off); Tab and Esc everywhere with a visible focus ring; 44 px touch targets on touch screens; layouts from 360 px phones to desktops; dark/light; zh/en | implemented, unit-tested, verified in a browser at 1920 / 1440 / 1024 / 768 / 390 / 360 px, light and dark, Chinese and English; window sizes of 1366×768 and 1920×1080 screens at 100 / 125 / 150 % checked in Chrome with the matching pixel ratio (the real window only at 125 %); timings, keyboard and focus measured in the real window; not yet tested with users, a screen reader or a real phone |
-| Background | scheduled Gmail sync, folder scans, reminder checks, automatic retries, restart recovery, optional Windows autostart (only after confirmation) | implemented, tested |
-| Data control | export as JSON, delete single items, delete everything (typed confirmation) | implemented, tested |
-| Desktop app | Its own window (Microsoft Edge WebView2 through pywebview) that runs the local service: started on `127.0.0.1` (port 8000, or a free one when 8000 is taken) and stopped when the window closes; size, position and maximised state remembered (moved back onto a screen if that one is gone, rescaled when the DPI changed); a second start brings the open window to the front; closing with unsaved edits asks first; links and the Google sign-in open in your default browser and the window picks up the result. `TaskRadar-Setup-0.1.0.exe` installs for your account without administrator rights (Start menu entry, optional desktop shortcut, entry in Settings → Apps; it never writes into a folder it did not create) and updates an installed version; uninstalling keeps your data. Also a portable zip. No Python or Node.js needed | built and verified on this computer (Windows 11, WebView2 155, 2560×1440 at 125 %): installer window, install in 1.5–1.8 s, update, window after about 1 s and app ready after about 2 s, the whole flow start → add content → confirm → view → complete in the installed app (automated, [scripts/desktop-check](scripts/desktop-check)), the unsaved-changes question, uninstalling refused while TaskRadar runs and complete afterwards. **Not tested on another computer or on Windows 10; not code-signed** |
+| To-dos in one sentence | "添加待办" on every page: one sentence in Chinese, German or English; the date and time are recognised locally and shown in editable fields before saving (relative dates count from the moment of typing; a date without a time stays date-only). Category, priority and notes wait under "更多选项" | implemented, tested, verified in the desktop window |
+| Statuses you can see | To do, in progress, waiting for reply, done, dismissed. The home page lists what is overdue or due soon (with each task's status) and below it a board with one lane per status; "开始" moves a to-do to "进行中" in one click; every list shows the status of tasks that are not plain to-dos | implemented, tested, verified in the desktop window |
+| Deleting | "删除任务…" in every task's menu and for a selection of tasks, after a question that says what happens (gone for good, unlike "忽略"); the task's Google Calendar event goes too (a setting) | implemented, tested, verified in the desktop window |
+| Views in the sidebar | 全部任务, 我创建的 (your own to-dos) and Google 日历 (tasks with an event in TaskRadar's calendar), each with the tabs open / to do / in progress / waiting / done / dismissed / all | implemented, tested |
+| Pomodoro | Focus 25 min, short break 5 min, a long break of 15 min after 4 Pomodoros (all adjustable); pause, resume, skip to the next phase, stop; breaks and focus sessions can start by themselves; a focus session can be linked to a task; today's count; the sidebar shows the time left | implemented, tested, verified in the desktop window |
+| Countdowns | For a duration (presets from 1 minute to 1 hour, or hours/minutes/seconds; can be paused and run again) or until a moment in your time zone; several at once; the sidebar shows the one that ends first | implemented, tested; a 5-second and a 3-second countdown ended on their own in the desktop window with their notification |
+| Windows notifications | Timers and reminders announce themselves with a Windows notification under TaskRadar's own name and icon, also with the window in the tray (a timer runs in TaskRadar's background service, not in the page). A timer that ended while TaskRadar was not running is announced at the next start with its end time. Each kind can be switched off | implemented, tested. **Windows shows them on the screen only when TaskRadar is in the Start menu** (see [below](#notifications-on-the-screen)); measured on this computer: without such an entry 9 of 10 test notifications went only to the notification centre (the one that appeared came right after a test with an entry); with one, 5 of 5 appeared on the screen, and so did the notification of a 3-second countdown |
+| Tray | Closing the window keeps TaskRadar in the notification area (switchable in Settings → 常规): click the icon to open the window, right-click to quit (asking about unsaved changes first). The icon's tooltip shows a running timer ("专注中 · 剩 25 分钟 · 1 个倒计时"). Starting TaskRadar again brings the window out of the tray | implemented, tested, verified in the desktop window (the tooltip read through UI Automation) |
+| Reminders | Overdue, due within 24 hours, 3 days or 7 days (configurable); a date-only deadline counts until the end of that day; daylight saving time is handled; each reminder once, none after completion | implemented, tested |
+| Status at a glance | An icon in the top bar is green while everything works; otherwise it says what needs attention and where to fix it (calendar events that failed, reminder checks that fail, background service stopped, notifications that Windows will not show) | implemented, tested |
+| Google Calendar (optional) | Separate sign-in with the `calendar.app.created` permission only; a task with a date is written into a calendar named "TaskRadar" after a preview and a click (or automatically for categories you choose); events are updated in place and removed again with their task; TaskRadar only touches its own events | implemented, tested with a fake Calendar; verified with one real account in an earlier version (this version moved some helpers but did not change how the calendar is written) |
+| Data control | Export everything as JSON; delete single tasks; delete what earlier versions imported; delete all data (typed confirmation) | implemented, tested |
+| Desktop app | Its own window (Microsoft Edge WebView2 through pywebview), its local service on `127.0.0.1` only; size and position remembered; light and dark; Chinese and English; optional start with Windows (into the tray). `TaskRadar-Setup-<version>.exe` installs for your account without administrator rights and adds TaskRadar to the Start menu; uninstalling keeps your data. Also a portable zip | the program built from this version answered on its local address 3.5 s after starting with a new data folder and 2.1 s after starting again (one measurement each, on this computer); the folder build is 55.7 MB. Not code-signed; not tested on Windows 10 or on another computer |
 
 ## Install the desktop app
 
-Run `TaskRadar-Setup-0.1.0.exe` (built with `scripts\build-exe.ps1`, see
+Run `TaskRadar-Setup-<version>.exe` (built with `scripts\build-exe.ps1`, see
 [below](#build-the-desktop-app-and-its-installer)). It shows where TaskRadar goes
-(`%LOCALAPPDATA%\Programs\TaskRadar`, for your account only, no administrator rights), creates a Start menu entry and,
-if you leave the box ticked, a desktop shortcut, and adds TaskRadar to **Settings → Apps → Installed apps**, where
-you can uninstall it again (your data stays). Running a newer setup updates an installed version (close TaskRadar
-first). The program is not code-signed, so Windows SmartScreen may ask on the first start ("More info" → "Run
-anyway"). It needs the Microsoft Edge WebView2 Runtime, which is part of Windows 11 (if it is missing, TaskRadar
-says so and offers Microsoft's download page). For scans and screenshots, double-click `Install-OCR.cmd` in the
-program folder once (needs 7-Zip).
+(`%LOCALAPPDATA%\Programs\TaskRadar`, for your account only, no administrator rights), creates a Start menu entry
+(which also lets Windows show TaskRadar's notifications on the screen) and, if you leave the box ticked, a desktop
+shortcut, and adds TaskRadar to **Settings → Apps → Installed apps**, where you can uninstall it again (your data
+stays). Running a newer setup updates an installed version (quit TaskRadar first). The program is not code-signed,
+so Windows SmartScreen may ask on the first start ("More info" → "Run anyway"). It needs the Microsoft Edge WebView2
+Runtime, which is part of Windows 11 (if it is missing, TaskRadar says so and offers Microsoft's download page).
 
-Then open **TaskRadar** from the Start menu. The window opens with a short start screen; closing it stops TaskRadar
-(nothing keeps running in the background). Starting it again while it is open brings the open window to the front.
+Then open **TaskRadar** from the Start menu. Closing the window keeps TaskRadar running in the tray, so reminders
+and timers go on; right-click its icon and choose "退出 TaskRadar" to end it.
+
+### Notifications on the screen
+
+Windows shows an app's notifications as banners only when a Start menu entry stands for the app; otherwise they go
+to the notification centre without appearing on the screen. The installer creates that entry. When you run
+TaskRadar from source or as the portable version, **Settings → 提醒与通知** says whether Windows will show the
+notifications and offers "添加到开始菜单": after your confirmation it creates a "TaskRadar" shortcut in your Start
+menu (for your account, no administrator rights), which you can remove there again.
 
 ## Quick start from source (Windows 10/11)
 
-Requirements: **Python 3.12+**, **Node.js 20+** (only to build the web UI) and, for scans/screenshots,
-**7-Zip** (used once to unpack the OCR engine). No administrator rights are needed.
+Requirements: **Python 3.12+** and **Node.js 20+** (only to build the web UI). No administrator rights are needed.
 
-1. **Set up** — double-click `Setup.cmd` (or run
-   `powershell -ExecutionPolicy Bypass -File scripts\setup.ps1`). It creates `backend\.venv`, builds the web
-   UI and prepares the database in `%LOCALAPPDATA%\TaskRadar`.
-2. **OCR (recommended)** — the setup asks whether to install it; you can also run
-   `powershell -ExecutionPolicy Bypass -File scripts\install-tesseract.ps1` at any time. It downloads Tesseract
-   5.4 (UB Mannheim build) plus the German and Chinese models, verifies pinned SHA-256 checksums and unpacks them
-   into `%LOCALAPPDATA%\TaskRadar\tools\tesseract`.
-3. **Start** — double-click `TaskRadar.cmd`. TaskRadar opens in its own window (the same window as the installed
-   app); closing it stops the local service. `TaskRadar.cmd --browser` starts the browser version instead
-   (<http://127.0.0.1:8000>, stopped by closing its console window); `scripts\start.ps1 -Background` starts that
-   without a console.
+1. **Set up** — double-click `Setup.cmd` (or run `powershell -ExecutionPolicy Bypass -File scripts\setup.ps1`). It
+   creates `backend\.venv`, builds the web UI and prepares the database in `%LOCALAPPDATA%\TaskRadar`.
+2. **Start** — double-click `TaskRadar.cmd`. TaskRadar opens in its own window (the same window as the installed
+   app). `TaskRadar.cmd --browser` starts the browser version instead (<http://127.0.0.1:8000>, stopped by closing
+   its console window).
+3. **Notifications on the screen** — see [above](#notifications-on-the-screen).
 
 ### Build the desktop app and its installer
 
@@ -124,80 +96,46 @@ powershell -ExecutionPolicy Bypass -File scripts\build-exe.ps1
 ```
 
 needs the setup above once and builds, with PyInstaller, a program that runs without Python or Node.js:
+`dist\TaskRadar-Setup-<version>.exe` (the installer; `--silent` installs without asking),
+`dist\TaskRadar-<version>-windows-x64.zip` (the portable version: unzip and double-click `TaskRadar.exe`) and, with
+`-OneFile`, a single `dist\onefile\TaskRadar.exe`. The program keeps its data where the source version does
+(`%LOCALAPPDATA%\TaskRadar`), so both can be used in turn, one at a time. Nothing personal is packed (no data, no
+`.env`, no tokens).
 
-| | Result | Size (measured) |
-| --- | --- | --- |
-| Installer | `dist\TaskRadar-Setup-0.1.0.exe`: a small window that shows where TaskRadar goes and installs or updates it; `--silent` installs without asking | 76 MB |
-| Portable | `dist\TaskRadar-0.1.0-windows-x64.zip`: unzip and double-click `TaskRadar.exe` (keep the folder together) | 58.7 MB (111 MB unpacked) |
-| One file | `-OneFile`: a single `dist\onefile\TaskRadar.exe` that unpacks itself into `%TEMP%` on every start and removes that copy when it ends (window after about 2 s, ready after about 3 s; no installer) | 58.8 MB |
+[scripts/desktop-check](scripts/desktop-check) drives the real window through the main flow (add to-dos, start
+one, delete one, complete one, the Pomodoro timer, a countdown, the guide) and saves screenshots; see its read-me.
 
-Measured on this computer (Windows 11, 2560×1440 at 125 %, installed version): the window appears after about
-1 s with its start screen and TaskRadar is ready after about 2 s (2.2 s with a new data folder); installing takes
-1.5–1.8 s; after the window is closed the process ends within about 2.5 s (a start in that moment waits for it).
-The program keeps its data where the source version does (`%LOCALAPPDATA%\TaskRadar`) and finds the same
-Tesseract, so both versions can be used in turn, one at a time (a second start brings the open window to the front;
-if the browser version runs, the desktop app offers to open it in the browser). Nothing personal is packed (no
-data, no `.env`, no tokens). Autostart (optional, in the settings) starts TaskRadar minimised.
+## Connecting Google Calendar (optional)
 
-[scripts/desktop-check](scripts/desktop-check) drives the real window through the whole flow (start → add content
-→ confirm → view → complete) with synthetic files and saves screenshots; see its read-me.
-
-### Try it without any account
-
-* **Add content → Demo mailbox → Create**: 11 synthetic mails (Chinese, German, English) with a fee request and
-  its reminder, a deadline extension, an appointment, marketing, a newsletter and a prompt-injection attempt.
-  "Deliver follow-up mail" sends a payment confirmation to show automatic completion and undo; the
-  failure-mode selector simulates rate limits, server errors, expired authorization and network outages.
-* **Import files**: the synthetic sample documents in `backend/src/taskradar/demo/samples/` (Chinese PDF,
-  German screenshots, a scanned PDF, an English contract, a marketing flyer). Drop them onto the window.
-  `backend\.venv\Scripts\python.exe -m taskradar demo-files <folder>` writes fresh copies.
-
-## Connecting Gmail and Google Calendar
-
-These are the only steps that require you personally. TaskRadar never sees your Google password, and only
-asks for read-only Gmail access and for calendars it creates itself.
+These are the only steps that need you personally; TaskRadar never sees your Google password and only asks for
+access to calendars it creates itself.
 
 1. Open the [Google Cloud Console](https://console.cloud.google.com/) and create a project (e.g. "TaskRadar").
-2. *APIs & Services → Library*: enable the **Gmail API** and, if you want calendar entries, the
-   **Google Calendar API** (connecting works without it, but writing an event then fails; the calendar
-   dialog links to the switch).
+2. *APIs & Services → Library*: enable the **Google Calendar API**.
 3. *OAuth consent screen*: user type **External**, publishing status **Testing**, add your own Google account
-   under **Test users**. Scopes: `.../auth/gmail.readonly` and `.../auth/calendar.app.created`.
+   under **Test users**. Scope: `.../auth/calendar.app.created`.
 4. *Credentials → Create credentials → OAuth client ID*, application type **Desktop app**. Download the JSON.
-5. In TaskRadar: **Settings → Gmail → Upload client JSON**, then **Connect Gmail (read-only)**. Google's
-   consent page opens (in the desktop app: in your default browser); sign in and approve. Google sends you back to
-   `http://127.0.0.1:<port>/api/oauth/google/callback` (a desktop-app client accepts any local port); the desktop
-   app then shows a "you can close this tab" page and takes the result over in its window. The first sync (last
-   30 days) starts.
-6. Optional: **Settings → Google Calendar → Connect Google Calendar**. Tasks are written only after you open
-   a task, check the preview and press **Confirm & write**.
+5. In TaskRadar: **Settings → Google 日历 → upload the client JSON**, then **connect**. Google's consent page opens
+   in your default browser; sign in and approve. The window takes the result over.
+6. Tasks are written only after you open a task, check the preview and confirm (or for the categories you choose
+   for automatic writing).
 
-Notes: the client JSON and the tokens are stored in the Windows Credential Manager, not in files. While
-the Google project is in *Testing* status, Google expires refresh tokens after 7 days; TaskRadar then shows
-"re-authorization needed" and keeps all data until you reconnect. Disconnecting revokes the token.
-
-## Optional: LLM-assisted extraction
-
-The default is the local rule engine: no API key, no data leaves the computer. In **Settings → Extraction**
-you can choose **OpenAI** or an **OpenAI-compatible endpoint** (e.g. a local server), pick the model (not
-hard-coded; default `gpt-5-mini`) and store the key in the Windows Credential Manager. Before any content is
-sent to a cloud provider you must tick the data notice. Data minimisation is on by default: only content that
-looks like it contains obligations is sent, IBANs/card numbers/ID numbers/phone numbers/mail user names are
-masked, long texts are truncated, and the model output is checked against the source text. If the model
-fails or returns invalid JSON, TaskRadar falls back to the rule engine.
+The client JSON and the token are stored in the Windows Credential Manager, not in files. While the Google project
+is in *Testing* status, Google expires the sign-in after 7 days; TaskRadar then says so and keeps all data until you
+reconnect. Disconnecting revokes the token.
 
 ## Privacy and permission model
 
-* Binds to `127.0.0.1` only; Host-header allow-list against DNS rebinding; per-process CSRF token plus
-  Origin/`Sec-Fetch-Site` checks on every state-changing request; strict Content-Security-Policy.
-* Every external side effect (LLM request, Gmail read, calendar write, autostart, desktop notification,
-  opening Explorer, deleting all data, …) goes through one permission guard and is written to an audit log.
-* Mail and document text is treated as untrusted data: prompt-injection phrases are detected and flagged,
-  command-like "tasks" are dropped, and nothing is ever executed from content.
-* Uploads are size-limited and identified by magic bytes; file names are sanitised; files are served only
-  from TaskRadar's storage or folders you added; whole drives, your profile root and system folders cannot
-  be watched.
-* Secrets never go to the database, the logs (a redaction filter masks tokens and keys) or Git.
+* Everything is stored on your computer (`%LOCALAPPDATA%\TaskRadar`). The only connection to the internet is Google
+  Calendar, and only if you connect it.
+* The local service binds to `127.0.0.1` only; a Host-header allow-list blocks DNS rebinding; every state-changing
+  request needs a per-process CSRF token and passes Origin/`Sec-Fetch-Site` checks; a strict Content-Security-Policy
+  applies.
+* Every side effect outside TaskRadar's own data (calendar writes and deletions, autostart, the Start menu entry,
+  notifications, Google sign-in and sign-out, export, deleting everything) goes through one permission guard and is
+  written to an audit log. Autostart and the Start menu entry are created only after your confirmation.
+* Secrets (the Google client and token) live in the Windows Credential Manager, never in the database, the logs (a
+  redaction filter masks tokens) or Git.
 
 See [SECURITY.md](SECURITY.md) for the threat model.
 
@@ -205,130 +143,71 @@ See [SECURITY.md](SECURITY.md) for the threat model.
 
 ```powershell
 cd backend
-.venv\Scripts\python.exe -m pytest            # 313 tests, about 25 s, includes real OCR and the installer
+.venv\Scripts\python.exe -m pytest            # 177 tests
 .venv\Scripts\python.exe -m ruff check .
 .venv\Scripts\python.exe -m ruff format --check .
 .venv\Scripts\python.exe -m mypy
-.venv\Scripts\python.exe -m taskradar eval    # extraction / dedup evaluation on the labelled dataset
 
 cd ..\frontend
-npm run lint; npm run typecheck; npm test      # 126 tests
+npm run lint; npm run typecheck; npm test      # 99 tests
 ```
 
-The workflow in `.github/workflows/ci.yml` runs the same checks on Ubuntu on every push, with Tesseract and the
-same pinned language models. Locally the backend checks also run on Windows 11 and on Ubuntu 24.04 (WSL), where the
-OCR tests are skipped when Tesseract is not installed.
-
-### Evaluation (rule engine, `rules-1.6`)
-
-Measured with `python -m taskradar eval` on synthetic, hand-labelled cases. The development set was used while
-building the rules; the held-out set was written separately and run without tuning on it (one bug it exposed,
-an invented date for "within 14 days after signing", was fixed afterwards, and one case improved as a side
-effect of a later fix — see [docs/EVALUATION.md](docs/EVALUATION.md)).
-
-| Metric | Development set (36 cases) | Held-out set (30 cases) |
-| --- | --- | --- |
-| Task precision / recall / F1 | 1.00 / 1.00 / 1.00 | 1.00 / 0.78 / 0.88 |
-| Deadline date correct | 21/21 | 13/13 |
-| Deadline time correct | 21/21 | 12/13 |
-| Marketing/info cases with false tasks | 0/7 | 0/7 |
-| Correct merges / wrong merges | 4/5 / 0 (the fifth is flagged for review, see below) | 1/1 / 0 |
-| Completion evidence detected | 6/6 | 3/5 |
-
-The held-out recall shows the honest limit of hand-written rules on unseen phrasing; that is what the optional
-LLM path is for (not yet measured against a real model). Since `rules-1.6` a payment reminder that sets a *new*
-deadline without saying that the deadline changed (development case de-05) is flagged as a possible duplicate
-instead of being merged: a different deadline is never merged silently. This costs one automatic merge by design.
-
-### Performance (measured)
-
-On an AMD Ryzen 9 7940H laptop (Windows 11, Tesseract 5.4), importing the seven sample documents through the
-full pipeline (parsing, OCR, extraction, reconciliation, storage), three runs on fresh databases:
-
-| Input | Time per document (median of 3) |
-| --- | --- |
-| Text PDF (Chinese / English) | 97 ms / 45 ms |
-| Screenshot, OCR (German / Chinese) | 0.40 – 0.99 s |
-| Scanned PDF, OCR (Chinese) | 1.19 s |
-| All seven samples | 3.8 – 4.1 s total |
-
-Result: 4 tasks, 2 reminder screenshots merged into existing tasks, the marketing flyer ignored.
+The workflow in `.github/workflows/ci.yml` runs the same checks on Ubuntu on every push; the Windows-only tests
+(shortcuts, the Start menu entry, the registry) are skipped there and run locally on Windows.
 
 ## Project layout
 
 ```
-backend/            FastAPI app, agent pipeline, SQLite + Alembic, tests  (Python package `taskradar`)
-  src/taskradar/    api · parsing · extraction · llm · reconciliation · deadlines · policy · services
-                    connectors (Gmail, Calendar, OAuth) · scheduler · security · demo · migrations
-                    desktop (window, its server, window placement, install / uninstall)
+backend/            FastAPI app, SQLite + Alembic, tests  (Python package `taskradar`)
+  src/taskradar/    api · services (tasks, timers, notifications, calendar, data, settings) · deadlines
+                    extraction (dates and one-sentence to-dos) · connectors (Calendar, OAuth) · scheduler
+                    security · notify (Windows notifications) · desktop (window, tray, installer) · migrations
 frontend/           React + TypeScript + Tailwind interface (built into backend/src/taskradar/static)
 packaging/          PyInstaller specs, launcher, installer (installer.py + installer.html), icon, read-me
-scripts/            setup.ps1 · start.ps1 · install-tesseract.ps1 · build-exe.ps1 · desktop-check/
-docs/               EVALUATION.md · screenshots/
+scripts/            setup.ps1 · start.ps1 · build-exe.ps1 · desktop-check/
+docs/               screenshots/
 TaskRadar.cmd       double-click launcher (window; --browser)     Setup.cmd   one-time setup
 ```
 
 ## Limitations
 
-* The rule engine misses phrasings it has not seen (held-out recall 0.78), e.g. library loans
-  ("归还/续借"), parcel pick-ups ("abholen"), passive bookings ("must be booked") and some completion phrasings
-  ("has been confirmed", "was submitted successfully"). Titles can be vague when the instruction uses a pronoun
-  ("Diese hochladen"); the evidence quote still shows the full context.
-* Gmail sync and calendar writing have been exercised with one real account. The OpenAI path is implemented
-  against the official API and covered by tests with a mocked provider, but has **not** been exercised with a
-  real API key yet.
+* Built and checked on one computer (Windows 11, one 2560×1440 screen, WebView2). Windows 10, other scaling setups
+  and a screen reader have not been tested. The programs are not code-signed and do not update themselves.
+* Windows shows the notifications on the screen only with TaskRadar in the Start menu (see
+  [above](#notifications-on-the-screen)). Clicking a notification is meant to bring the window forward; that was not
+  tested with a real click.
+* Reminders and timers run while TaskRadar runs (window or tray). After "退出 TaskRadar" nothing reminds you; a timer
+  that ended in the meantime is announced at the next start, with the time it ended.
+* No recurring to-dos, no per-task reminder times, single user, no sync between devices (apart from Google Calendar
+  for dated tasks).
 * "Delete all data" removes local data only; events already in the "TaskRadar" calendar stay there (remove that
   calendar in Google Calendar if you want them gone).
-* Desktop toasts use Windows PowerShell/WinRT and depend on the Windows notification settings (there is a test
-  button); autostart, Explorer integration and toasts are Windows-only.
-* OCR covers printed Chinese (simplified), German and English; handwriting and low-quality photos are not
-  reliable. Low OCR confidence is flagged for review.
-* Recurring obligations are recognised as "related", not modelled as series. Single user, no mobile sync.
-* Tasks created by older rule versions are not changed when the rules improve; "Re-check with current rules"
-  lists the doubtful ones for you to decide.
 * The local database is not encrypted by TaskRadar; it relies on your Windows account (BitLocker recommended).
-* Desktop app: built and checked on one computer (Windows 11, one 2560×1440 screen at 125 %, WebView2 155).
-  100 % and 150 % scaling and the 1366×768 / 1920×1080 window sizes were checked in Chrome with the matching
-  pixel ratio, not by changing the Windows setting; several screens with different scaling, Windows 10 and a
-  screen reader have not been tested, nor the message for a missing WebView2 runtime (it is part of Windows 11).
-  Not code-signed (SmartScreen asks once); no automatic updates (run a newer setup).
-* Reminders, Gmail sync and folder scans run only while the window is open (or after the optional autostart,
-  which starts TaskRadar minimised); there is no tray icon.
-* Connecting Google in the desktop app (sign-in in the default browser, result taken over by the window) is
-  covered by tests with a simulated callback; with a real Google account it has so far only been used in the
-  browser version.
-* After the window is closed the process needs up to about 2.5 s to end; a start in that moment waits for it.
 
 ## Roadmap
 
-* Measure the LLM path on the held-out set with a real model and a local OpenAI-compatible model.
-* Learn from corrections (user edits and dismissals as few-shot examples / rule suggestions).
-* IMAP and Outlook connectors; recurring obligations.
-* A code-signed installer with automatic updates; a tray icon so reminders continue with the window closed.
+* Recurring to-dos and reminders at a chosen time.
+* Pomodoro history over weeks.
+* A code-signed installer with automatic updates.
 * Optional encryption of the local database.
 
 ## 中文快速上手
 
-1. 安装 Python 3.12+ 和 Node.js 20+；如需识别扫描件/截图，再安装 7-Zip。
-2. 双击 `Setup.cmd` 完成一次性安装（无需管理员权限）。安装过程中会询问是否下载 OCR 引擎（约 110 MB，会校验 SHA-256），
-   也可以之后运行 `powershell -ExecutionPolicy Bypass -File scripts\install-tesseract.ps1`。
-3. 双击 `TaskRadar.cmd` 启动：TaskRadar 在自己的窗口中打开，本地服务随窗口启动、关闭窗口即停止。
-   `TaskRadar.cmd --browser` 改为浏览器版本（<http://127.0.0.1:8000>）。
-4. 不连接任何账号也能体验：「添加内容 → 演示邮箱 → 创建」，或把 `backend/src/taskradar/demo/samples/` 中的示例文件拖进窗口。
-   如果在安装 OCR 之前就已导入截图或扫描件，装好 OCR 后在「添加内容」页点「立即识别」即可补识别，无需重启。
-5. 连接 Gmail / Google 日历需要你本人在 Google Cloud Console 创建“桌面应用”OAuth 客户端并登录授权，并在
-   「API 和服务 → 库」中启用 Gmail API；要写入日历，还需启用 Google Calendar API。步骤见上文
-   [Connecting Gmail and Google Calendar](#connecting-gmail-and-google-calendar)。Gmail 只申请只读权限。
-6. 默认使用本地规则引擎，不会把内容发给任何云服务；启用 OpenAI 前需要在设置中明确同意数据发送说明。
-7. 打包成桌面应用：运行 `powershell -ExecutionPolicy Bypass -File scripts\build-exe.ps1`，得到安装程序
-   `dist\TaskRadar-Setup-0.1.0.exe`（76 MB）和便携版 `dist\TaskRadar-0.1.0-windows-x64.zip`（58.7 MB）。
-   安装程序只为当前用户安装到 `%LOCALAPPDATA%\Programs\TaskRadar`（不需要管理员权限），创建开始菜单项和可选的
-   桌面快捷方式，并出现在“设置 → 应用 → 已安装的应用”中，可在那里卸载（数据保留）。之后从开始菜单打开 TaskRadar：
-   约 1 秒出现窗口，约 2 秒可用；关闭窗口即停止。不需要 Python 或 Node.js；数据仍保存在 `%LOCALAPPDATA%\TaskRadar`。
+1. 安装 Python 3.12+ 和 Node.js 20+，双击 `Setup.cmd` 完成一次性安装（无需管理员权限）。
+2. 双击 `TaskRadar.cmd` 启动：TaskRadar 在自己的窗口中打开。点窗口的 × 后，它留在任务栏右下角的托盘里继续提醒和计时；
+   在托盘图标上右键选“退出 TaskRadar”才会退出（可以在“设置 → 常规”中改为点 × 直接退出）。
+3. 添加待办：任意页面右上角「添加待办」，写一句话即可，例如“周五前交房租”“明天下午3点开组会”，日期和时间会自动识别。
+   首页按“需要关注”和“按状态”（待办 / 进行中 / 等待回复）显示任务；点“开始”即移到“进行中”；“…”菜单里可以忽略或删除任务。
+4. 左侧边栏：全部任务、我创建的、Google 日历三个视图；“专注”下是番茄钟和倒计时，运行时侧边栏直接显示剩余时间。
+5. Windows 通知：番茄钟每个阶段结束、倒计时结束和任务提醒都会发出 Windows 通知。**只有开始菜单中有 TaskRadar 时，
+   Windows 才会把通知弹到屏幕上**；安装版会自动添加，从源代码运行时请在「设置 → 提醒与通知」中点「添加到开始菜单」（会先询问）。
+6. 这一版不再读取 Gmail、不再导入文件、不再有“待确认”。以前版本找到的任务都保留；以前导入的邮件和文件、旧的 Gmail 授权
+   和 API Key 可以在「设置 → 数据与隐私」中删除（不会自动删除）。
+7. 连接 Google 日历（可选）需要你本人在 Google Cloud Console 创建“桌面应用”OAuth 客户端并登录授权，步骤见上文
+   [Connecting Google Calendar](#connecting-google-calendar-optional)。TaskRadar 只申请访问它自己创建的日历。
+8. 打包成桌面应用：`powershell -ExecutionPolicy Bypass -File scripts\build-exe.ps1`，得到安装程序和便携版。安装程序只为当前用户
+   安装到 `%LOCALAPPDATA%\Programs\TaskRadar`（不需要管理员权限），并添加开始菜单项；可在“设置 → 应用”中卸载（数据保留）。
    程序没有数字签名，第一次运行时 Windows 可能提示“已保护你的电脑”，点“更多信息”→“仍要运行”。
-8. 自己的待办：任意页面右上角「添加待办」，写一句话即可，例如“周五前交房租”“明天下午3点开组会”，
-   日期和时间会自动识别并填好，可以直接修改；类别、优先级和说明在「更多选项」里。自己添加的待办直接生效，
-   同样有提醒，也可以写入或移出日历。
 
 ## Author
 

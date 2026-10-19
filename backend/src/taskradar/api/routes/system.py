@@ -1,4 +1,4 @@
-"""Session, health, system status, settings, secrets, notifications, metrics, data management."""
+"""Session, health, system status, settings, notifications, data management."""
 
 from __future__ import annotations
 
@@ -7,18 +7,17 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 from taskradar import __version__
 from taskradar.api.deps import get_container
 from taskradar.api.errors import ApiError
 from taskradar.container import Container
-from taskradar.llm.base import LLMError
-from taskradar.notify.desktop import desktop_notifications_supported
+from taskradar.notify import windows as windows_notifications
 from taskradar.packaged import is_packaged
-from taskradar.security import secrets as sk
 from taskradar.security.permissions import SideEffect
-from taskradar.services.system import AutostartManager
+from taskradar.security.secrets import LEGACY_SECRETS
+from taskradar.services.system import AutostartManager, StartMenuEntry
 
 router = APIRouter(prefix="/api", tags=["system"])
 
@@ -46,49 +45,37 @@ def _autostart(request: Request) -> AutostartManager:
     return request.app.state.autostart
 
 
+def _start_menu(request: Request) -> StartMenuEntry:
+    return request.app.state.start_menu
+
+
+def _banners_missing(request: Request, c: Container) -> bool:
+    """Windows would put TaskRadar's notifications only into the notification centre, while the user wants them."""
+    entry = _start_menu(request)
+    if not (entry.supported and windows_notifications.supported()):
+        return False
+    settings = c.settings.get()
+    wanted = settings.notifications.desktop_enabled or settings.timers.notify
+    return wanted and not entry.status()["banners"]
+
+
 @router.get("/system/status")
 def system_status(request: Request, c: Container = Depends(get_container)) -> dict[str, Any]:
-    settings = c.settings.get()
-    ocr = c.ocr
     scheduler = getattr(request.app.state, "scheduler", None)
     autostart = _autostart(request)
-    key_source = None
-    try:
-        if c.secrets.get(sk.OPENAI_API_KEY):
-            key_source = "credential_store"
-    except Exception:
-        key_source = None
-    if key_source is None and c.guard.llm_api_key():
-        key_source = "environment"
     return {
         "version": __version__,
         "packaged": is_packaged(),
         "data_dir": str(c.config.data_dir),
-        "ocr": {
-            "engine": ocr.name,
-            "available": ocr.available(),
-            "languages": ocr.languages(),
-            "version": getattr(ocr, "version", lambda: None)(),
-            "backlog": len(c.documents.ocr_backlog()),
-            "reprocessing": c.documents.ocr_backlog_running(),
-        },
         "secret_store": {"backend": c.secrets.backend_name, "available": c.secrets.available()},
         "scheduler": scheduler.status() if scheduler else {"running": False, "jobs": []},
-        "agent_mode": c.agent.mode(),
-        "llm": {
-            "provider": settings.llm.provider,
-            "model": settings.llm.model,
-            "api_key_configured": key_source is not None,
-            "api_key_source": key_source,
-            "cloud_consent": settings.llm.cloud_consent,
-        },
         "google": {
             "client_configured": c.oauth.client_status()["configured"],
-            "gmail_connected": c.oauth.connected("gmail"),
             "calendar_connected": c.oauth.connected("calendar"),
         },
         "autostart": {"supported": autostart.supported, "enabled": autostart.enabled()},
-        "desktop_notifications_supported": desktop_notifications_supported(),
+        "start_menu": _start_menu(request).status(),
+        "desktop_notifications_supported": windows_notifications.supported(),
         "now": c.clock().isoformat(),
     }
 
@@ -98,7 +85,7 @@ def system_summary(request: Request, c: Container = Depends(get_container)) -> d
     """Runtime problems in plain terms (what, how many, since when, where to fix it) instead of logs."""
     scheduler = getattr(request.app.state, "scheduler", None)
     running = bool(scheduler and scheduler.status().get("running"))
-    return c.status.summary(scheduler_running=running)
+    return c.status.summary(scheduler_running=running, banners_missing=_banners_missing(request, c))
 
 
 # ---------------------------------------------------------------------------------------------
@@ -113,68 +100,11 @@ def get_settings(c: Container = Depends(get_container)) -> dict[str, Any]:
 
 @router.put("/settings")
 def put_settings(body: dict[str, dict[str, Any]], c: Container = Depends(get_container)) -> dict[str, Any]:
-    llm = body.get("llm")
-    if isinstance(llm, dict) and "consent_at" in llm:
-        llm.pop("consent_at")
-    if isinstance(llm, dict) and llm.get("cloud_consent") is True and not c.settings.get().llm.cloud_consent:
-        llm["consent_at"] = c.clock().isoformat()
-    if isinstance(llm, dict) and llm.get("cloud_consent") is False:
-        llm["consent_at"] = None
     return c.settings.update(body).model_dump(mode="json")
 
 
-class ApiKeyBody(BaseModel):
-    api_key: str = Field(min_length=8, max_length=400)
-
-
-@router.put("/settings/llm-key")
-def set_llm_key(body: ApiKeyBody, c: Container = Depends(get_container)) -> dict[str, Any]:
-    key = body.api_key.strip()
-    if any(ch.isspace() for ch in key):
-        raise ApiError("invalid_api_key", "The API key must not contain spaces", 422)
-    c.secrets.set(sk.OPENAI_API_KEY, key)
-    return {"configured": True}
-
-
-@router.delete("/settings/llm-key")
-def delete_llm_key(c: Container = Depends(get_container)) -> dict[str, Any]:
-    c.secrets.delete(sk.OPENAI_API_KEY)
-    return {"configured": False}
-
-
-@router.post("/settings/llm/test")
-def test_llm(c: Container = Depends(get_container)) -> dict[str, Any]:
-    provider = c.agent.llm_provider()
-    if provider is None:
-        raise ApiError("llm_not_configured", "No model provider or API key is configured", 409)
-    c.guard.check(SideEffect.LLM_SEND, target="connection_test", kind="test")
-    schema = {
-        "type": "object",
-        "additionalProperties": False,
-        "properties": {"ok": {"type": "boolean"}},
-        "required": ["ok"],
-    }
-    try:
-        response = provider.complete_json(
-            system='Reply with JSON {"ok": true}.',
-            user="ping",
-            schema_name="connection_test",
-            schema=schema,
-            max_output_tokens=200,
-        )
-    except LLMError as exc:
-        raise ApiError(exc.code, str(exc), 502) from exc
-    return {
-        "ok": True,
-        "model": response.model,
-        "latency_ms": response.latency_ms,
-        "input_tokens": response.input_tokens,
-        "output_tokens": response.output_tokens,
-    }
-
-
 # ---------------------------------------------------------------------------------------------
-# Notifications & metrics
+# Notifications
 # ---------------------------------------------------------------------------------------------
 
 
@@ -212,11 +142,6 @@ def test_desktop(c: Container = Depends(get_container)) -> dict[str, Any]:
     return {"delivered": ok}
 
 
-@router.get("/metrics")
-def metrics(c: Container = Depends(get_container)) -> dict[str, Any]:
-    return {**c.metrics.summary(), "agent_mode": c.agent.mode()}
-
-
 # ---------------------------------------------------------------------------------------------
 # Data management
 # ---------------------------------------------------------------------------------------------
@@ -234,6 +159,49 @@ def export_data(include_content: bool = True, c: Container = Depends(get_contain
 
 class DeleteAllBody(BaseModel):
     confirm: str
+
+
+@router.get("/data/legacy")
+def legacy_data(c: Container = Depends(get_container)) -> dict[str, Any]:
+    """What earlier versions left behind: imported mails and files, a Gmail sign-in, a model API key."""
+    return {**c.data.imported_counts(), "credentials": _legacy_credentials(c)}
+
+
+def _legacy_credentials(c: Container) -> list[str]:
+    stored = []
+    for name, key in LEGACY_SECRETS.items():
+        try:
+            if c.secrets.get(key):
+                stored.append(name)
+        except Exception:  # noqa: S112 - an unavailable credential store has nothing to offer here
+            continue
+    return stored
+
+
+class ConfirmBody(BaseModel):
+    confirm: bool = False
+
+
+@router.post("/data/delete-imported")
+def delete_imported(body: ConfirmBody, c: Container = Depends(get_container)) -> dict[str, Any]:
+    if not body.confirm:
+        raise ApiError("confirmation_required", "Please confirm deleting the imported mails and files", 400)
+    c.guard.check(SideEffect.DATA_DELETE_ALL, target="imported", confirm_phrase="DELETE")
+    return {"deleted": c.data.delete_imported()}
+
+
+@router.delete("/data/legacy-credentials/{name}")
+def delete_legacy_credential(name: str, c: Container = Depends(get_container)) -> dict[str, Any]:
+    """Remove a sign-in or key only removed features used (Gmail reading, analysis by a language model)."""
+    key = LEGACY_SECRETS.get(name)
+    if key is None:
+        raise ApiError("unknown_credential", "Unknown credential", 404)
+    c.guard.check(SideEffect.CREDENTIAL_DELETE, target=name)
+    if name == "gmail":
+        c.oauth.forget(key)  # also revoked at Google, so the sign-in cannot be used anywhere any more
+    else:
+        c.secrets.delete(key)
+    return {"credentials": _legacy_credentials(c)}
 
 
 @router.post("/data/delete-all")
@@ -273,3 +241,22 @@ def set_autostart(body: AutostartBody, request: Request, c: Container = Depends(
     except RuntimeError as exc:
         raise ApiError("autostart_failed", str(exc), 409) from exc
     return {"supported": True, "enabled": manager.enabled(), "path": str(manager.path)}
+
+
+class StartMenuBody(BaseModel):
+    enabled: bool
+    confirm: bool = False
+
+
+@router.post("/system/start-menu")
+def set_start_menu(body: StartMenuBody, request: Request, c: Container = Depends(get_container)) -> dict[str, Any]:
+    """Add TaskRadar to the Start menu (so Windows shows its notifications as banners), or remove that entry."""
+    entry = _start_menu(request)
+    if not entry.supported:
+        raise ApiError("start_menu_unsupported", "The Start menu entry is only available on Windows", 409)
+    c.guard.check(SideEffect.START_MENU_MODIFY, target=str(entry.path), confirmed=body.confirm)
+    try:
+        entry.add() if body.enabled else entry.remove()
+    except (RuntimeError, OSError) as exc:
+        raise ApiError("start_menu_failed", str(exc), 409) from exc
+    return entry.status()

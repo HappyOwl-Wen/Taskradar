@@ -18,6 +18,7 @@ from taskradar.services.calendar_sync import CalendarSyncError
 from taskradar.services.jobs import JobAlreadyRunning
 from taskradar.services.settings import SettingsError
 from taskradar.services.tasks import TaskError
+from taskradar.services.timers import TimerError
 
 log = logging.getLogger(__name__)
 
@@ -64,6 +65,10 @@ def install_error_handlers(app: FastAPI) -> None:
     @app.exception_handler(TaskError)
     async def _task_error(_: Request, exc: TaskError) -> JSONResponse:
         return error_response(exc.code, str(exc), exc.status_code)
+
+    @app.exception_handler(TimerError)
+    async def _timer_error(_: Request, exc: TimerError) -> JSONResponse:
+        return error_response(exc.code, exc.message, exc.status_code)
 
     @app.exception_handler(PermissionDenied)
     async def _denied(_: Request, exc: PermissionDenied) -> JSONResponse:

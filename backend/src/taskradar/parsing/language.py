@@ -86,7 +86,3 @@ def detect_language(text: str) -> str | None:
     if de == 0 and en == 0:
         return "zh" if cjk else None
     return "de" if de > en else "en"
-
-
-def contains_cjk(text: str) -> bool:
-    return bool(_CJK.search(text))

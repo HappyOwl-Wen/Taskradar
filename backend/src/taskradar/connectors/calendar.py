@@ -11,8 +11,8 @@ from taskradar.connectors.errors import (
     PermanentError,
     RateLimitedError,
     TransientError,
+    map_http_error,
 )
-from taskradar.connectors.gmail import map_http_error
 
 
 class CalendarClient(Protocol):
