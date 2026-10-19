@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "taskradar"
-version = "0.1.0"
+version = "0.2.0"
 description = "TaskRadar - a local to-do app for Windows: one-line date recognition, Google Calendar, reminders, Pomodoro and countdown timers."
 readme = "README.md"
 license = { text = "MIT" }
