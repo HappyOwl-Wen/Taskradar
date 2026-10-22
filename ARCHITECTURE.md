@@ -80,7 +80,9 @@ At the end, `finish_due()` marks the timer finished, stores a notification (the 
 notification if timer notifications are on. The Pomodoro set follows the usual rules: after focus session *n* a short
 break, after the `long_break_every`-th a long one; after a short break focus session *n + 1*; after a long break, a
 stop, or more than an hour without a phase a new set begins. "Skip" ends a phase without counting it and starts the
-next; starting another phase while one runs skips the running one. A countdown to a moment ends exactly at that
+next; starting another phase while one runs skips the running one. A focus session that belongs to a to-do moves it
+to "进行中" when the session starts, resumes or starts by itself (a recorded status change that can be undone; a task
+in any other status keeps it). A countdown to a moment ends exactly at that
 moment in the user's time zone and cannot be paused. On start-up `resume_schedule()` ends what ran out while
 TaskRadar was not running (the notification says when it ended) and schedules the rest.
 

@@ -104,5 +104,5 @@ def build_container(
         notifications=notifications,
         data=DataService(factory, config=config, clock=clock),
         status=StatusSummaryService(factory, calendar_connected=lambda: oauth.connected("calendar"), clock=clock),
-        timers=TimerService(factory, settings=settings, guard=guard, toast=toast, clock=clock),
+        timers=TimerService(factory, settings=settings, guard=guard, tasks=tasks, toast=toast, clock=clock),
     )

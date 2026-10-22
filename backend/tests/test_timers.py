@@ -13,8 +13,9 @@ from sqlalchemy import select
 
 from taskradar.config import AppConfig
 from taskradar.container import Container, build_container
-from taskradar.db.models import Notification, Timer
+from taskradar.db.models import Notification, TaskEvent, Timer
 from taskradar.db.session import transaction
+from taskradar.domain.enums import Actor, TaskStatus
 from taskradar.security.secrets import MemorySecretStore
 from taskradar.services.timers import TimerError
 
@@ -32,6 +33,27 @@ def _notes(c: Container) -> list[Notification]:
         notes = list(session.scalars(select(Notification).order_by(Notification.id)))
         session.expunge_all()
         return notes
+
+
+def _status(c: Container, task_id: str) -> str:
+    with transaction(c.factory) as session:
+        return c.tasks.get(session, task_id).status
+
+
+def _set_status(c: Container, task_id: str, status: TaskStatus) -> None:
+    with transaction(c.factory) as session:
+        c.tasks.change_status(session, c.tasks.get(session, task_id), status, actor=Actor.USER)
+
+
+def _status_changes(c: Container, task_id: str) -> list[tuple[str, str, str]]:
+    """(summary, actor, reason) of each status change of the task."""
+    with transaction(c.factory) as session:
+        events = session.scalars(
+            select(TaskEvent)
+            .where(TaskEvent.task_id == task_id, TaskEvent.event_type == "status_changed")
+            .order_by(TaskEvent.id)
+        )
+        return [(e.summary, e.actor, e.reason or "") for e in events]
 
 
 # ------------------------------------------------------------------------------------------------
@@ -175,6 +197,59 @@ def test_a_pomodoro_can_belong_to_a_task_that_may_be_deleted_later(api: Any) -> 
     assert api.delete(f"/api/tasks/{task_id}").status_code == 200
     current = api.get("/api/timers").json()["pomodoro"]["current"]
     assert (current["task_id"], current["task_title"], current["status"]) == (None, None, "running")
+
+
+def test_a_focus_session_on_a_todo_moves_it_to_in_progress(api: Any) -> None:
+    task_id = add_task(api.container, "Num Prog 写代码")
+    # A break that belongs to the task leaves it a to-do.
+    api.post("/api/timers/pomodoro", json={"phase": "short_break", "task_id": task_id})
+    assert api.get(f"/api/tasks/{task_id}").json()["status"] == "confirmed"
+
+    api.post("/api/timers/pomodoro", json={"phase": "focus", "task_id": task_id})
+    detail = api.get(f"/api/tasks/{task_id}").json()
+    assert detail["status"] == "in_progress"
+    [change] = [e for e in detail["events"] if e["type"] == "status_changed"]
+    assert (change["summary"], change["actor"], change["revertible"]) == ("开始专注：待办 → 进行中", "user", True)
+    # Undone, it is a to-do again; the focus session runs on.
+    assert api.post(f"/api/events/{change['id']}/undo").json()["status"] == "confirmed"
+    assert api.get("/api/timers").json()["pomodoro"]["current"]["status"] == "running"
+
+
+def test_resuming_a_focus_session_moves_its_todo_on_again(container: Container, clock: Clock) -> None:
+    task_id = add_task(container)
+    timer_id = container.timers.start_pomodoro(task_id=task_id)["pomodoro"]["current"]["id"]
+    container.timers.pause(timer_id)
+    _set_status(container, task_id, TaskStatus.CONFIRMED)  # put back while the session was paused
+    container.timers.resume(timer_id)
+    assert _status(container, task_id) == "in_progress"
+    assert [actor for _, actor, _ in _status_changes(container, task_id)] == ["user", "user", "user"]
+
+
+def test_a_focus_session_that_starts_by_itself_moves_its_todo_on(container: Container, clock: Clock) -> None:
+    container.settings.update({"timers": {"auto_start_breaks": True, "auto_start_focus": True}})
+    task_id = add_task(container)
+    container.timers.start_pomodoro(task_id=task_id)
+    clock.advance(minutes=25)
+    assert _current(container)["phase"] == "short_break"
+    _set_status(container, task_id, TaskStatus.CONFIRMED)  # put back during the break
+    clock.advance(minutes=5)
+    current = _current(container)
+    assert (current["phase"], current["task_id"]) == ("focus", task_id)
+    assert _status(container, task_id) == "in_progress"
+    assert _status_changes(container, task_id)[-1] == ("开始专注：待办 → 进行中", "system", "pomodoro")
+
+
+@pytest.mark.parametrize(
+    "status", [TaskStatus.IN_PROGRESS, TaskStatus.WAITING_FOR_REPLY, TaskStatus.COMPLETED, TaskStatus.DISMISSED]
+)
+def test_a_focus_session_leaves_any_other_status_alone(container: Container, status: TaskStatus) -> None:
+    task_id = add_task(container)
+    _set_status(container, task_id, status)
+    timer_id = container.timers.start_pomodoro(task_id=task_id)["pomodoro"]["current"]["id"]
+    container.timers.pause(timer_id)
+    container.timers.resume(timer_id)
+    assert _status(container, task_id) == status.value
+    assert len(_status_changes(container, task_id)) == 1
 
 
 # ------------------------------------------------------------------------------------------------

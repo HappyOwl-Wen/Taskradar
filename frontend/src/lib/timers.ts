@@ -1,7 +1,7 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { api } from "./api";
-import { qk, useAction } from "./queries";
+import { qk, refreshTasks, useAction } from "./queries";
 import type { TimersOverview, TimerView } from "./types";
 
 export const isRunning = (timer: TimerView | null | undefined): timer is TimerView & { status: "running" } =>
@@ -68,7 +68,8 @@ export function progressOf(timer: TimerView, remaining: number): number {
 
 /**
  * A change to the timers (start, pause, …): the server answers with all timers, which replace the shown ones at once.
- * After an error (the timer may have ended meanwhile) they are read again.
+ * After an error (the timer may have ended meanwhile) they are read again. A focus session on a to-do that starts or
+ * resumes moves the to-do to "进行中", so the tasks are read again then.
  */
 export function useTimerAction<TVars>(fn: (vars: TVars) => Promise<TimersOverview>, options: { onSuccess?: (data: TimersOverview) => void } = {}) {
   const queryClient = useQueryClient();
@@ -85,6 +86,8 @@ export function useTimerAction<TVars>(fn: (vars: TVars) => Promise<TimersOvervie
       invalidate: false,
       onSuccess: (data) => {
         queryClient.setQueryData(qk.timers, data);
+        const current = data.pomodoro.current;
+        if (isRunning(current) && current.phase === "focus" && current.task_id) void refreshTasks(queryClient);
         options.onSuccess?.(data);
       },
     },

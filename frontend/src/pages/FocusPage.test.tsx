@@ -101,6 +101,20 @@ describe("FocusPage", () => {
     expect(start).toHaveBeenLastCalledWith({ phase: "focus", task_id: "a" });
   });
 
+  it("reads the tasks again once a focus session on a task runs (the server moved it to 进行中)", async () => {
+    vi.spyOn(api, "startPomodoro").mockImplementation(async () => {
+      timers = makeTimers({ pomodoro: { current: makeTimer({ task_id: "a", task_title: "Bericht schreiben" }), next: null } });
+      return timers;
+    });
+    renderFocus();
+    await userEvent.click(await screen.findByRole("combobox", { name: "专注于（可选）" }));
+    await userEvent.click(await screen.findByRole("option", { name: "Bericht schreiben" }));
+    expect(api.tasks).toHaveBeenCalledTimes(1);
+    await userEvent.click(screen.getByRole("button", { name: "开始专注" }));
+    expect(await screen.findByRole("link", { name: "Bericht schreiben" })).toHaveAttribute("href", "/tasks/a");
+    await waitFor(() => expect(api.tasks).toHaveBeenCalledTimes(2));
+  });
+
   it("shows a paused session with its time left and a way on", async () => {
     timers = makeTimers({ pomodoro: { current: makeTimer({ status: "paused", remaining_seconds: 754, ends_at: null }), next: null } });
     const act = vi.spyOn(api, "timerAction").mockResolvedValue(makeTimers());

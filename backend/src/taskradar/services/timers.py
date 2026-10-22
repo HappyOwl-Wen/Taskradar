@@ -5,8 +5,9 @@ that were running), so a timer ends - and sends its Windows notification - on ti
 the tray. Reading the timers finishes due ones as well, so the state is right even without a scheduler.
 
 The Pomodoro timer is one phase at a time (focus, short break, long break); each phase is a row of its own, so the
-finished ones are the day's history. After ``long_break_every`` focus sessions the break is a long one. Countdowns
-run for a duration (they can be paused) or until a moment.
+finished ones are the day's history. After ``long_break_every`` focus sessions the break is a long one. A focus
+session can belong to a task: a to-do then moves to "in progress" when the session starts or resumes. Countdowns run
+for a duration (they can be paused) or until a moment.
 """
 
 from __future__ import annotations
@@ -25,8 +26,10 @@ from sqlalchemy.orm import Session, sessionmaker
 from taskradar.db.base import utcnow
 from taskradar.db.models import Notification, Task, Timer
 from taskradar.db.session import transaction
+from taskradar.domain.enums import Actor, TaskStatus
 from taskradar.security.permissions import PermissionGuard, SideEffect
 from taskradar.services.settings import SettingsService, TimerSettings
+from taskradar.services.tasks import TaskService
 
 log = logging.getLogger(__name__)
 
@@ -101,12 +104,14 @@ class TimerService:
         *,
         settings: SettingsService,
         guard: PermissionGuard,
+        tasks: TaskService,
         toast: Callable[[str, str], bool],
         clock: Callable[[], dt.datetime] = utcnow,
     ) -> None:
         self._factory = session_factory
         self.settings = settings
         self.guard = guard
+        self.tasks = tasks
         self.toast = toast
         self.clock = clock
         # Set by the scheduler: wake up at a timer's end; and forget a timer that no longer ends then.
@@ -255,6 +260,7 @@ class TimerService:
             chosen = phase or nxt_phase
             seconds = _phase_seconds(cfg, chosen)
             timer = self._new(session, "pomodoro", seconds, now, phase=chosen, cycle=cycle, task_id=task_id)
+            self._work_on(session, timer, Actor.USER)
             timer_id, ends_at = timer.id, timer.ends_at
         if replaced is not None:
             self._unschedule(replaced)
@@ -301,6 +307,15 @@ class TimerService:
         session.flush()
         return timer
 
+    def _work_on(self, session: Session, timer: Timer, actor: Actor) -> None:
+        """A focus session on a to-do: the to-do is being worked on now (as its "开始" button does); undoable."""
+        task = timer.task
+        if timer.phase != "focus" or task is None or task.status != TaskStatus.CONFIRMED.value:
+            return  # a task waiting for a reply, done or dismissed keeps its status
+        self.tasks.change_status(
+            session, task, TaskStatus.IN_PROGRESS, actor=actor, reason="pomodoro", summary="开始专注：待办 → 进行中"
+        )
+
     def pause(self, timer_id: int) -> dict[str, Any]:
         self.finish_due()
         now = self.clock()
@@ -328,6 +343,7 @@ class TimerService:
             timer.remaining_seconds = None
             timer.status = "running"
             ends_at = timer.ends_at
+            self._work_on(session, timer, Actor.USER)
         self._schedule(timer_id, ends_at)
         self._changed()
         return self.overview()
@@ -501,6 +517,7 @@ class TimerService:
                     cycle=auto[1],
                     task_id=timer.task_id,
                 )
+                self._work_on(session, following, Actor.SYSTEM)
                 next_id, next_end = following.id, following.ends_at
         if next_id is not None:
             self._schedule(next_id, next_end)

@@ -30,6 +30,11 @@ export function refreshAll(queryClient: QueryClient): Promise<void> {
   return queryClient.invalidateQueries({ predicate: (query) => query.queryKey[0] !== "session" });
 }
 
+/** Refetch the tasks on screen: the board, the lists and a task's page. */
+export function refreshTasks(queryClient: QueryClient): Promise<void> {
+  return queryClient.invalidateQueries({ predicate: (query) => ["dashboard", "tasks", "task"].includes(String(query.queryKey[0])) });
+}
+
 export const useSettings = () => useQuery({ queryKey: qk.settings, queryFn: api.settings, staleTime: 60_000 });
 export const useSystemStatus = () => useQuery({ queryKey: qk.system, queryFn: api.systemStatus, staleTime: 15_000 });
 /** Runtime problems in plain terms; it changes slowly, so a minute between checks is enough. */
