@@ -6,6 +6,8 @@ const calendarZh = {
   offline: "本地日历可正常使用。连接 Google 后，可在这里查看选定日历。", cached: "Google 内容来自本机缓存",
   updated: "更新于 {{time}}", never: "尚未加载", partial: "部分日历未能刷新；已保留缓存和所有本地修改。",
   refreshFailed: "Google 刷新失败；缓存仍可浏览。请检查网络或授权。", settings: "管理 Google 连接",
+  syncDetails: "同步详情",
+  refreshing: "正在刷新", refreshFailedShort: "刷新失败",
   filtersHint: "这里的选择控制 TaskRadar 显示和操作哪些日历，不会缩小 Google 已授予的账号权限。",
   timezone: "显示时区", unscheduled: "待安排", unscheduledHint: "拖到日期可打开安排表单，也可以点“安排”。截止日期不会改变。",
   schedule: "安排", noUnscheduled: "无日期的待办已全部安排。", empty: "这个时间段暂无安排", count: "{{count}} 项",

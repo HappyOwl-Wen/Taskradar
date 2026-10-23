@@ -64,11 +64,11 @@ class SchedulerService:
         )
         log.info("Background scheduler started")
 
-    def shutdown(self) -> None:
+    def shutdown(self, *, wait: bool = False) -> None:
         if self._started:
             self.c.timers.on_schedule = None
             self.c.timers.on_unschedule = None
-            self.scheduler.shutdown(wait=False)
+            self.scheduler.shutdown(wait=wait)
             self._started = False
 
     def _schedule_timer(self, timer_id: int, at: dt.datetime) -> None:

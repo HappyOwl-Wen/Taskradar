@@ -60,6 +60,7 @@ class BackgroundServer:
         self._container: Container | None = None
         self._done = threading.Event()
         self._stopping = threading.Event()
+        self._lifecycle_lock = threading.RLock()
         self._thread = threading.Thread(target=self._run, name="taskradar-server", daemon=True)
 
     @property
@@ -67,12 +68,39 @@ class BackgroundServer:
         return self.config.base_url
 
     @property
+    def ready(self) -> bool:
+        return bool(
+            self._server is not None
+            and self._server.started
+            and not self._stopping.is_set()
+            and not self._done.is_set()
+        )
+
+    @property
     def container(self) -> Container | None:
         """The services once the server has built them (None while it starts or after a failed start)."""
-        return self._container
+        return None if self._stopping.is_set() or self._done.is_set() else self._container
 
     def start(self) -> None:
-        self._thread.start()
+        with self._lifecycle_lock:
+            self._thread.start()
+
+    def restart(self, cancel: threading.Event | None = None) -> bool:
+        """Rebuild the service on the same address, only after its old worker has fully stopped."""
+        with self._lifecycle_lock:
+            if not self.stop():
+                self.error = "shutdown_timeout"
+                return False
+            if cancel is not None and cancel.is_set():
+                return False
+            self.error = None
+            self._server = None
+            self._container = None
+            self._done.clear()
+            self._stopping.clear()
+            self._thread = threading.Thread(target=self._run, name="taskradar-server", daemon=True)
+            self.start()
+        return self.wait_ready(cancel=cancel)
 
     def _run(self) -> None:
         try:
@@ -113,7 +141,7 @@ class BackgroundServer:
         was set (the window was closed meanwhile)."""
         deadline = time.monotonic() + timeout
         while time.monotonic() < deadline:
-            if self._server is not None and self._server.started:
+            if self.ready:
                 return True
             if self._done.is_set() or (cancel is not None and cancel.is_set()):
                 return False
@@ -121,9 +149,11 @@ class BackgroundServer:
         self.error = self.error or "timeout"
         return False
 
-    def stop(self, timeout: float = 15.0) -> None:
-        self._stopping.set()
-        if self._server is not None:
-            self._server.should_exit = True
-        if self._thread.is_alive():
-            self._thread.join(timeout)
+    def stop(self, timeout: float = 15.0) -> bool:
+        with self._lifecycle_lock:
+            self._stopping.set()
+            if self._server is not None:
+                self._server.should_exit = True
+            if self._thread.is_alive():
+                self._thread.join(timeout)
+            return not self._thread.is_alive()

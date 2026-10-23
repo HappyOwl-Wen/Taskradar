@@ -59,8 +59,9 @@ def create_app(
             yield
         finally:
             if scheduler is not None:
-                scheduler.shutdown()
-            app.state.executor.shutdown(wait=False, cancel_futures=True)
+                scheduler.shutdown(wait=desktop is not None)
+            # A desktop restart must not overlap old background work with its replacement services.
+            app.state.executor.shutdown(wait=desktop is not None, cancel_futures=True)
 
     app = FastAPI(
         title="TaskRadar",

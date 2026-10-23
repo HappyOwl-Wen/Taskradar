@@ -61,6 +61,7 @@ TEXTS = {
     "zh-CN": {
         "unsaved": "有尚未保存的修改。\n\n关闭 TaskRadar 会丢失这些修改。仍要关闭吗？",
         "unsaved_quit": "有尚未保存的修改。\n\n退出 TaskRadar 会丢失这些修改。仍要退出吗？",
+        "unsaved_restart": "有尚未保存的修改。\n\n重启服务会重新加载页面，丢失这些修改。仍要重启吗？",
         "tray_title": "TaskRadar 仍在运行",
         "tray_body": "提醒和计时会继续。TaskRadar 的图标在任务栏右下角（可能收在“^”里）：点它重新打开，右键可以退出。",
         "already_running": "TaskRadar 已经在运行。",
@@ -76,6 +77,9 @@ TEXTS = {
     "en": {
         "unsaved": "There are unsaved changes.\n\nClosing TaskRadar discards them. Close anyway?",
         "unsaved_quit": "There are unsaved changes.\n\nQuitting TaskRadar discards them. Quit anyway?",
+        "unsaved_restart": (
+            "There are unsaved changes.\n\nRestarting the service reloads the page and discards them. Restart anyway?"
+        ),
         "tray_title": "TaskRadar is still running",
         "tray_body": "Reminders and timers go on. TaskRadar's icon sits at the right of the taskbar (perhaps under ^): "
         "click it to open the window again, right-click it to quit.",
@@ -261,6 +265,8 @@ class Shell:
         self._native_ready = False
         self._app_shown = False  # the web UI has been loaded (from then on the start screen stays behind)
         self._quitting = False  # "Quit" was chosen (and confirmed): the next close really ends TaskRadar
+        self._restarting = False
+        self._restart_lock = threading.Lock()
         self._timers_changed = threading.Event()  # wakes the tray tooltip up when a timer starts, stops or ends
         self._alarm_lock = threading.Lock()
         self._alarm_sound = AlarmSound()
@@ -286,13 +292,17 @@ class Shell:
 
     def after_start(self) -> None:
         """Runs once the window exists: show the web UI as soon as the server answers."""
+        threading.Thread(target=self._follow_timers, name="taskradar-tray-status", daemon=True).start()
         if self.server.wait_ready(cancel=self.closed):
             self.window.load_url(self.server.url)
-            threading.Thread(target=self._follow_timers, name="taskradar-tray-status", daemon=True).start()
+            if self.tray is not None:
+                self.tray.set_service_state("running")
         elif not self.closed.is_set():
             log_path = str(self.server.config.logs_dir / "taskradar.log")
             code = self.server.error or "unknown"
             self.window.load_html(error_page(self.theme, self.language, code=code, log_path=log_path))
+            if self.tray is not None:
+                self.tray.set_service_state("failed")
 
     def _on_shown(self) -> None:
         native = self.window.native
@@ -305,13 +315,22 @@ class Shell:
     def _install_tray(self, form: Any) -> None:
         if self.tray is not None:
             return
-        tray = Tray(form, ICON, language=self.language, on_open=self.show_window, on_quit=self.quit)
+        tray = Tray(
+            form,
+            ICON,
+            language=self.language,
+            theme=self.theme,
+            on_open=self.show_window,
+            on_restart=self.restart_service,
+            on_quit=self.quit,
+        )
         try:
             tray.install()
         except Exception:  # without a tray icon the close button simply quits
             log.exception("Could not add the TaskRadar icon to the notification area")
             return
         self.tray = tray
+        tray.set_service_state("running" if self.server.ready else "failed" if self.server.error else "starting")
 
     def remove_tray(self) -> None:
         self._timers_changed.set()  # lets the tooltip thread see that TaskRadar ends
@@ -324,17 +343,19 @@ class Shell:
 
     def _follow_timers(self) -> None:
         """Keep the tray icon's tooltip on the running timers ("TaskRadar · 专注中 · 剩 18 分钟")."""
-        container = self.server.container
-        if container is None:
-            return
-        container.timers.subscribe(self._timers_changed.set)
-        container.timers.subscribe(self._sync_alarm)
-        container.settings.subscribe(lambda _settings, _sections: self._sync_alarm())
-        self._sync_alarm()
+        container = None
         shown: str | None = None
         while not self.closed.is_set():
+            current = self.server.container
+            if current is not container:
+                container = current
+                if container is not None:
+                    container.timers.subscribe(self._timers_changed.set)
+                    container.timers.subscribe(self._sync_alarm)
+                    container.settings.subscribe(lambda _settings, _sections: self._sync_alarm())
+                    self._sync_alarm()
             try:
-                status = container.timers.tray_status()
+                status = container.timers.tray_status() if container is not None and not self._restarting else None
             except Exception:  # the database may be closing while TaskRadar ends
                 log.debug("Could not read the timers for the tray", exc_info=True)
                 status = None
@@ -343,7 +364,7 @@ class Shell:
                 tray.set_status(status)
                 shown = status
             # The minutes left change while a timer runs; otherwise only a change wakes the thread up.
-            self._timers_changed.wait(10 if status else 300)
+            self._timers_changed.wait(0.25 if self._restarting else 1 if container is None else 10 if status else 300)
             self._timers_changed.clear()
 
     def _sync_alarm(self) -> None:
@@ -352,7 +373,7 @@ class Shell:
         if container is None:
             return
         with self._alarm_lock:
-            if self.closed.is_set() or self._quitting or self._alarm_stopped:
+            if self.closed.is_set() or self._quitting or self._restarting or self._alarm_stopped:
                 self._alarm_sound.stop()
                 return
             state = container.timers.alarm_state()
@@ -483,6 +504,73 @@ class Shell:
         log.info("Quit from the notification area")
         self.window.destroy()
 
+    def restart_service(self) -> None:
+        """Restart only the local service, keeping this window and its tray icon alive."""
+        if self.closed.is_set() or self._quitting or not self._restart_lock.acquire(blocking=False):
+            return
+        try:
+            if self.bridge.unsaved:
+                self.show_window()
+                flags = win32.MB_YESNO | win32.MB_ICONWARNING | win32.MB_DEFBUTTON2
+                if (
+                    win32.message_box(_texts(self.language)["unsaved_restart"], TITLE, flags, owner=self.hwnd)
+                    != win32.IDYES
+                ):
+                    self._restart_lock.release()
+                    return
+            self._restarting = True
+            if self.tray is not None:
+                self.tray.set_service_state("restarting")
+            threading.Thread(target=self._restart_service, name="taskradar-restart", daemon=True).start()
+        except Exception:
+            self._restarting = False
+            self._restart_lock.release()
+            log.exception("Could not start the service restart")
+
+    def _restart_service(self) -> None:
+        ready = False
+        try:
+            if self.closed.is_set() or self._quitting:
+                return
+            current_url = self.window.get_current_url() or self.server.url
+            target = (
+                current_url
+                if current_url == self.server.url or current_url.startswith(self.server.url + "/")
+                else self.server.url
+            )
+            with self._alarm_lock:
+                self._alarm_sound.stop()
+            self._timers_changed.set()
+            self.bridge.update(unsaved=False)
+            self._app_shown = False  # allow the inline start/error page while the service is unavailable
+            self.window.load_html(start_page(self.theme, self.language))
+            log.info("Restarting the local TaskRadar service")
+            ready = self.server.restart(cancel=self.closed)
+            if self.closed.is_set() or self._quitting:
+                return
+            if ready:
+                self.window.load_url(target)
+                log.info("TaskRadar service restarted")
+            else:
+                self._show_restart_error()
+        except Exception:
+            log.exception("The TaskRadar service could not restart")
+            if not self.closed.is_set() and not self._quitting:
+                self._show_restart_error()
+        finally:
+            self._restarting = False
+            self._timers_changed.set()
+            if self.tray is not None and not self.closed.is_set() and not self._quitting:
+                self.tray.set_service_state("running" if ready else "failed")
+            self._restart_lock.release()
+
+    def _show_restart_error(self) -> None:
+        log_path = str(self.server.config.logs_dir / "taskradar.log")
+        self.window.load_html(
+            error_page(self.theme, self.language, code=self.server.error or "restart_failed", log_path=log_path)
+        )
+        self.show_window()
+
     # -- requests from the page and the server ---------------------------------------------------------------
 
     def _on_appearance(self, theme: str | None, language: str | None) -> None:
@@ -490,7 +578,7 @@ class Shell:
         self.language = language or self.language
         self._apply_title_bar()
         if self.tray is not None:
-            self.tray.set_language(self.language)
+            self.tray.set_appearance(self.theme, self.language)
         self._schedule_save()
 
     def _apply_title_bar(self) -> None:

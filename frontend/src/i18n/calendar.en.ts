@@ -7,6 +7,8 @@ const calendarEn: Record<keyof typeof zh, string> = {
   offline: "Your local calendar is ready. Connect Google to see your selected calendars here.", cached: "Google content is cached on this computer",
   updated: "Updated {{time}}", never: "Not loaded yet", partial: "Some calendars could not refresh. Cached data and all local changes are preserved.",
   refreshFailed: "Google refresh failed. Cached events remain available. Check your connection or authorization.", settings: "Manage Google connection",
+  syncDetails: "Sync details",
+  refreshing: "Refreshing", refreshFailedShort: "Refresh failed",
   filtersHint: "These choices control which calendars TaskRadar displays and operates on. They do not narrow Google's account permissions.",
   timezone: "Display time zone", unscheduled: "Unscheduled", unscheduledHint: "Drag onto a date to open the planning form, or choose Plan. Deadlines stay unchanged.",
   schedule: "Plan", noUnscheduled: "All undated tasks have a work plan.", empty: "Nothing scheduled in this period", count: "{{count}} items",

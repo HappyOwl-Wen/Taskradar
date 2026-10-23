@@ -1,7 +1,7 @@
-"""TaskRadar's icon in the notification area (tray): the window closes into it, and it opens or quits TaskRadar.
+"""TaskRadar's notification icon and its themed open/restart/quit menu.
 
 A WinForms ``NotifyIcon`` (pywebview has already loaded WinForms through pythonnet), created and used on the window's
-UI thread like the window itself. A left click opens the window; the right-click menu opens it or quits TaskRadar.
+UI thread like the window itself. A left click opens the window; right-click offers open, restart service and quit.
 """
 
 from __future__ import annotations
@@ -11,12 +11,9 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
-log = logging.getLogger(__name__)
+from taskradar.desktop.tray_menu import TEXTS, TrayMenu
 
-TEXTS = {
-    "zh-CN": {"open": "打开 TaskRadar", "quit": "退出 TaskRadar"},
-    "en": {"open": "Open TaskRadar", "quit": "Quit TaskRadar"},
-}
+log = logging.getLogger(__name__)
 TOOLTIP_LIMIT = 63  # what NotifyIcon.Text accepts
 
 
@@ -33,17 +30,23 @@ class Tray:
         icon: Path,
         *,
         language: str,
+        theme: str,
         on_open: Callable[[], None],
+        on_restart: Callable[[], None],
         on_quit: Callable[[], None],
     ) -> None:
         self._form = form
         self._icon_path = icon
         self._language = language
+        self._theme = theme
         self._on_open = on_open
+        self._on_restart = on_restart
         self._on_quit = on_quit
         self._icon: Any = None
-        self._open_item: Any = None
-        self._quit_item: Any = None
+        self._menu: TrayMenu | None = None
+        self._image: Any = None
+        self._status: str | None = None
+        self._service_state = "starting"
 
     @property
     def installed(self) -> bool:
@@ -51,31 +54,32 @@ class Tray:
 
     def install(self) -> None:
         self._invoke(self._create)
+        if not self.installed:
+            self.remove()
+            raise RuntimeError("The notification icon could not be created")
 
     def _create(self) -> None:
-        from System.Drawing import Font, FontStyle, Icon
-        from System.Windows.Forms import (
-            ContextMenuStrip,
-            MouseButtons,
-            NotifyIcon,
-            ToolStripMenuItem,
-            ToolStripSeparator,
-        )
+        from System.Drawing import Icon
+        from System.Windows.Forms import MouseButtons, NotifyIcon
 
-        texts = TEXTS["en" if self._language == "en" else "zh-CN"]
         icon = NotifyIcon()
-        icon.Icon = Icon(str(self._icon_path))
+        self._image = icon.Icon = Icon(str(self._icon_path))
         icon.Text = tooltip(None)
-        menu = ContextMenuStrip()
-        self._open_item = ToolStripMenuItem(texts["open"])
-        self._open_item.Font = Font(self._open_item.Font, FontStyle.Bold)  # what a click on the icon does
-        self._open_item.Click += lambda _sender, _args: self._on_open()
-        self._quit_item = ToolStripMenuItem(texts["quit"])
-        self._quit_item.Click += lambda _sender, _args: self._on_quit()
-        menu.Items.Add(self._open_item)
-        menu.Items.Add(ToolStripSeparator())
-        menu.Items.Add(self._quit_item)
-        icon.ContextMenuStrip = menu
+        try:
+            self._menu = TrayMenu(
+                self._form,
+                self._icon_path,
+                language=self._language,
+                theme=self._theme,
+                on_open=self._on_open,
+                on_restart=self._on_restart,
+                on_quit=self._on_quit,
+            )
+        except Exception:
+            icon.Dispose()
+            raise
+        self._menu.set_state(self._service_state)
+        icon.ContextMenuStrip = self._menu.control
 
         def on_click(_sender: Any, args: Any) -> None:
             if args.Button == MouseButtons.Left:
@@ -85,23 +89,39 @@ class Tray:
         icon.Visible = True
         self._icon = icon
 
-    def set_language(self, language: str) -> None:
-        self._language = language
-        texts = TEXTS["en" if language == "en" else "zh-CN"]
+    def set_appearance(self, theme: str, language: str) -> None:
+        self._theme, self._language = theme, language
 
         def apply() -> None:
-            if self._open_item is not None:
-                self._open_item.Text = texts["open"]
-                self._quit_item.Text = texts["quit"]
+            if self._menu is not None:
+                self._menu.update(language, theme)
+            self._update_tooltip()
 
         self._invoke(apply)
 
     def set_status(self, status: str | None) -> None:
         def apply() -> None:
-            if self._icon is not None:
-                self._icon.Text = tooltip(status)
+            self._status = status
+            if self._menu is not None:
+                self._menu.set_status(status)
+            self._update_tooltip()
 
         self._invoke(apply)
+
+    def set_service_state(self, state: str) -> None:
+        def apply() -> None:
+            self._service_state = state
+            if self._menu is not None:
+                self._menu.set_state(state)
+            self._update_tooltip()
+
+        self._invoke(apply)
+
+    def _update_tooltip(self) -> None:
+        if self._icon is not None:
+            texts = TEXTS["en" if self._language == "en" else "zh-CN"]
+            status = self._status if self._service_state == "running" else texts[self._service_state]
+            self._icon.Text = tooltip(status)
 
     def remove(self) -> None:
         """Take the icon away at once (before the process ends), so no dead icon stays in the tray."""
@@ -111,6 +131,12 @@ class Tray:
                 self._icon.Visible = False
                 self._icon.Dispose()
                 self._icon = None
+            if self._menu is not None:
+                self._menu.dispose()
+                self._menu = None
+            if self._image is not None:
+                self._image.Dispose()
+                self._image = None
 
         self._invoke(dispose)
 

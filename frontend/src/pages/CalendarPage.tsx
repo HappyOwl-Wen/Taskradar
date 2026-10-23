@@ -6,11 +6,11 @@ import interactionPlugin, { Draggable } from "@fullcalendar/interaction";
 import luxonPlugin from "@fullcalendar/luxon3";
 import zhLocale from "@fullcalendar/core/locales/zh-cn";
 import type { EventApi, EventContentArg } from "@fullcalendar/core";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { CheckCheck, ChevronLeft, ChevronRight, Clock3, Cloud, ExternalLink, Flag, Link2, LockKeyhole, Plus, RefreshCw } from "lucide-react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { CheckCheck, ChevronDown, ChevronLeft, ChevronRight, CircleAlert, Clock3, Cloud, ExternalLink, Flag, Link2, LockKeyhole, Plus, RefreshCw } from "lucide-react";
 import { DateTime } from "luxon";
 import { useEffect, useRef, useState } from "react";
-import { Link, useNavigate, useSearchParams } from "react-router";
+import { Link, useLocation, useNavigate, useSearchParams } from "react-router";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { ItemBuffers } from "@/components/calendar/BufferFields";
@@ -18,17 +18,30 @@ import { CalendarEditor, loadRecovery, RECOVERY_KEY, type EditorSeed } from "@/c
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog, Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/form";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/menu";
 import { ErrorState } from "@/components/ui/states";
 import { translateKey } from "@/i18n";
 import { bufferBands, bufferable, bufferSummary, hasBuffer, type Band } from "@/lib/buffers";
 import { calendarApi, displayRange, eventForm, visibleItems, type CalendarItem, type CalendarView } from "@/lib/calendar";
-import { formatDateTime } from "@/lib/format";
+import { formatDateTime, todayIn } from "@/lib/format";
 import { useTimezone } from "@/lib/hooks";
 import { refreshAll, useAction, useGoogle, useTask } from "@/lib/queries";
 import "@/components/calendar/calendar.css";
 
 const plugins = [dayGridPlugin, timeGridPlugin, listPlugin, interactionPlugin, luxonPlugin];
 const ICONS = { deadline: Flag, work: Clock3, google: Cloud };
+const VIEWS = [["dayGridMonth", "month"], ["timeGridWeek", "week"], ["listMonth", "agenda"]] as const;
+const VIEW_KEY = "taskradar.calendar.view";
+type DisplayView = typeof VIEWS[number][0];
+
+function initialCalendarView(): DisplayView {
+  try {
+    const saved = localStorage.getItem(VIEW_KEY);
+    const match = VIEWS.find(([view]) => view === saved);
+    if (match) return match[0];
+  } catch { /* The calendar also works when browser storage is unavailable. */ }
+  return window.innerWidth < 700 ? "listMonth" : "dayGridMonth";
+}
 
 function ItemDetail({ item, onClose, onEdit }: { item: CalendarItem; onClose: () => void; onEdit: (s: EditorSeed) => void }) {
   const { t, i18n } = useTranslation();
@@ -100,9 +113,11 @@ export default function CalendarPage() {
   const { t, i18n } = useTranslation();
   const timezone = useTimezone();
   const qc = useQueryClient();
+  const location = useLocation();
   const [params, setParams] = useSearchParams();
   const task = useTask(params.get("task") ?? undefined);
   const { data: google } = useGoogle();
+  const connected = google?.calendar.connected;
   const calendar = useRef<FullCalendar>(null);
   const canvas = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -119,18 +134,25 @@ export default function CalendarPage() {
     observer.observe(canvas.current);
     return () => { observer.disconnect(); cancelAnimationFrame(frame); };
   }, []);
-  const [view, setView] = useState(() => window.innerWidth < 700 ? "listMonth" : "dayGridMonth");
+  const [view, setView] = useState(initialCalendarView);
+  useEffect(() => {
+    try { localStorage.setItem(VIEW_KEY, view); } catch { /* Optional view preference. */ }
+  }, [view]);
   const [range, setRange] = useState({ start: "", end: "", title: "" });
+  const agendaTarget = useRef(params.get("date"));
+  const [agendaRequest, setAgendaRequest] = useState(0);
+  const agendaScrolled = useRef("");
   const [local, setLocal] = useState(true);
   const [completed, setCompleted] = useState(true);
   const [editor, setEditor] = useState<EditorSeed | null>(null);
   const [detail, setDetail] = useState<CalendarItem | null>(null);
   const [recovery, setRecovery] = useState(loadRecovery);
-  const [syncMessage, setSyncMessage] = useState("");
-  const { data, error, refetch } = useQuery({ queryKey: ["calendar-workspace", range.start, range.end, timezone], queryFn: () => calendarApi.view(range.start, range.end), enabled: !!range.start, refetchInterval: 20_000 });
-  const refresh = useAction(() => calendarApi.refresh(range.start, range.end), { onSuccess: (r) => {
-    setSyncMessage(r.status === "partial" ? t("workbench.partial") : r.status === "failed" ? t("workbench.refreshFailed") : "");
-  } });
+  const { data, error, refetch } = useQuery({ queryKey: ["calendar-workspace", range.start, range.end, timezone], queryFn: () => calendarApi.view(range.start, range.end), enabled: !!range.start, refetchOnMount: "always", refetchInterval: 20_000 });
+  const refresh = useMutation({
+    mutationFn: ({ start, end }: { start: string; end: string }) => calendarApi.refresh(start, end),
+    onSettled: () => { void refreshAll(qc); },
+  });
+  const { mutate: refreshCalendar } = refresh;
   const select = useAction((ids: string[]) => calendarApi.select(ids, ids.includes(data?.default_calendar_id ?? "") ? data?.default_calendar_id ?? null : null, data?.google_edit_enabled ?? false));
   const autoRefreshed = useRef("");
   const scrolledRange = useRef("");
@@ -143,15 +165,31 @@ export default function CalendarPage() {
     return () => cancelAnimationFrame(frame);
   }, [view, range.start, data]);
   useEffect(() => {
-    if (!range.start || !google?.calendar.connected) return;
-    const key = `${range.start}/${range.end}/${timezone}`;
+    if (view !== "listMonth" || !data) return;
+    const key = `${range.start}/${range.end}/${timezone}/${agendaRequest}`;
+    if (agendaScrolled.current === key) return;
+    // Wait for cached/async events to produce day headers, then focus only once per navigation.
+    const frame = requestAnimationFrame(() => {
+      const scroller = canvas.current?.querySelector<HTMLElement>(".fc-list .fc-scroller");
+      const days = Array.from(canvas.current?.querySelectorAll<HTMLElement>(".fc-list-day[data-date]") ?? []);
+      if (!scroller || !days.length) return;
+      const date = agendaTarget.current ?? todayIn(timezone);
+      const target = date >= range.start && date < range.end
+        ? days.find((day) => day.dataset.date! >= date) ?? days[days.length - 1]
+        : days[0];
+      scroller.scrollTop += target.getBoundingClientRect().top - scroller.getBoundingClientRect().top;
+      agendaScrolled.current = key;
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [view, range.start, range.end, timezone, agendaRequest, data, local, completed]);
+  useEffect(() => {
+    if (!range.start || connected === undefined) return;
+    const key = `${location.key}/${range.start}/${range.end}/${timezone}/${connected}`;
     if (autoRefreshed.current === key) return;
     autoRefreshed.current = key;
-    void calendarApi.refresh(range.start, range.end).then((r) => {
-      if (r.status === "partial" || r.status === "failed") setSyncMessage(t("workbench.refreshFailed"));
-      void refreshAll(qc);
-    }).catch(() => setSyncMessage(t("workbench.refreshFailed")));
-  }, [range.start, range.end, timezone, google?.calendar.connected, qc, t]);
+    if (connected) refreshCalendar({ start: range.start, end: range.end });
+    else void refetch({ cancelRefetch: false });
+  }, [location.key, range.start, range.end, timezone, connected, refreshCalendar, refetch]);
   const openedTask = useRef("");
   useEffect(() => {
     if (!task.data || !data || params.get("plan") !== "1" || openedTask.current === task.data.id) return;
@@ -160,7 +198,12 @@ export default function CalendarPage() {
   }, [task.data, data, params]);
   const closeEditor = () => { setEditor(null); setRecovery(loadRecovery()); if (params.has("plan")) setParams({}); };
   const openEditor = (s: EditorSeed) => setEditor({ ...s, id: s.id ?? s.draft?.id ?? crypto.randomUUID() });
-  const changeView = (next: string) => { setView(next); calendar.current?.getApi().changeView(next); };
+  const focusAgenda = (date: string | null = null) => { agendaTarget.current = date; setAgendaRequest((request) => request + 1); };
+  const changeView = (next: DisplayView) => {
+    setView(next);
+    if (next === "listMonth") focusAgenda();
+    calendar.current?.getApi().changeView(next, next === "listMonth" ? todayIn(timezone) : undefined);
+  };
   const changeTime = (event: EventApi, revert: () => void) => {
     const item = data?.items.find((i) => i.id === event.id);
     const a = event.startStr, b = event.endStr;
@@ -173,6 +216,9 @@ export default function CalendarPage() {
       start: DateTime.fromISO(a, { zone: timezone }).toFormat(allDay ? "yyyy-MM-dd" : "yyyy-MM-dd'T'HH:mm"),
       end: DateTime.fromISO(b, { zone: timezone }).toFormat(allDay ? "yyyy-MM-dd" : "yyyy-MM-dd'T'HH:mm") } });
   };
+  const selectedSources = data?.sources.filter((source) => source.selected) ?? [];
+  const syncIssue = refresh.isError || refresh.data?.status === "failed" ? t("workbench.refreshFailed")
+    : refresh.data?.status === "partial" || selectedSources.some((source) => source.last_error) ? t("workbench.partial") : "";
   const shown = data ? visibleItems(data, local).filter((item) => completed || item.task_status !== "completed") : [];
   const events = [...shown.map((item) => ({
     id: item.id, title: item.title, start: item.start, end: item.end, allDay: item.all_day,
@@ -194,13 +240,13 @@ export default function CalendarPage() {
       <div className="flex flex-wrap gap-2"><Button variant="outline" onClick={() => openEditor({ mode: "local" })}><Clock3 />{t("workbench.newBlock")}</Button><Button onClick={() => openEditor({ mode: "google" })} disabled={!data?.sources.some((s) => s.writable)}><Plus />{t("workbench.newEvent")}</Button></div>
     </header>
     <div className="flex flex-wrap items-center gap-2 rounded-lg border bg-subtle p-2">
-      <Button variant="outline" onClick={() => calendar.current?.getApi().today()}>{t("workbench.today")}</Button>
+      <Button variant="outline" onClick={() => { focusAgenda(); calendar.current?.getApi().today(); }}>{t("workbench.today")}</Button>
       <Button variant="ghost" size="icon" aria-label={t("workbench.prev")} onClick={() => calendar.current?.getApi().prev()}><ChevronLeft /></Button>
       <Button variant="ghost" size="icon" aria-label={t("workbench.next")} onClick={() => calendar.current?.getApi().next()}><ChevronRight /></Button>
       <h2 className="mr-auto min-w-36 text-base font-semibold" aria-live="polite">{range.title}</h2>
-      <Input type="date" aria-label={t("workbench.jump")} className="w-37" value={params.get("date") ?? undefined} onChange={(e) => { if (e.target.value) calendar.current?.getApi().gotoDate(e.target.value); }} />
+      <Input type="date" aria-label={t("workbench.jump")} className="w-37" value={params.get("date") ?? undefined} onChange={(e) => { if (e.target.value) { focusAgenda(e.target.value); calendar.current?.getApi().gotoDate(e.target.value); } }} />
       <div className="flex rounded-md border bg-card p-0.5" role="group" aria-label={t("workbench.title")}>
-        {([["dayGridMonth", "month"], ["timeGridWeek", "week"], ["listMonth", "agenda"]] as const).map(([v, key]) => <Button key={v} size="sm" variant={view === v ? "secondary" : "ghost"} aria-pressed={view === v} onClick={() => changeView(v)}>{t(`workbench.${key}`)}</Button>)}
+        {VIEWS.map(([v, key]) => <Button key={v} size="sm" variant={view === v ? "secondary" : "ghost"} aria-pressed={view === v} onClick={() => changeView(v)}>{t(`workbench.${key}`)}</Button>)}
       </div>
     </div>
     <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm" aria-label={t("workbench.sources")}>
@@ -209,20 +255,35 @@ export default function CalendarPage() {
         <input type="checkbox" checked={s.selected} disabled={select.isPending} onChange={(e) => select.mutate(data.sources.filter((x) => x.id === s.id ? e.target.checked : x.selected).map((x) => x.id))} />
         <Cloud className="size-4 shrink-0" style={{ color: s.color }} /><span className="truncate">{s.summary}</span>{s.writable ? null : <LockKeyhole className="size-3" aria-label={t("workbench.readOnly")} />}
       </label>)}
-      <label className="ml-auto flex items-center gap-2 text-xs text-muted-foreground"><input type="checkbox" checked={completed} onChange={(e) => setCompleted(e.target.checked)} />{t("workbench.showCompleted")}</label>
+      <div className="ml-auto flex items-center gap-2 text-xs text-muted-foreground">
+        <label className="flex items-center gap-2 whitespace-nowrap"><input type="checkbox" checked={completed} onChange={(e) => setCompleted(e.target.checked)} />{t("workbench.showCompleted")}</label>
+        <Popover>
+          <PopoverTrigger asChild><Button variant="ghost" size="xs" aria-label={t("workbench.syncDetails")} title={syncIssue || t("workbench.syncDetails")} className={syncIssue ? "text-high" : "text-muted-foreground"}>
+            {syncIssue ? <CircleAlert aria-hidden /> : <Cloud aria-hidden />}<span role="status">{refresh.isPending ? t("workbench.refreshing") : syncIssue ? t("workbench.refreshFailedShort") : t("workbench.syncDetails")}</span><ChevronDown aria-hidden />
+          </Button></PopoverTrigger>
+          <PopoverContent aria-label={t("workbench.syncDetails")} collisionPadding={16} className="grid max-h-[min(28rem,80vh)] w-80 max-w-[calc(100vw-2rem)] gap-3 overflow-y-auto p-4 text-xs">
+            <h3 className="text-sm font-medium">{t("workbench.syncDetails")}</h3>
+            {syncIssue ? <p className="text-high">{syncIssue}</p> : null}
+            <div className="grid gap-2 text-muted-foreground">
+              <p>{t("workbench.timezone")}: <span className="text-foreground">{timezone}</span></p>
+              <p>{data?.capabilities.connected ? t("workbench.cached") : t("workbench.offline")}</p>
+            </div>
+            {selectedSources.length ? <ul className="grid gap-3 border-t pt-3">{selectedSources.map((source) => <li key={source.id} className="grid gap-1 break-words">
+              <span className="font-medium">{source.summary}</span>
+              <span className="text-muted-foreground">{data?.window_updated[source.id] ? t("workbench.updated", { time: formatDateTime(data.window_updated[source.id]!, i18n.language, timezone) }) : t("workbench.never")}</span>
+              {source.last_error ? <span className="text-high">{translateKey(`errors.${source.last_error}`, source.last_error)}</span> : null}
+            </li>)}</ul> : null}
+            <Link className="w-fit text-primary hover:underline" to="/settings?section=calendar">{t("workbench.settings")}</Link>
+            <p className="border-t pt-3 leading-relaxed text-muted-foreground">{t("workbench.filtersHint")}</p>
+          </PopoverContent>
+        </Popover>
+        <Button variant="ghost" size="xs" className="size-7 p-0" aria-label={t("workbench.refresh")} title={t("workbench.refresh")} onClick={() => refreshCalendar({ start: range.start, end: range.end })} loading={refresh.isPending} disabled={!range.start || !google?.calendar.connected}><RefreshCw aria-hidden /></Button>
+      </div>
     </div>
-    <div className="flex flex-wrap items-center gap-x-3 gap-y-2 text-xs text-muted-foreground">
-      <span>{t("workbench.timezone")}: {timezone}</span><span aria-hidden>·</span>
-      <span>{data?.capabilities.connected ? t("workbench.cached") : t("workbench.offline")}</span>
-      <Button variant="ghost" size="xs" onClick={() => refresh.mutate(undefined)} loading={refresh.isPending} disabled={!range.start || !google?.calendar.connected}><RefreshCw />{t("workbench.refresh")}</Button>
-      <Link className="text-primary hover:underline" to="/settings?section=calendar">{t("workbench.settings")}</Link>
-    </div>
-    {data?.sources.some((s) => s.selected) ? <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">{data.sources.filter((s) => s.selected).map((s) => <span key={s.id}>{s.summary} · {data.window_updated[s.id] ? t("workbench.updated", { time: formatDateTime(data.window_updated[s.id], i18n.language, timezone) }) : t("workbench.never")}{s.last_error ? ` · ${translateKey(`errors.${s.last_error}`, s.last_error)}` : ""}</span>)}</div> : null}
-    {syncMessage ? <p role="status" className="rounded-md border border-high/30 bg-high/5 p-3 text-sm">{syncMessage}</p> : null}
     {error ? <ErrorState error={error} onRetry={() => void refetch()} /> : null}
     <div ref={canvas} className="calendar-canvas min-w-0 overflow-hidden rounded-lg border">
       <FullCalendar ref={calendar} plugins={plugins} initialView={view} initialDate={params.get("date") ?? undefined} locale={i18n.language === "zh-CN" ? zhLocale : "en"}
-        timeZone={timezone} headerToolbar={false} height={view === "timeGridWeek" ? 500 : "auto"} firstDay={1} fixedWeekCount={false} nowIndicator allDaySlot
+        timeZone={timezone} headerToolbar={false} height={view === "dayGridMonth" ? "auto" : 500} firstDay={1} fixedWeekCount={false} nowIndicator allDaySlot
         dayMaxEvents={3} eventMaxStack={3} eventDisplay="block" slotMinTime="00:00:00" slotMaxTime="24:00:00" scrollTime="08:00:00"
         slotDuration="00:30:00" displayEventEnd eventTimeFormat={{ hour: "2-digit", minute: "2-digit", hour12: false }}
         allDayText={t("workbench.allDay")} noEventsText={t("workbench.empty")} events={events} eventContent={renderEvent}
@@ -245,6 +306,5 @@ export default function CalendarPage() {
     </section> : null}
     {detail ? <ItemDetail item={detail} onClose={() => setDetail(null)} onEdit={openEditor} /> : null}
     {editor && data ? <CalendarEditor key={editor.id} seed={editor} sources={data} timezone={timezone} onClose={closeEditor} /> : null}
-    <p className="text-xs text-muted-foreground">{t("workbench.filtersHint")}</p>
   </div>;
 }
