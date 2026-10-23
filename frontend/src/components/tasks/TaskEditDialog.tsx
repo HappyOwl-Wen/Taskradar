@@ -1,5 +1,5 @@
 import { ChevronRight } from "lucide-react";
-import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
+import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router";
 import { toast } from "sonner";
@@ -16,7 +16,13 @@ import { diffPatch, initialState, type FormState } from "@/lib/task-form";
 import { CATEGORIES, PRIORITIES, type Category, type Priority, type QuickParse, type TaskDetail, type TimeSemantics } from "@/lib/types";
 
 /** The field the dialog starts in. */
-export type EditFocus = "title" | "date";
+export type EditFocus = "title" | "date" | "notes";
+
+function submitOnCtrlEnter(event: KeyboardEvent<HTMLFormElement>) {
+  if (event.key !== "Enter" || !event.ctrlKey || event.nativeEvent.isComposing) return;
+  event.preventDefault();
+  if (!event.repeat) event.currentTarget.requestSubmit();
+}
 
 export function TaskEditDialog({
   open,
@@ -259,13 +265,13 @@ function AddForm({
 
   const submit = (e: FormEvent) => {
     e.preventDefault();
-    if (!title && !text.trim()) return;
+    if (save.isPending || !text.trim()) return;
     save.mutate(undefined);
   };
   const when = date ? `${formatDate(date, i18n.language)}${time ? ` ${time}` : ""}` : null;
 
   return (
-    <form onSubmit={submit} className="grid gap-4">
+    <form onSubmit={submit} onKeyDown={submitOnCtrlEnter} className="grid gap-4">
       <DialogHeader>
         <DialogTitle>{t("newTask.title")}</DialogTitle>
         <DialogDescription>{t("newTask.description")}</DialogDescription>
@@ -353,12 +359,12 @@ function EditForm({
   const set = <K extends keyof FormState>(key: K, value: FormState[K]) => setForm((f) => ({ ...f, [key]: value }));
   const submit = (e: FormEvent) => {
     e.preventDefault();
-    if (!form.title.trim()) return;
+    if (save.isPending || !form.title.trim()) return;
     save.mutate(undefined);
   };
 
   return (
-    <form onSubmit={submit} className="grid gap-4">
+    <form onSubmit={submit} onKeyDown={submitOnCtrlEnter} className="grid gap-4">
       <DialogHeader>
         <DialogTitle>{t("detail.edit")}</DialogTitle>
       </DialogHeader>
@@ -373,13 +379,13 @@ function EditForm({
         onTime={(value) => set("due_time", value)}
         onClear={() => setForm((f) => ({ ...f, due_date: "", due_time: "" }))}
       />
-      <MoreOptions>
+      <MoreOptions defaultOpen={focus === "notes"}>
         {form.due_date && form.due_time ? <KindField value={form.time_semantics} onChange={(v) => set("time_semantics", v)} /> : null}
         <Field label={t("field.action_required")} htmlFor="task-action">
           <Textarea id="task-action" rows={2} value={form.action_required} onChange={(e) => set("action_required", e.target.value)} />
         </Field>
         <Field label={t("field.description")} htmlFor="task-description">
-          <Textarea id="task-description" rows={3} value={form.description} onChange={(e) => set("description", e.target.value)} />
+          <Textarea id="task-description" rows={3} value={form.description} autoFocus={focus === "notes"} onChange={(e) => set("description", e.target.value)} />
         </Field>
         <CategoryPriority category={form.category} priority={form.priority} onCategory={(v) => set("category", v)} onPriority={(v) => set("priority", v)} />
       </MoreOptions>

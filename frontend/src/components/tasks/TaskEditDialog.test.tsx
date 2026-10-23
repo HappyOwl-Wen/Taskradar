@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
 import { MemoryRouter } from "react-router";
@@ -75,6 +75,21 @@ describe("TaskEditDialog: adding a to-do", () => {
     expect(create.mock.calls[0][0]).toMatchObject({ title: "交房租", due_date: "2026-10-16" });
   });
 
+  it("adds with Ctrl+Enter from the notes field, keeping plain Enter for new lines", async () => {
+    vi.spyOn(api, "quickParse").mockResolvedValue(RENT);
+    const create = vi.spyOn(api, "createTask").mockResolvedValue(makeDetail());
+    renderCreate();
+
+    await userEvent.type(screen.getByLabelText("待办"), "周五前交房租");
+    await userEvent.click(screen.getByText("更多选项"));
+    await userEvent.type(screen.getByLabelText("说明"), "第一行{Enter}第二行");
+    expect(create).not.toHaveBeenCalled();
+
+    await userEvent.keyboard("{Control>}{Enter}{/Control}");
+    await waitFor(() => expect(create).toHaveBeenCalledTimes(1));
+    expect(create.mock.calls[0][0]).toMatchObject({ title: "交房租", description: "第一行\n第二行" });
+  });
+
   it("drops the original wording once the user picks another date", async () => {
     vi.spyOn(api, "quickParse").mockResolvedValue(RENT);
     const create = vi.spyOn(api, "createTask").mockResolvedValue({ id: "t1" } as TaskDetail);
@@ -135,6 +150,8 @@ describe("TaskEditDialog: editing a task", () => {
 
     expect(screen.getByRole("heading", { name: "编辑任务" })).toBeInTheDocument();
     const title = screen.getByLabelText("标题");
+    expect(title).toHaveFocus();
+    expect(screen.getByLabelText("说明")).not.toBeVisible();
     await userEvent.clear(title);
     await userEvent.type(title, "Formular unterschrieben abgeben");
     await userEvent.click(screen.getByRole("button", { name: "保存" }));
@@ -146,5 +163,31 @@ describe("TaskEditDialog: editing a task", () => {
   it("opened from “change date”, it starts at the date", () => {
     wrap(<TaskEditDialog open onOpenChange={() => undefined} task={task} focus="date" />);
     expect(screen.getByLabelText("日期")).toHaveFocus();
+    expect(screen.getByLabelText("说明")).not.toBeVisible();
+  });
+
+  it("validates Ctrl+Enter and ignores composition, key repeats and submissions while saving", async () => {
+    let finishSave!: (updated: TaskDetail) => void;
+    const update = vi.spyOn(api, "updateTask").mockImplementation(() => new Promise<TaskDetail>((resolve) => { finishSave = resolve; }));
+    const onOpenChange = vi.fn();
+    wrap(<TaskEditDialog open onOpenChange={onOpenChange} task={task} />);
+    const title = screen.getByLabelText("标题");
+
+    await userEvent.clear(title);
+    await userEvent.keyboard("{Control>}{Enter}{/Control}");
+    expect(update).not.toHaveBeenCalled();
+    await userEvent.type(title, "Updated title");
+    fireEvent.keyDown(title, { key: "Enter", ctrlKey: true, isComposing: true });
+    fireEvent.keyDown(title, { key: "Enter", ctrlKey: true, repeat: true });
+    expect(update).not.toHaveBeenCalled();
+
+    await userEvent.keyboard("{Control>}{Enter}{/Control}");
+    await waitFor(() => expect(screen.getByRole("button", { name: "正在保存…" })).toBeDisabled());
+    await userEvent.keyboard("{Control>}{Enter}{/Control}");
+    expect(update).toHaveBeenCalledTimes(1);
+    expect(update).toHaveBeenCalledWith(task.id, { title: "Updated title" });
+
+    await act(async () => finishSave({ ...task, title: "Updated title" }));
+    await waitFor(() => expect(onOpenChange).toHaveBeenCalledWith(false));
   });
 });

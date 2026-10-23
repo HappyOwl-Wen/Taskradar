@@ -193,7 +193,7 @@ export function TaskDetailView({
       ) : (
         <button
           type="button"
-          onClick={() => setEdit("title")}
+          onClick={() => setEdit("notes")}
           className="w-fit rounded-md text-left text-[13px] text-muted-foreground outline-none hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/40"
         >
           {t("detail.addNotes")}
