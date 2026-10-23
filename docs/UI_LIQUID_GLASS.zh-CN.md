@@ -36,7 +36,7 @@ Canvas 不可用时保留 CSS 材质，避免影响软件功能。
 
 ## 验证
 
-- 前端 209 项测试、ESLint、TypeScript 与生产构建全部通过。
+- 前端 212 项测试、ESLint、TypeScript 与生产构建全部通过。
 - 透镜中心不偏移、相对边缘对称、圆角双轴折射、小尺寸边界及 Canvas 失败回退测试。
 - 侧边栏日期快捷入口、时区跨日和日历内日期跳转测试。
 - 桌面启动与重启相关的 51 项后端测试，以及改动的 Python 文件的 Ruff 检查。
@@ -45,6 +45,18 @@ Canvas 不可用时保留 CSS 材质，避免影响软件功能。
 
 光学实现：`frontend/src/lib/liquidGlass.ts`、`frontend/src/components/ui/LiquidGlassEffects.tsx`。
 设计样式：`frontend/src/glass.css`。截图位于 `docs/screenshots/liquid-glass-*`。
+
+### 导航弹层在缩放下的遮挡修复
+
+导航抽屉现在明确使用 `surface="navigation"`，不再叠加通用 `glass-dialog` 材质。
+菜单文字区使用独立的实色读取层，玻璃折射保留在外缘；打开时隐藏下方导航导轨，并将主界面
+设为 `inert`。菜单通过 body 中的 Portal 弹出，继续保留遮罩、键盘焦点约束和 Esc 关闭，
+关闭后恢复打开按钮的焦点。点击遮罩不会触发下面的卡片。
+
+滚动发生在菜单内部，外部读取层与关闭按钮保持固定，避免低高度窗口滚动后再次穿透。
+已验证触发问题的 1088 × 956、设备像素比 1.25 的布局，以及 360 × 320 和 840 × 480 的真实页面视口。
+新增三项集成回归测试，覆盖独立 Portal、底层禁用、焦点约束、Esc 恢复和导航后的交互恢复。
+修复截图为 `liquid-glass-navigation-fixed.png`，短窗口滚动截图为 `liquid-glass-navigation-viewports.png`。
 
 ## 回到原始界面
 

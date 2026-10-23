@@ -48,6 +48,19 @@
     backdrop-filter: var(--liquid-filter, blur(2px) saturate(120%));
   }
   .app-sidebar { border-radius: 26px; }
+  /* A modal navigation pane replaces the rail visually, and has a solid reading area inside its clear rim. */
+  .app-shell[data-navigation-overlay="open"] .app-sidebar { visibility: hidden; }
+  .nav-drawer { border-radius: 26px; background-color: rgb(24 27 43 / .18); }
+  .nav-drawer::before {
+    content: "";
+    position: absolute;
+    inset: 5px;
+    z-index: 0;
+    border-radius: 21px;
+    background: #252638;
+    pointer-events: none;
+  }
+  .nav-drawer > * { position: relative; z-index: 1; }
   .sidebar-brand-row { margin-bottom: 10px; border-bottom: 1px solid var(--border); }
   .sidebar-brand > svg { filter: drop-shadow(0 3px 7px rgb(174 131 230 / 0.22)); }
   .sidebar-entry { border-radius: 13px; }
@@ -213,5 +226,6 @@
     .app-sidebar, .nav-drawer, .sidebar-entry[aria-current="page"], .sidebar-week-days a[aria-current="date"] { color: CanvasText; background: Canvas; border-color: CanvasText; }
     .sidebar-entry[aria-current="page"], .sidebar-week-days a[aria-current="date"] { outline: 2px solid Highlight; outline-offset: -2px; }
     .sidebar-icon, .sidebar-week-title, .sidebar-week-days a > span { color: inherit; }
+    .nav-drawer::before { background: Canvas; }
   }
 }

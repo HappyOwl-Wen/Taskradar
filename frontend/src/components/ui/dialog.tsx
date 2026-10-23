@@ -12,7 +12,7 @@ export const DialogClose = DialogPrimitive.Close;
 
 const overlayClass = "glass-overlay motion-overlay fixed inset-0 z-50";
 const contentClass =
-  "glass-dialog fixed top-[50%] left-[50%] z-50 grid max-h-[calc(100dvh-2rem)] w-full max-w-[calc(100%-2rem)] translate-x-[-50%] translate-y-[-50%] gap-4 overflow-y-auto border p-6 outline-none sm:max-w-lg";
+  "fixed top-[50%] left-[50%] z-50 grid max-h-[calc(100dvh-2rem)] w-full max-w-[calc(100%-2rem)] translate-x-[-50%] translate-y-[-50%] gap-4 overflow-y-auto border p-6 outline-none sm:max-w-lg";
 
 /**
  * The buttons that finish a dialog. On phones they stay in view at the bottom while the content scrolls and
@@ -36,15 +36,17 @@ export function DialogContent({
   children,
   showClose = true,
   motion = "dialog",
+  surface = "glass",
   ...props
-}: ComponentProps<typeof DialogPrimitive.Content> & { showClose?: boolean; motion?: "dialog" | "drawer" }) {
+}: ComponentProps<typeof DialogPrimitive.Content> & { showClose?: boolean; motion?: "dialog" | "drawer"; surface?: "glass" | "navigation" }) {
   const { t } = useTranslation();
   return (
     <DialogPrimitive.Portal>
       <DialogPrimitive.Overlay className={overlayClass} />
       <DialogPrimitive.Content
         data-slot="dialog-content"
-        className={cn(contentClass, motion === "drawer" ? "motion-drawer" : "motion-dialog", className)}
+        data-surface={surface}
+        className={cn(contentClass, surface === "navigation" ? "nav-drawer" : "glass-dialog", motion === "drawer" ? "motion-drawer" : "motion-dialog", className)}
         {...props}
       >
         {children}
@@ -108,7 +110,7 @@ export function ConfirmDialog({
     <AlertPrimitive.Root open={open} onOpenChange={onOpenChange}>
       <AlertPrimitive.Portal>
         <AlertPrimitive.Overlay className={overlayClass} />
-        <AlertPrimitive.Content className={cn(contentClass, "motion-dialog sm:max-w-md")}>
+        <AlertPrimitive.Content className={cn(contentClass, "glass-dialog motion-dialog sm:max-w-md")}>
           <div className="grid gap-2">
             <AlertPrimitive.Title className="font-display text-lg font-semibold">{title}</AlertPrimitive.Title>
             <AlertPrimitive.Description asChild>
