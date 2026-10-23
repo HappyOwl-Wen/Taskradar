@@ -7,7 +7,7 @@ import logging
 from collections.abc import Callable
 from typing import Any
 
-from sqlalchemy import Select, or_, select
+from sqlalchemy import Select, func, or_, select, update
 from sqlalchemy.orm import Session, sessionmaker
 
 from taskradar.db.base import utcnow
@@ -136,15 +136,19 @@ class NotificationService:
 
     def unread_count(self) -> int:
         with transaction(self._factory) as session:
-            return len(session.scalars(_real(select(Notification.id)).where(Notification.read_at.is_(None))).all())
+            return (
+                session.scalar(
+                    _real(select(func.count()).select_from(Notification)).where(Notification.read_at.is_(None))
+                )
+                or 0
+            )
 
     def mark_read(self, notification_id: int | None = None) -> None:
         with transaction(self._factory) as session:
-            stmt = select(Notification).where(Notification.read_at.is_(None))
+            stmt = update(Notification).where(Notification.read_at.is_(None)).values(read_at=self.clock())
             if notification_id is not None:
                 stmt = stmt.where(Notification.id == notification_id)
-            for note in session.scalars(stmt):
-                note.read_at = self.clock()
+            session.execute(stmt)
 
 
 def _real(stmt: Select[Any]) -> Select[Any]:

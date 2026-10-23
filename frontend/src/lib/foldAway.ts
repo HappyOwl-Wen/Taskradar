@@ -21,16 +21,20 @@ export function useFoldAway<T extends { id: string }>(items: T[], scope: string,
   if (seen.items !== items || seen.scope !== scope) {
     const kept = new Set(items.map((i) => i.id));
     const sameList = seen.scope === scope;
-    const gone = sameList ? seen.items.filter((i) => !kept.has(i.id)) : [];
-    const added =
-      gone.length > 0 && gone.length <= max
-        ? gone.map((item) => {
-            // Shown after the nearest earlier row that is still there (or first).
-            const index = seen.items.indexOf(item);
-            const before = seen.items.slice(0, index).reverse().find((i) => kept.has(i.id));
-            return { item, after: before?.id ?? null };
-          })
-        : [];
+    const added: { item: T; after: string | null }[] = [];
+    if (sameList) {
+      let after: string | null = null;
+      for (const item of seen.items) {
+        if (kept.has(item.id)) after = item.id;
+        else {
+          added.push({ item, after });
+          if (added.length > max) {
+            added.length = 0;
+            break;
+          }
+        }
+      }
+    }
     setSeen({ items, scope });
     setGhosts((previous) => [...(sameList ? previous.filter((g) => !kept.has(g.item.id)) : []), ...added]);
   }
@@ -41,14 +45,25 @@ export function useFoldAway<T extends { id: string }>(items: T[], scope: string,
     return () => clearTimeout(timer);
   }, [ghosts]);
 
-  const rows: ListRow<T>[] = items.map((item) => ({ item, leaving: false }));
-  const placed = new Map<string | null, number>(); // ghosts already put after each row, to keep their order
+  const after = new Map<string | null, T[]>();
   for (const ghost of ghosts) {
-    const anchor = ghost.after === null ? -1 : rows.findIndex((r) => r.item.id === ghost.after);
-    const offset = placed.get(ghost.after) ?? 0;
-    const at = ghost.after !== null && anchor < 0 ? rows.length : anchor + 1 + offset;
-    placed.set(ghost.after, offset + 1);
-    rows.splice(at, 0, { item: ghost.item, leaving: true });
+    const group = after.get(ghost.after) ?? [];
+    group.push(ghost.item);
+    after.set(ghost.after, group);
+  }
+  const rows: ListRow<T>[] = [];
+  const appendGhosts = (anchor: string | null) => {
+    for (const item of after.get(anchor) ?? []) rows.push({ item, leaving: true });
+    after.delete(anchor);
+  };
+  appendGhosts(null);
+  for (const item of items) {
+    rows.push({ item, leaving: false });
+    appendGhosts(item.id);
+  }
+  // An earlier anchor may have left during the animation; its ghosts stay at the end.
+  for (const ghost of ghosts) {
+    if (after.has(ghost.after)) rows.push({ item: ghost.item, leaving: true });
   }
   return rows;
 }

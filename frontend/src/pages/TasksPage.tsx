@@ -156,7 +156,10 @@ export default function TasksPage() {
   const [leavingSeen, setLeavingSeen] = useState(data);
   if (leavingSeen !== data) {
     setLeavingSeen(data);
-    if (leaving.size) setLeaving(new Map([...leaving].filter(([id, status]) => items.some((i) => i.id === id && i.status === status))));
+    if (leaving.size) {
+      const statuses = new Map(items.map((item) => [item.id, item.status]));
+      setLeaving(new Map([...leaving].filter(([id, status]) => statuses.get(id) === status)));
+    }
   }
   const total = data?.total ?? 0;
   const chosen = items.filter((i) => selected.has(i.id)).map((i) => i.id);

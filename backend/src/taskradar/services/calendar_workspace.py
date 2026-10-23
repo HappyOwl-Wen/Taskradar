@@ -422,11 +422,14 @@ class CalendarWorkspace:
         items: list[dict[str, Any]] = []
         unscheduled = []
         with transaction(self.c.factory) as session:
-            tasks = session.scalars(
-                select(Task).where(Task.sample.is_(False), Task.status != "dismissed", Task.deleted_at.is_(None))
+            tasks = session.execute(
+                select(Task.id, Task.title, Task.status, Task.due_date, Task.due_time, Task.timezone).where(
+                    Task.sample.is_(False), Task.status != "dismissed", Task.deleted_at.is_(None)
+                )
             ).all()
             links = {link.task_id: link for link in session.scalars(select(CalendarLink))}
             blocks = session.scalars(select(WorkBlock)).all()
+            scheduled_task_ids = {block.task_id for block in blocks if block.task_id is not None}
             task_map = {t.id: t for t in tasks}
             trashed_ids = set(session.scalars(select(Task.id).where(Task.deleted_at.isnot(None))))
             sources = {s.id: s for s in session.scalars(select(CalendarSource))}
@@ -449,7 +452,7 @@ class CalendarWorkspace:
                         remote[(source.id, cached_event["id"])] = cached_event
             for task in tasks:
                 if not task.due_date:
-                    if task.status != "completed" and not any(b.task_id == task.id for b in blocks):
+                    if task.status != "completed" and task.id not in scheduled_task_ids:
                         unscheduled.append({"id": task.id, "title": task.title})
                     continue
                 date = task.due_date

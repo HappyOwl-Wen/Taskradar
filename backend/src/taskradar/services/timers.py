@@ -20,8 +20,8 @@ from collections.abc import Callable
 from typing import Any, Literal
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import select, update
-from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy import func, select, update
+from sqlalchemy.orm import Session, joinedload, sessionmaker
 
 from taskradar.db.base import utcnow
 from taskradar.db.models import Notification, Task, Timer
@@ -167,7 +167,10 @@ class TimerService:
                 last = None
             nxt = None if current else self._next_phase(session, cfg.timers, now)
             countdowns = session.scalars(
-                select(Timer).where(Timer.kind == "countdown").order_by(Timer.created_at.desc())
+                select(Timer)
+                .where(Timer.kind == "countdown")
+                .options(joinedload(Timer.task).load_only(Task.id, Task.title, Task.deleted_at))
+                .order_by(Timer.created_at.desc())
             ).all()
             running = sorted(
                 (c for c in countdowns if c.status in ("running", "paused")),
@@ -218,15 +221,15 @@ class TimerService:
 
     def _today(self, session: Session, tz: str, now: dt.datetime) -> dict[str, int]:
         midnight = dt.datetime.combine(now.astimezone(ZoneInfo(tz)).date(), dt.time(), tzinfo=ZoneInfo(tz))
-        done = session.scalars(
-            select(Timer).where(
+        sessions, seconds = session.execute(
+            select(func.count(), func.coalesce(func.sum(Timer.duration_seconds), 0)).where(
                 Timer.kind == "pomodoro",
                 Timer.phase == "focus",
                 Timer.status == "finished",
                 Timer.finished_at >= midnight.astimezone(dt.UTC),
             )
-        ).all()
-        return {"focus_sessions": len(done), "focus_minutes": sum(t.duration_seconds for t in done) // 60}
+        ).one()
+        return {"focus_sessions": sessions, "focus_minutes": seconds // 60}
 
     @staticmethod
     def _current_pomodoro(session: Session) -> Timer | None:
@@ -234,11 +237,12 @@ class TimerService:
             select(Timer)
             .where(Timer.kind == "pomodoro", Timer.status.in_(("running", "paused")))
             .order_by(Timer.id.desc())
+            .limit(1)
         ).first()
 
     @staticmethod
     def _last_pomodoro(session: Session) -> Timer | None:
-        return session.scalars(select(Timer).where(Timer.kind == "pomodoro").order_by(Timer.id.desc())).first()
+        return session.scalars(select(Timer).where(Timer.kind == "pomodoro").order_by(Timer.id.desc()).limit(1)).first()
 
     def _next_phase(self, session: Session, cfg: TimerSettings, now: dt.datetime) -> tuple[Phase, int]:
         """What the Pomodoro timer does next: after a focus session a break, after a break the next focus session."""
@@ -644,10 +648,13 @@ class TimerService:
                 elif current.ends_at is not None:
                     minutes = max(1, int((current.ends_at - now).total_seconds() / 60 + 0.999))
                     parts.append(f"{texts[current.phase]} · {texts['left'].format(minutes=minutes)}")
-            countdowns = len(
-                session.scalars(
-                    select(Timer.id).where(Timer.kind == "countdown", Timer.status.in_(("running", "paused")))
-                ).all()
+            countdowns = (
+                session.scalar(
+                    select(func.count())
+                    .select_from(Timer)
+                    .where(Timer.kind == "countdown", Timer.status.in_(("running", "paused")))
+                )
+                or 0
             )
         if countdowns:
             parts.append(texts["countdowns"].format(count=countdowns))

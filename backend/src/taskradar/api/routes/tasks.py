@@ -5,13 +5,15 @@ from __future__ import annotations
 import datetime as dt
 import logging
 import math
-from collections.abc import Iterable
+from bisect import insort_right
+from collections.abc import Callable, Iterable, Iterator
+from heapq import nlargest, nsmallest
 from typing import Any, Literal
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, Field, field_validator
-from sqlalchemy import func, or_, select
+from sqlalchemy import Select, case, func, or_, select
 from sqlalchemy.orm import Session, selectinload
 
 from taskradar.api.deps import get_container, thresholds_for
@@ -20,7 +22,7 @@ from taskradar.api.serializers import task_detail, task_summary
 from taskradar.container import Container
 from taskradar.db.models import CalendarLink, Document, Message, Task, TaskLink, TaskSource
 from taskradar.db.session import transaction
-from taskradar.deadlines.engine import local_today, parse_hhmm
+from taskradar.deadlines.engine import Thresholds, evaluate, local_today, parse_hhmm
 from taskradar.domain.enums import (
     ActionType,
     Actor,
@@ -59,6 +61,9 @@ _URGENCY_ORDER = {
     )
 }
 _PRIORITY_ORDER = {"high": 0, "medium": 1, "low": 2}
+_TIMESTAMP_SORTS = {"created_at": Task.created_at, "updated_at": Task.updated_at, "detected_at": Task.detected_at}
+_RANK_COLUMNS = (Task.id, Task.status, Task.priority, Task.due_date, Task.due_time, Task.timezone)
+_RANK_BATCH = 256
 
 
 def _detail(c: Container, session: Session, task_id: str) -> dict[str, Any]:
@@ -66,21 +71,24 @@ def _detail(c: Container, session: Session, task_id: str) -> dict[str, Any]:
     if task is None or task.deleted_at is not None:
         raise ApiError("task_not_found", "Task not found", 404)
     links = []
-    for link in session.scalars(
-        select(TaskLink).where(or_(TaskLink.task_id == task_id, TaskLink.other_task_id == task_id))
+    for kind, other_id, title, status, from_id in session.execute(
+        select(TaskLink.kind, Task.id, Task.title, Task.status, TaskLink.task_id)
+        .select_from(TaskLink)
+        .join(
+            Task,
+            Task.id == case((TaskLink.task_id == task_id, TaskLink.other_task_id), else_=TaskLink.task_id),
+        )
+        .where(or_(TaskLink.task_id == task_id, TaskLink.other_task_id == task_id), Task.deleted_at.is_(None))
     ):
-        other_id = link.other_task_id if link.task_id == task_id else link.task_id
-        other = session.get(Task, other_id)
-        if other is not None and other.deleted_at is None:
-            links.append(
-                {
-                    "kind": link.kind,
-                    "task_id": other.id,
-                    "title": other.title,
-                    "status": other.status,
-                    "direction": "outgoing" if link.task_id == task_id else "incoming",
-                }
-            )
+        links.append(
+            {
+                "kind": kind,
+                "task_id": other_id,
+                "title": title,
+                "status": status,
+                "direction": "outgoing" if from_id == task_id else "incoming",
+            }
+        )
     return task_detail(task, now=c.clock(), thresholds=thresholds_for(c), links=links)
 
 
@@ -92,6 +100,44 @@ def _sort_key(sort: str, item: dict[str, Any]) -> tuple[Any, ...]:
     if sort == "urgency":
         return (_URGENCY_ORDER[item["urgency"]], item["effective_deadline"] or "9999")
     return (item.get(sort) or "",)
+
+
+def _ranked_tasks(
+    session: Session, stmt: Select[Any], *, now: dt.datetime, thresholds: Thresholds, sort: str = "due"
+) -> Iterator[dict[str, Any]]:
+    """Stream only ranking fields; load sources, notes and full summaries for the selected rows later."""
+    columns = (*_RANK_COLUMNS, _TIMESTAMP_SORTS[sort]) if sort in _TIMESTAMP_SORTS else _RANK_COLUMNS
+    rows = session.execute(stmt.with_only_columns(*columns).execution_options(yield_per=_RANK_BATCH)).mappings()
+    for row in rows:
+        deadline = evaluate(
+            status=row["status"],
+            due_date=row["due_date"],
+            due_time=row["due_time"],
+            tz_name=row["timezone"],
+            now=now,
+            thresholds=thresholds,
+        )
+        yield {
+            "id": row["id"],
+            "status": row["status"],
+            "priority": row["priority"],
+            "due_date": row["due_date"],
+            "urgency": deadline.urgency.value,
+            "effective_deadline": deadline.effective_deadline.isoformat() if deadline.effective_deadline else None,
+            **({sort: row[sort].isoformat()} if sort in _TIMESTAMP_SORTS else {}),
+        }
+
+
+def _summaries(
+    session: Session, ids: Iterable[str], *, now: dt.datetime, thresholds: Thresholds
+) -> dict[str, dict[str, Any]]:
+    selected = list(dict.fromkeys(ids))
+    if not selected:
+        return {}
+    return {
+        task.id: task_summary(task, now=now, thresholds=thresholds)
+        for task in session.scalars(select(Task).where(Task.id.in_(selected)).options(*_TASK_LOAD))
+    }
 
 
 # ---------------------------------------------------------------------------------------------
@@ -110,8 +156,18 @@ _LANES = {
 _LANE_LIMIT = 8
 
 
-def _by_deadline(entries: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    return sorted(entries, key=lambda i: (i["effective_deadline"] or "9999", _PRIORITY_ORDER.get(i["priority"], 3)))
+def _deadline_key(item: dict[str, Any]) -> tuple[Any, ...]:
+    return (item["effective_deadline"] or "9999", _PRIORITY_ORDER.get(item["priority"], 3))
+
+
+def _keep_first(
+    entries: list[dict[str, Any]], item: dict[str, Any], *, limit: int, key: Callable[[dict[str, Any]], Any]
+) -> None:
+    # Dashboard limits are small constants (8/12), so this takes bounded time and space per task.
+    if len(entries) < limit or key(item) < key(entries[-1]):
+        insort_right(entries, item, key=key)
+        if len(entries) > limit:
+            entries.pop()
 
 
 @router.get("/dashboard")
@@ -120,40 +176,58 @@ def dashboard(c: Container = Depends(get_container)) -> dict[str, Any]:
     thresholds = thresholds_for(c)
     today = local_today(now, c.settings.get().general.timezone)
     with transaction(c.factory) as session:
-        tasks = session.scalars(select(Task).where(Task.deleted_at.is_(None)).options(*_TASK_LOAD)).all()
-        # Test data is listed elsewhere (marked as such) but never counts here.
-        sample_open = sum(1 for t in tasks if t.sample and t.status in _OPEN)
-        items = [task_summary(t, now=now, thresholds=thresholds) for t in tasks if not t.sample]
-
-    active = [i for i in items if i["status"] in _OPEN]
-    attention = _attention(active, today=today)
-    lanes = {lane: _by_deadline([i for i in active if i["status"] in statuses]) for lane, statuses in _LANES.items()}
-    week_ago = (now - dt.timedelta(days=7)).isoformat()
-    completed_recent = sorted(
-        (i for i in items if i["status"] == "completed" and i["completed_at"] and i["completed_at"] >= week_ago),
-        key=lambda i: i["completed_at"],
-        reverse=True,
-    )
-    reasons = [i["attention"] for i in attention]
+        counts = {
+            (sample, status): count
+            for sample, status, count in session.execute(
+                select(Task.sample, Task.status, func.count())
+                .where(Task.deleted_at.is_(None))
+                .group_by(Task.sample, Task.status)
+            )
+        }
+        active_counts = {status: counts.get((False, status), 0) for status in _OPEN}
+        lanes: dict[str, list[dict[str, Any]]] = {lane: [] for lane in _LANES}
+        lane_for = {status: lane for lane, statuses in _LANES.items() for status in statuses}
+        attention: list[dict[str, Any]] = []
+        reason_counts = dict.fromkeys(_ATTENTION_RANK, 0)
+        stmt = select(Task).where(Task.deleted_at.is_(None), Task.sample.is_(False), Task.status.in_(_OPEN))
+        for entry in _ranked_tasks(session, stmt, now=now, thresholds=thresholds):
+            _keep_first(lanes[lane_for[entry["status"]]], entry, limit=_LANE_LIMIT, key=_deadline_key)
+            reason = _attention_reason(entry, today=today)
+            if reason is not None:
+                reason_counts[reason] += 1
+                _keep_first(attention, {**entry, "attention": reason}, limit=12, key=_attention_key)
+        completed_stmt = select(Task).where(
+            Task.deleted_at.is_(None),
+            Task.sample.is_(False),
+            Task.status == "completed",
+            Task.completed_at >= now - dt.timedelta(days=7),
+        )
+        completed_count = (
+            session.scalar(completed_stmt.with_only_columns(func.count(), maintain_column_froms=True)) or 0
+        )
+        completed_ids = list(
+            session.scalars(completed_stmt.with_only_columns(Task.id).order_by(Task.completed_at.desc()).limit(5))
+        )
+        summaries = _summaries(
+            session,
+            [i["id"] for entries in lanes.values() for i in entries] + [i["id"] for i in attention] + completed_ids,
+            now=now,
+            thresholds=thresholds,
+        )
     return {
         "today": today.isoformat(),
         "counts": {
-            "overdue": reasons.count("overdue"),
-            "due_today": reasons.count("due_today"),
-            "due_tomorrow": reasons.count("due_tomorrow"),
-            "due_soon": reasons.count("due_soon"),
-            "active": len(active),
-            "todo": len(lanes["todo"]),
-            "in_progress": len(lanes["in_progress"]),
-            "waiting_for_reply": len(lanes["waiting_for_reply"]),
-            "unconfirmed": sum(1 for i in active if i["status"] == "candidate"),
-            "completed_7d": len(completed_recent),
-            "sample_open": sample_open,
+            **reason_counts,
+            "active": sum(active_counts.values()),
+            **{lane: sum(active_counts[s] for s in statuses) for lane, statuses in _LANES.items()},
+            "unconfirmed": active_counts["candidate"],
+            "completed_7d": completed_count,
+            "sample_open": sum(counts.get((True, s), 0) for s in _OPEN),
         },
-        "attention": attention[:12],
-        "attention_total": len(attention),
-        "lanes": {lane: entries[:_LANE_LIMIT] for lane, entries in lanes.items()},
-        "completed_recent": completed_recent[:5],
+        "attention": [{**summaries[i["id"]], "attention": i["attention"]} for i in attention],
+        "attention_total": sum(reason_counts.values()),
+        "lanes": {lane: [summaries[i["id"]] for i in entries] for lane, entries in lanes.items()},
+        "completed_recent": [summaries[task_id] for task_id in completed_ids],
         "notifications_unread": c.notifications.unread_count(),
     }
 
@@ -161,28 +235,23 @@ def dashboard(c: Container = Depends(get_container)) -> dict[str, Any]:
 _ATTENTION_RANK = {"overdue": 0, "due_today": 1, "due_tomorrow": 2, "due_soon": 3}
 
 
-def _attention(items: list[dict[str, Any]], *, today: dt.date) -> list[dict[str, Any]]:
+def _attention_reason(item: dict[str, Any], *, today: dt.date) -> str | None:
     """Open tasks whose time is (nearly) up, most pressing first: overdue, due today, tomorrow, within a week."""
-    tomorrow = today + dt.timedelta(days=1)
-    week_end = today + dt.timedelta(days=7)
-    result: list[dict[str, Any]] = []
-    for i in items:
-        due = dt.date.fromisoformat(i["due_date"]) if i["due_date"] else None
-        if i["urgency"] == Urgency.OVERDUE.value:
-            reason = "overdue"
-        elif due is None:
-            continue
-        elif due <= today:
-            reason = "due_today"
-        elif due == tomorrow:
-            reason = "due_tomorrow"
-        elif due <= week_end:
-            reason = "due_soon"
-        else:
-            continue
-        result.append({**i, "attention": reason})
-    result.sort(key=lambda i: (_ATTENTION_RANK[i["attention"]], i["effective_deadline"] or "9999"))
-    return result
+    due = item["due_date"]
+    if item["urgency"] == Urgency.OVERDUE.value:
+        return "overdue"
+    if due is None:
+        return None
+    days = (due - today).days
+    if days <= 0:
+        return "due_today"
+    if days == 1:
+        return "due_tomorrow"
+    return "due_soon" if days <= 7 else None
+
+
+def _attention_key(item: dict[str, Any]) -> tuple[Any, ...]:
+    return (_ATTENTION_RANK[item["attention"]], item["effective_deadline"] or "9999")
 
 
 # ---------------------------------------------------------------------------------------------
@@ -210,7 +279,7 @@ def list_tasks(
     now = c.clock()
     thresholds = thresholds_for(c)
     with transaction(c.factory) as session:
-        stmt = select(Task).where(Task.deleted_at.is_(None)).options(*_TASK_LOAD)
+        stmt = select(Task).where(Task.deleted_at.is_(None))
         if status:
             stmt = stmt.where(Task.status.in_(status))
         if category:
@@ -232,11 +301,29 @@ def list_tasks(
                     Task.due_text.ilike(like),
                 )
             )
-        items = [task_summary(t, now=now, thresholds=thresholds) for t in session.scalars(stmt).all()]
-    if urgency:
-        items = [i for i in items if i["urgency"] in urgency]
-    items.sort(key=lambda i: _sort_key(sort, i), reverse=order == "desc")
-    return {"items": items[offset : offset + limit], "total": len(items)}
+        if sort in _TIMESTAMP_SORTS and not urgency:
+            total = session.scalar(stmt.with_only_columns(func.count(), maintain_column_froms=True)) or 0
+            column = _TIMESTAMP_SORTS[sort]
+            page = stmt.with_only_columns(Task.id).order_by(column.desc() if order == "desc" else column.asc())
+            ids = list(session.scalars(page.offset(offset).limit(limit)))
+            summaries = _summaries(session, ids, now=now, thresholds=thresholds)
+            return {"items": [summaries[task_id] for task_id in ids], "total": total}
+
+        total = 0
+        wanted_urgency = set(urgency)
+
+        def matching() -> Iterator[dict[str, Any]]:
+            nonlocal total
+            for entry in _ranked_tasks(session, stmt, now=now, thresholds=thresholds, sort=sort):
+                if not wanted_urgency or entry["urgency"] in wanted_urgency:
+                    total += 1
+                    yield entry
+
+        select_page = nlargest if order == "desc" else nsmallest
+        ranked = select_page(offset + limit, matching(), key=lambda i: _sort_key(sort, i))
+        ids = [i["id"] for i in ranked[offset:]]
+        summaries = _summaries(session, ids, now=now, thresholds=thresholds)
+        return {"items": [summaries[task_id] for task_id in ids], "total": total}
 
 
 class LocalTimeBody(BaseModel):

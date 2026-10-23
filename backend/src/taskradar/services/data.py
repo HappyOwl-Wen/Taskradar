@@ -11,7 +11,7 @@ import shutil
 from collections.abc import Callable
 from typing import Any
 
-from sqlalchemy import delete, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session, sessionmaker
 
 from taskradar import __version__
@@ -91,8 +91,8 @@ class DataService:
         """Mails and files that earlier versions imported (kept until the user deletes them)."""
         with transaction(self._factory) as session:
             return {
-                "messages": len(session.scalars(select(Message.id)).all()),
-                "documents": len(session.scalars(select(Document.id)).all()),
+                "messages": session.scalar(select(func.count()).select_from(Message)) or 0,
+                "documents": session.scalar(select(func.count()).select_from(Document)) or 0,
             }
 
     def delete_imported(self) -> dict[str, int]:
