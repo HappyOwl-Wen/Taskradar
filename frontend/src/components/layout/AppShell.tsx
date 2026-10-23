@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Outlet, useLocation, useMatches } from "react-router";
 import { useTranslation } from "react-i18next";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
+import { useFocusView } from "@/lib/focusView";
 import { cn } from "@/lib/utils";
 import { Brand, SettingsNav, Sidebar, SidebarNav } from "./Sidebar";
 import { TopBar } from "./TopBar";
@@ -42,6 +43,8 @@ function NavDrawer({ open, onOpenChange }: { open: boolean; onOpenChange: (open:
 export function AppShell() {
   const matches = useMatches();
   const { pathname } = useLocation();
+  const { compact } = useFocusView();
+  const compactFocus = pathname === "/focus" && compact;
   const main = useRef<HTMLElement>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const fullHeight = matches.some((m) => (m.handle as RouteHandle | undefined)?.fullHeight);
@@ -52,15 +55,20 @@ export function AppShell() {
 
   return (
     <div className="flex h-dvh overflow-hidden bg-frame">
-      <Sidebar onOpenDrawer={() => setDrawerOpen(true)} />
+      <div className={compactFocus ? "hidden" : "contents"}>
+        <Sidebar onOpenDrawer={() => setDrawerOpen(true)} />
+      </div>
       <div className="flex min-w-0 flex-1 flex-col">
-        <TopBar onOpenDrawer={() => setDrawerOpen(true)} />
+        <div className={compactFocus ? "hidden" : "contents"}>
+          <TopBar onOpenDrawer={() => setDrawerOpen(true)} />
+        </div>
         <main
           ref={main}
           id="main"
           tabIndex={-1}
           className={cn(
-            "min-h-0 flex-1 border-t bg-background outline-none md:rounded-tl-xl md:border-l",
+            "min-h-0 flex-1 bg-background outline-none",
+            !compactFocus && "border-t md:rounded-tl-xl md:border-l",
             fullHeight ? "overflow-hidden" : "scroll-stable overflow-y-auto",
           )}
         >

@@ -23,8 +23,8 @@ from taskradar.desktop.win32 import Monitor, Rect
 
 log = logging.getLogger(__name__)
 
-# Logical pixels (DIP). The minimum fits a maximised window on 1366 x 768 at 150 % (910 x 464 without the taskbar).
-MIN_SIZE = (720, 440)
+# Logical pixels (DIP). Small windows use the compact Pomodoro view; the title bar stays reachable.
+MIN_SIZE = (320, 240)
 DEFAULT_SIZE = (1280, 860)
 # Below this work area (DIP) the window opens maximised: on small screens every pixel counts.
 SMALL_SCREEN = (1100, 680)

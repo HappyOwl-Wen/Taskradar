@@ -20,11 +20,11 @@ const TIMERS = {
   notify: true,
 };
 
-function renderFocus() {
+function renderFocus(entry = "/focus") {
   return render(
     <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
       <TooltipProvider>
-        <MemoryRouter>
+        <MemoryRouter initialEntries={[entry]}>
           <FocusPage />
         </MemoryRouter>
       </TooltipProvider>
@@ -123,6 +123,48 @@ describe("FocusPage", () => {
     expect(screen.getAllByText("已暂停").length).toBeGreaterThan(0);
     await userEvent.click(screen.getByRole("button", { name: "继续" }));
     expect(act).toHaveBeenCalledWith(1, "resume");
+  });
+
+  it("keeps the chosen phase and task when switching between compact and full views", async () => {
+    const start = vi.spyOn(api, "startPomodoro").mockResolvedValue(makeTimers());
+    renderFocus();
+    await userEvent.click(await screen.findByRole("combobox", { name: "专注于（可选）" }));
+    await userEvent.click(await screen.findByRole("option", { name: "Bericht schreiben" }));
+    await userEvent.click(screen.getByRole("tab", { name: "长休息" }));
+    const clock = screen.getByRole("timer");
+    expect(clock).toHaveTextContent("15:00");
+
+    await userEvent.click(screen.getByRole("button", { name: "简洁视图" }));
+    expect(screen.getByRole("timer")).toBe(clock);
+    expect(clock).toHaveTextContent("15:00");
+    expect(screen.getByRole("link", { name: "返回任务" })).toHaveAttribute("href", "/");
+    await userEvent.click(screen.getByRole("button", { name: "完整视图" }));
+    expect(screen.getByRole("timer")).toBe(clock);
+    expect(start).not.toHaveBeenCalled();
+
+    await userEvent.click(screen.getByRole("tab", { name: "专注" }));
+    await userEvent.click(screen.getByRole("button", { name: "开始专注" }));
+    expect(start).toHaveBeenCalledWith({ phase: "focus", task_id: "a" });
+  });
+
+  it("preserves a paused timer with hours across view changes and resumes it in compact view", async () => {
+    timers = makeTimers({ pomodoro: { current: makeTimer({ status: "paused", remaining_seconds: 7199, ends_at: null }), next: null } });
+    const act = vi.spyOn(api, "timerAction").mockImplementation(async () => {
+      timers = makeTimers({ pomodoro: { current: makeTimer({ remaining_seconds: 7199 }), next: null } });
+      return timers;
+    });
+    renderFocus("/focus?view=compact");
+    const clock = await screen.findByRole("timer");
+    expect(clock).toHaveTextContent("1:59:59");
+    await userEvent.click(screen.getByRole("button", { name: "完整视图" }));
+    await userEvent.click(screen.getByRole("button", { name: "简洁视图" }));
+    expect(screen.getByRole("timer")).toBe(clock);
+    expect(clock).toHaveTextContent("1:59:59");
+    expect(act).not.toHaveBeenCalled();
+    await userEvent.click(screen.getByRole("button", { name: "继续" }));
+    expect(act).toHaveBeenCalledWith(1, "resume");
+    expect(await screen.findByRole("button", { name: "暂停" })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "短休息" })).toBeDisabled();
   });
 
   it("after a focus session suggests the break, and counts the set and the day", async () => {

@@ -188,6 +188,9 @@ const en: Messages = {
     title: "Pomodoro",
     description: "Focus for {{focus}} minutes, then take a {{short}}-minute break; after {{every}} Pomodoros, a long break of {{long}} minutes.",
     settings: "Durations and notifications",
+    compactView: "Compact view",
+    fullView: "Full view",
+    back: "Back to tasks",
     timer: "Pomodoro timer",
     phase: "Phase",
     phases: {

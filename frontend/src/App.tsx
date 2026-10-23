@@ -46,7 +46,7 @@ const router = createBrowserRouter([
       { index: true, element: page(<DashboardPage />) },
       { path: "tasks", element: page(<TasksPage />) },
       { path: "tasks/:id", element: page(<TaskDetailPage />) },
-      { path: "focus", element: page(<FocusPage />) },
+      { path: "focus", element: page(<FocusPage />), handle: { fullHeight: true } },
       { path: "timers", element: page(<CountdownsPage />) },
       { path: "settings", element: page(<SettingsPage />) },
       // Pages of removed features (review queue, importing, processing figures): old links land somewhere useful.

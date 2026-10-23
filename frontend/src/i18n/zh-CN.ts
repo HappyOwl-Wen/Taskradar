@@ -186,6 +186,9 @@ const zhCN = {
     title: "番茄钟",
     description: "专注 {{focus}} 分钟，再休息 {{short}} 分钟；每 {{every}} 个番茄后长休息 {{long}} 分钟。",
     settings: "时长与通知",
+    compactView: "简洁视图",
+    fullView: "完整视图",
+    back: "返回任务",
     timer: "番茄钟计时",
     phase: "阶段",
     phases: {

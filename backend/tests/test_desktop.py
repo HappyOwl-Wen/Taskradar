@@ -75,6 +75,14 @@ def test_after_a_scale_change_the_window_keeps_its_size_in_logical_pixels() -> N
     assert (placement.width, placement.height) == (1000, 700)
 
 
+@pytest.mark.parametrize("dpi", [96, 120, 144, 192])
+def test_a_compact_timer_window_is_restored_at_its_chosen_size(dpi: int) -> None:
+    saved = SavedWindow(Rect(100, 100, 420, 340), dpi=96, maximized=False)
+    placement = initial_placement(saved, [dataclasses.replace(WIDE, dpi=dpi)])
+    assert (placement.width, placement.height) == (320, 240)
+    assert not placement.maximized
+
+
 def test_a_window_snapped_to_the_screen_edge_keeps_its_invisible_border() -> None:
     snapped = SavedWindow(Rect(-9, 0, 1289, 1389), dpi=120, maximized=False)
     placement = initial_placement(snapped, [WIDE])
