@@ -142,6 +142,13 @@ export default function CalendarPage() {
   const agendaTarget = useRef(params.get("date"));
   const [agendaRequest, setAgendaRequest] = useState(0);
   const agendaScrolled = useRef("");
+  const linkedDate = params.get("date");
+  useEffect(() => {
+    if (!linkedDate) return;
+    agendaTarget.current = linkedDate;
+    agendaScrolled.current = "";
+    calendar.current?.getApi().gotoDate(linkedDate);
+  }, [linkedDate, location.key]);
   const [local, setLocal] = useState(true);
   const [completed, setCompleted] = useState(true);
   const [editor, setEditor] = useState<EditorSeed | null>(null);
@@ -181,7 +188,7 @@ export default function CalendarPage() {
       agendaScrolled.current = key;
     });
     return () => cancelAnimationFrame(frame);
-  }, [view, range.start, range.end, timezone, agendaRequest, data, local, completed]);
+  }, [view, range.start, range.end, timezone, agendaRequest, data, local, completed, location.key]);
   useEffect(() => {
     if (!range.start || connected === undefined) return;
     const key = `${location.key}/${range.start}/${range.end}/${timezone}/${connected}`;
@@ -235,21 +242,21 @@ export default function CalendarPage() {
     return <span className="calendar-event-content"><Icon size={12} aria-hidden /><span className="calendar-event-text"><span className="calendar-event-title">{time ? `${time} ` : ""}{event.title}{item.due_time ? ` · ${item.due_time}` : ""}</span><small>{t(`workbench.${item.kind}`)} · {item.source_name === "local" ? t(item.kind === "deadline" ? "workbench.localTask" : "workbench.localOnly") : item.source_name}{item.editable || item.kind === "deadline" ? "" : ` · ${t("workbench.readOnly")}`}{hasBuffer(item.buffer) ? ` · ${bufferSummary(t, item.buffer)}` : ""}</small></span>{!item.editable && item.kind !== "deadline" ? <LockKeyhole size={11} aria-hidden /> : null}</span>;
   };
   return <div className="calendar-workspace grid gap-4">
-    <header className="flex flex-wrap items-start justify-between gap-3">
+    <header className="calendar-topline flex flex-wrap items-start justify-between gap-3">
       <div><h1 className="text-page font-semibold">{t("workbench.title")}</h1><p className="mt-1 text-sm text-muted-foreground">{t("workbench.subtitle")}</p></div>
       <div className="flex flex-wrap gap-2"><Button variant="outline" onClick={() => openEditor({ mode: "local" })}><Clock3 />{t("workbench.newBlock")}</Button><Button onClick={() => openEditor({ mode: "google" })} disabled={!data?.sources.some((s) => s.writable)}><Plus />{t("workbench.newEvent")}</Button></div>
     </header>
-    <div className="flex flex-wrap items-center gap-2 rounded-lg border bg-subtle p-2">
+    <div className="calendar-toolbar flex flex-wrap items-center gap-2">
       <Button variant="outline" onClick={() => { focusAgenda(); calendar.current?.getApi().today(); }}>{t("workbench.today")}</Button>
       <Button variant="ghost" size="icon" aria-label={t("workbench.prev")} onClick={() => calendar.current?.getApi().prev()}><ChevronLeft /></Button>
       <Button variant="ghost" size="icon" aria-label={t("workbench.next")} onClick={() => calendar.current?.getApi().next()}><ChevronRight /></Button>
       <h2 className="mr-auto min-w-36 text-base font-semibold" aria-live="polite">{range.title}</h2>
       <Input type="date" aria-label={t("workbench.jump")} className="w-37" value={params.get("date") ?? undefined} onChange={(e) => { if (e.target.value) { focusAgenda(e.target.value); calendar.current?.getApi().gotoDate(e.target.value); } }} />
-      <div className="flex rounded-md border bg-card p-0.5" role="group" aria-label={t("workbench.title")}>
+      <div className="calendar-view-switch glass-segmented flex" role="group" aria-label={t("workbench.title")}>
         {VIEWS.map(([v, key]) => <Button key={v} size="sm" variant={view === v ? "secondary" : "ghost"} aria-pressed={view === v} onClick={() => changeView(v)}>{t(`workbench.${key}`)}</Button>)}
       </div>
     </div>
-    <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm" aria-label={t("workbench.sources")}>
+    <div className="calendar-filters flex flex-wrap items-center gap-x-4 gap-y-2 text-sm" aria-label={t("workbench.sources")}>
       <label className="flex items-center gap-2"><input type="checkbox" checked={local} onChange={(e) => setLocal(e.target.checked)} /><Flag className="size-4 text-high" />{t("workbench.local")}</label>
       {data?.sources.map((s) => <label key={s.id} className="flex max-w-full items-center gap-2" title={s.app_created ? t("workbench.own") : t("workbench.other")}>
         <input type="checkbox" checked={s.selected} disabled={select.isPending} onChange={(e) => select.mutate(data.sources.filter((x) => x.id === s.id ? e.target.checked : x.selected).map((x) => x.id))} />
@@ -281,15 +288,22 @@ export default function CalendarPage() {
       </div>
     </div>
     {error ? <ErrorState error={error} onRetry={() => void refetch()} /> : null}
-    <div ref={canvas} className="calendar-canvas min-w-0 overflow-hidden rounded-lg border">
+    <div ref={canvas} className="calendar-canvas min-w-0 overflow-hidden">
       <FullCalendar ref={calendar} plugins={plugins} initialView={view} initialDate={params.get("date") ?? undefined} locale={i18n.language === "zh-CN" ? zhLocale : "en"}
-        timeZone={timezone} headerToolbar={false} height={view === "dayGridMonth" ? "auto" : 500} firstDay={1} fixedWeekCount={false} nowIndicator allDaySlot
+        timeZone={timezone} headerToolbar={false} height={view === "dayGridMonth" ? "auto" : 560} firstDay={1} fixedWeekCount={false} nowIndicator allDaySlot
+        dayHeaderContent={(info) => {
+          if (view !== "timeGridWeek") return info.text;
+          const day = DateTime.fromJSDate(info.date, { zone: timezone }).setLocale(i18n.language);
+          return <span className="calendar-day-heading"><span>{day.toFormat("ccc")}</span><strong>{day.day}</strong></span>;
+        }}
         dayMaxEvents={3} eventMaxStack={3} eventDisplay="block" slotMinTime="00:00:00" slotMaxTime="24:00:00" scrollTime="08:00:00"
         slotDuration="00:30:00" displayEventEnd eventTimeFormat={{ hour: "2-digit", minute: "2-digit", hour12: false }}
         allDayText={t("workbench.allDay")} noEventsText={t("workbench.empty")} events={events} eventContent={renderEvent}
         eventClick={(info) => { info.jsEvent.preventDefault(); setDetail(info.event.extendedProps.item as CalendarItem); }}
         datesSet={(info) => setRange({ start: info.startStr.slice(0, 10), end: info.endStr.slice(0, 10), title: info.view.title })}
         eventDidMount={({ el, event }) => {
+          const item = event.extendedProps.item as CalendarItem;
+          if (item?.color) el.style.setProperty("--event-tint", item.color);
           const band = event.extendedProps.band as Band | undefined;
           // Reserved time is drawn behind its item; the item itself (and its detail) carries it for keyboards and readers.
           if (band) { const owner = event.extendedProps.item as CalendarItem; el.style.setProperty("--band", owner.color); el.title = `${bandLabel(band)} · ${owner.title}`; el.setAttribute("aria-hidden", "true"); return; }

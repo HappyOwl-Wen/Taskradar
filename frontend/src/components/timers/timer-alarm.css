@@ -9,14 +9,20 @@
   width: min(26rem, calc(100% - 1rem));
   max-height: calc(100dvh - 1rem);
   padding: 1.5rem;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--card);
+  border: 1px solid var(--glass-stroke);
+  border-radius: 26px;
+  background: var(--glass-popover);
   color: var(--foreground);
-  box-shadow: 0 24px 64px -12px rgb(0 0 0 / 0.3);
+  box-shadow: var(--glass-shadow-float), inset 0 1px 0 var(--glass-highlight);
+  -webkit-backdrop-filter: blur(32px) saturate(140%);
+  backdrop-filter: blur(32px) saturate(140%);
   transform: translate(-50%, -50%);
   text-align: center;
   outline: none;
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .timer-alarm-dialog { background: var(--popover); -webkit-backdrop-filter: none; backdrop-filter: none; }
 }
 
 .timer-alarm-description {

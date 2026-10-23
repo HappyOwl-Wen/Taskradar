@@ -1,10 +1,19 @@
 @import "tailwindcss";
+@import "./glass.css";
+
+/* Bundled font, used offline. See public/fonts/Outfit-OFL.txt for its SIL Open Font License. */
+@font-face {
+  font-family: "Outfit";
+  src: url("/fonts/Outfit-Variable.ttf") format("truetype");
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+}
 
 @custom-variant dark (&:where(.dark, .dark *));
 
 /*
- * TaskRadar's look: quiet and light. A grey frame (title bar, navigation, top bar) holds the white page; lists are
- * rows divided by hairlines rather than boxes; colour is kept for what it means.
+ * Liquid Glass: translucent surfaces over a soft ambient background, with lavender as the brand accent.
  *
  * Colour roles (one meaning each, used everywhere):
  *   primary  brand indigo  - the main action of a screen, the selected item, links, the number of things to decide
@@ -15,43 +24,51 @@
  *   neutral greys          - categories, sources, "within a week", dismissed, secondary text
  * Text colours keep at least 4.5:1 against the page and the frame; control outlines at least 3:1.
  *
- * The frame and page colours are also used by the desktop window (title bar, start screen): see
- * backend/src/taskradar/desktop/splash.py.
+ * Native window colours are coordinated in backend/src/taskradar/desktop/splash.py.
  */
 :root {
-  --radius: 0.5rem; /* 8 px: rounded-md 6 (controls), rounded-lg 8 (menus, panels), rounded-xl 12 (dialogs, page) */
-  --frame: #f2f3f5;
-  --background: #ffffff;
-  --foreground: #1d2129;
+  --radius: 1rem;
+  --frame: #eae6f2;
+  --background: #f7f7fb;
+  --foreground: #292637;
   --card: #ffffff;
-  --card-foreground: #1d2129;
+  --card-foreground: #292637;
   --card-hover: color-mix(in oklab, var(--card), var(--foreground) 4.5%);
   --card-active: color-mix(in oklab, var(--card), var(--foreground) 8%);
-  --popover: #ffffff;
-  --popover-foreground: #1d2129;
-  --primary: #4f46e5;
-  --primary-hover: #4338ca;
+  --popover: #faf9fe;
+  --popover-foreground: #292637;
+  --primary: #7050ad;
+  --primary-hover: #604095;
   --primary-foreground: #ffffff;
-  --secondary: #eff0f3;
-  --secondary-foreground: #2a2f38;
-  --subtle: #f7f8fa; /* quiet panels and group headers on the page */
-  --muted: #eff0f3;
-  --muted-foreground: #5d6470; /* 5.9:1 on white, 5.3:1 on the frame */
+  --secondary: #eeebf5;
+  --secondary-foreground: #494154;
+  --subtle: #f0edf6;
+  --muted: #eeebf5;
+  --muted-foreground: #6b6478;
   /* Hover and press are translucent, so they read the same on the page and on the frame. */
-  --accent: rgb(15 23 42 / 0.05);
-  --accent-strong: rgb(15 23 42 / 0.085);
-  --accent-foreground: #1d2129;
-  --selected: #eceefe;
-  --selected-foreground: #4338ca;
+  --accent: rgb(112 80 173 / 0.065);
+  --accent-strong: rgb(112 80 173 / 0.11);
+  --accent-foreground: #292637;
+  --selected: #e9e0f8;
+  --selected-foreground: #634099;
   --destructive: #d92d20;
   --destructive-foreground: #ffffff;
-  --border: #e3e5e9;
+  --border: #ded9e8;
   /* Outline of form controls (fields, checkboxes, radios, switches): at least 3:1 against the page and the frame,
      because the outline is what identifies them. Dividers stay light (--border). */
-  --input: #868c97;
-  --ring: #4f46e5;
+  --input: #91879f;
+  --ring: #8c68c6;
   --sidebar: var(--frame);
-  --scrollbar: #c3c7cf;
+  --scrollbar: #c3b9d2;
+
+  --glass-surface: rgb(255 255 255 / 0.64);
+  --glass-raised: rgb(255 255 255 / 0.8);
+  --glass-popover: rgb(255 253 255 / 0.94);
+  --glass-stroke: rgb(255 255 255 / 0.84);
+  --glass-highlight: rgb(255 255 255 / 0.85);
+  --glass-shadow: 0 8px 32px rgb(54 35 84 / 0.065), 0 1px 3px rgb(54 35 84 / 0.025);
+  --glass-shadow-float: 0 24px 64px -24px rgb(54 35 84 / 0.24), 0 4px 16px rgb(54 35 84 / 0.04);
+  --ambient: radial-gradient(ellipse at 8% 8%, #d5c3f0 0, transparent 45%), radial-gradient(ellipse at 93% 4%, #d6e6f4 0, transparent 42%), radial-gradient(ellipse at 88% 98%, #edcee2 0, transparent 43%), radial-gradient(ellipse at 7% 94%, #cfe9e6 0, transparent 43%);
 
   --overdue: #d92d20; /* 4.9:1 */
   --urgent: #b45309; /* amber, 5.0:1 */
@@ -75,32 +92,41 @@
 }
 
 .dark {
-  --frame: #1d1e22;
-  --background: #25262b;
-  --foreground: #ebecef;
-  --card: #25262b;
-  --card-foreground: #ebecef;
-  --popover: #2c2d33;
-  --popover-foreground: #ebecef;
-  --primary: #8b8ff5;
-  --primary-hover: #a1a4f8;
-  --primary-foreground: #16171b;
-  --secondary: #303238;
-  --secondary-foreground: #e3e5ea;
-  --subtle: #2a2b31;
-  --muted: #2f3137;
-  --muted-foreground: #a6abb5;
+  --frame: #17151f;
+  --background: #24212f;
+  --foreground: #f1edf8;
+  --card: #302b3e;
+  --card-foreground: #f1edf8;
+  --popover: #302b3e;
+  --popover-foreground: #f1edf8;
+  --primary: #c4a4f0;
+  --primary-hover: #d3b9f7;
+  --primary-foreground: #291b40;
+  --secondary: #3a324a;
+  --secondary-foreground: #e9e0f5;
+  --subtle: #2d273b;
+  --muted: #362e44;
+  --muted-foreground: #b9afc9;
   --accent: rgb(255 255 255 / 0.06);
   --accent-strong: rgb(255 255 255 / 0.1);
   --accent-foreground: #ebecef;
-  --selected: #33355a;
-  --selected-foreground: #c3c5ff;
+  --selected: #48375e;
+  --selected-foreground: #dec5ff;
   --destructive: #ff7b72;
   --destructive-foreground: #16171b;
-  --border: #36383f;
-  --input: #7c828e; /* 3.6:1 on the dark page */
-  --ring: #8b8ff5;
-  --scrollbar: #4c4f58;
+  --border: #484053;
+  --input: #8f839f;
+  --ring: #c4a4f0;
+  --scrollbar: #65566f;
+
+  --glass-surface: rgb(35 30 47 / 0.76);
+  --glass-raised: rgb(54 46 68 / 0.8);
+  --glass-popover: rgb(48 40 62 / 0.96);
+  --glass-stroke: rgb(222 203 255 / 0.14);
+  --glass-highlight: rgb(241 224 255 / 0.12);
+  --glass-shadow: 0 8px 32px rgb(0 0 0 / 0.14), 0 1px 3px rgb(0 0 0 / 0.08);
+  --glass-shadow-float: 0 24px 64px -24px rgb(0 0 0 / 0.48), 0 4px 16px rgb(0 0 0 / 0.16);
+  --ambient: radial-gradient(ellipse at 6% 7%, #43305e 0, transparent 48%), radial-gradient(ellipse at 98% 6%, #213448 0, transparent 44%), radial-gradient(ellipse at 90% 97%, #472e46 0, transparent 44%), radial-gradient(ellipse at 6% 97%, #1b3b40 0, transparent 40%);
 
   --overdue: #ff7b72;
   --urgent: #f0b45e;
@@ -159,16 +185,16 @@
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
-  /* Windows: Segoe UI Variable (Windows 11) or Segoe UI for Latin text, Microsoft YaHei UI for Chinese. */
-  --font-sans: "Segoe UI Variable Text", "Segoe UI", "Microsoft YaHei UI", "Microsoft YaHei", "PingFang SC",
+  /* Outfit follows the reference; Chinese retains the platform's readable native typeface. */
+  --font-sans: "Outfit", "Segoe UI Variable Text", "Segoe UI", "Microsoft YaHei UI", "Microsoft YaHei", "PingFang SC",
     "Noto Sans CJK SC", system-ui, sans-serif;
-  --font-display: "Segoe UI Variable Display", "Segoe UI", "Microsoft YaHei UI", "Microsoft YaHei", "PingFang SC",
+  --font-display: "Outfit", "Segoe UI Variable Display", "Segoe UI", "Microsoft YaHei UI", "Microsoft YaHei", "PingFang SC",
     "Noto Sans CJK SC", system-ui, sans-serif;
   --font-mono: "Cascadia Mono", "Cascadia Code", Consolas, ui-monospace, monospace;
   /* Type scale: page titles 20 px, section titles 15 px, body 14 px (text-sm), secondary 12-13 px. */
-  --text-page: 1.25rem;
-  --text-page--line-height: 1.75rem;
-  --text-page--letter-spacing: -0.005em;
+  --text-page: 1.5rem;
+  --text-page--line-height: 2rem;
+  --text-page--letter-spacing: -0.035em;
   --text-section: 0.9375rem;
   --text-section--line-height: 1.375rem;
 }

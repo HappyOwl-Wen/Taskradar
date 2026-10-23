@@ -7,12 +7,12 @@ export const Tabs = TabsPrimitive.Root;
 type Variant = "pill" | "underline";
 
 const LIST: Record<Variant, string> = {
-  pill: "inline-flex h-8 w-fit items-center rounded-md bg-muted p-[3px] text-muted-foreground",
+  pill: "glass-segmented inline-flex w-fit items-center text-muted-foreground",
   underline: "flex w-full items-end gap-1 overflow-x-auto overflow-y-hidden text-muted-foreground",
 };
 
 const TRIGGER: Record<Variant, string> = {
-  pill: "h-full rounded-[5px] px-3 hover:text-foreground data-[state=active]:bg-card data-[state=active]:text-foreground data-[state=active]:shadow-[0_1px_2px_rgb(0_0_0/0.08)]",
+  pill: "h-full px-3.5 hover:text-foreground data-[state=active]:text-foreground",
   underline:
     "-mb-px border-b-2 border-transparent px-2 pt-1 pb-2 hover:text-foreground data-[state=active]:border-primary data-[state=active]:text-foreground sm:px-2.5",
 };

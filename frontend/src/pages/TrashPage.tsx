@@ -67,7 +67,7 @@ export default function TrashPage() {
         <span className="text-sm text-muted-foreground" role="status">{t("trash.count", { count: data?.total ?? 0 })}</span>
       </div>
       {isLoading ? <LoadingRows /> : error ? <ErrorState error={error} onRetry={() => void refetch()} /> : items.length ? (
-        <div className="overflow-hidden rounded-lg border">
+        <div className="tasks-list">
           <div className="flex min-h-12 flex-wrap items-center gap-3 border-b bg-subtle px-4 py-2">
             <Checkbox aria-label={t("trash.selectPage")} checked={chosen.length === items.length ? true : chosen.length ? "indeterminate" : false} disabled={disabled} onCheckedChange={(checked) => setSelected(checked ? new Set(items.map((task) => task.id)) : new Set())} />
             <span className="mr-auto text-[13px] text-muted-foreground">{t("common.selected", { count: chosen.length })}</span>

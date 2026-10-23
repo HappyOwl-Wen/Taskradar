@@ -9,14 +9,14 @@ from __future__ import annotations
 from html import escape
 
 # Same colours as the web UI's frame (frontend/src/index.css).
-FRAME = {"light": "#f2f3f5", "dark": "#1d1e22"}
-CONTENT = {"light": "#ffffff", "dark": "#25262b"}
-TEXT = {"light": "#1d2129", "dark": "#ebecef"}
-MUTED = {"light": "#5d6470", "dark": "#a6abb5"}
-ACCENT = {"light": "#4f46e5", "dark": "#8b8ff5"}
+FRAME = {"light": "#eae6f2", "dark": "#17151f"}
+CONTENT = {"light": "#f7f7fb", "dark": "#24212f"}
+TEXT = {"light": "#292637", "dark": "#f1edf8"}
+MUTED = {"light": "#6b6478", "dark": "#b9afc9"}
+ACCENT = {"light": "#7050ad", "dark": "#c4a4f0"}
 
 MARK = """<svg width="44" height="44" viewBox="0 0 32 32" fill="none" aria-hidden="true">
-<rect width="32" height="32" rx="8" fill="#4f46e5"/>
+<rect width="32" height="32" rx="10" fill="#a98be2"/>
 <circle cx="16" cy="16" r="9" stroke="#fff" stroke-opacity=".45" stroke-width="2"/>
 <circle cx="16" cy="16" r="4.5" stroke="#fff" stroke-opacity=".75" stroke-width="2"/>
 <path d="M16 16 L23.5 9.5" stroke="#fff" stroke-width="2.2" stroke-linecap="round"/>

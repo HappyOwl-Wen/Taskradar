@@ -20,7 +20,7 @@ function NavDrawer({ open, onOpenChange }: { open: boolean; onOpenChange: (open:
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
         motion="drawer"
-        className="top-0 left-0 flex h-dvh max-h-dvh w-72 max-w-72 translate-x-0 translate-y-0 flex-col gap-4 rounded-none rounded-r-xl border-y-0 border-l-0 bg-frame p-3"
+        className="nav-drawer top-0 left-0 flex h-dvh max-h-dvh w-72 max-w-72 translate-x-0 translate-y-0 flex-col gap-4 rounded-none rounded-r-xl border-y-0 border-l-0 p-3"
       >
         <DialogTitle className="sr-only">{t("nav.mainNav")}</DialogTitle>
         <div className="flex h-10 items-center px-2">
@@ -35,12 +35,7 @@ function NavDrawer({ open, onOpenChange }: { open: boolean; onOpenChange: (open:
   );
 }
 
-/**
- * App frame, as in Windows 11 apps: the navigation pane and the top bar form a grey frame; the page lies on a
- * white layer with a rounded corner and is the only scroll container, so there is never a page scrollbar next to
- * an inner one. Full-height pages get the whole layer and scroll their panes themselves.
- * Opening another page fades it in from slightly below.
- */
+/** Floating glass surfaces share one ambient backdrop; each page keeps its own scrolling behavior. */
 export function AppShell() {
   const matches = useMatches();
   const { pathname } = useLocation();
@@ -56,11 +51,11 @@ export function AppShell() {
   }, [pathname]);
 
   return (
-    <div className="flex h-dvh overflow-hidden bg-frame">
+    <div className={cn("app-shell flex h-dvh overflow-hidden", compactFocus && "app-shell-focus")}>
       <div className={compactFocus ? "hidden" : "contents"}>
         <Sidebar onOpenDrawer={() => setDrawerOpen(true)} />
       </div>
-      <div className="flex min-w-0 flex-1 flex-col">
+      <div className="app-workspace flex min-w-0 flex-1 flex-col">
         <div className={compactFocus ? "hidden" : "contents"}>
           <TopBar onOpenDrawer={() => setDrawerOpen(true)} agentOpen={agentOpen} onToggleAgent={() => setAgentOpen((value) => !value)} />
         </div>
@@ -69,8 +64,7 @@ export function AppShell() {
           id="main"
           tabIndex={-1}
           className={cn(
-            "min-h-0 flex-1 bg-background outline-none",
-            !compactFocus && "border-t md:rounded-tl-xl md:border-l",
+            "app-page min-h-0 flex-1 outline-none",
             fullHeight ? "overflow-hidden" : "scroll-stable overflow-y-auto",
           )}
         >
@@ -79,7 +73,7 @@ export function AppShell() {
               <Outlet />
             </div>
           ) : (
-            <div key={pathname} className="motion-page mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 lg:px-8 2xl:max-w-[96rem]">
+            <div key={pathname} className="page-content motion-page mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 lg:px-8 2xl:max-w-[96rem]">
               <Outlet />
             </div>
           )}

@@ -33,7 +33,7 @@ function mount(path = "/calendar", timezone = "Europe/Berlin", connected = false
   client.setQueryData(qk.settings, settings);
   client.setQueryData(qk.google, google);
   render(<QueryClientProvider client={client}><MemoryRouter initialEntries={[path]}>
-    <Link to="/calendar">Open calendar</Link><Link to="/other">Leave calendar</Link>
+    <Link to="/calendar">Open calendar</Link><Link to="/other">Leave calendar</Link><Link to="/calendar?date=2026-10-30">Date shortcut</Link>
     <Routes><Route path="/calendar" element={<CalendarPage />} /><Route path="/other" element={<p>Other page</p>} /></Routes>
   </MemoryRouter></QueryClientProvider>);
   return client;
@@ -141,6 +141,14 @@ afterEach(() => {
 });
 
 describe("calendar agenda navigation", () => {
+  it("follows a sidebar date shortcut while the calendar is already open", async () => {
+    mount();
+    await userEvent.click(screen.getByRole("button", { name: "Agenda" }));
+    await waitFor(() => expect(scroller().scrollTop).toBe(200));
+    await userEvent.click(screen.getByRole("link", { name: "Date shortcut" }));
+    await waitFor(() => expect(scroller().scrollTop).toBe(400));
+  });
+
   it("opens at today, keeps earlier plans available, and focuses today again on re-entry", async () => {
     mount();
     await screen.findByText("Plan 2026-10-23");

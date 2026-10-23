@@ -402,6 +402,9 @@ const en: Messages = {
     sample_mismatch: "Test data cannot be merged with real tasks.",
   },
   dashboard: {
+    eyebrow: "YOUR DAY",
+    overviewLabel: "Task overview",
+    overview: { open: "Open tasks", working: "In progress", waiting: "Waiting for reply", completed: "Done in 7 days" },
     greeting: "Today is {{date}}",
     summaryNone: "Nothing needs your attention right now.",
     summaryNothingDue: "Nothing is due soon; {{count}} open task(s)",

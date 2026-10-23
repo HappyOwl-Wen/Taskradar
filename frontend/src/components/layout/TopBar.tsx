@@ -38,7 +38,7 @@ function NewTodoButton() {
   const [open, setOpen] = useState(false);
   return (
     <>
-      <Button variant="outline" size="sm" className="touch-target relative" onClick={() => setOpen(true)}>
+      <Button size="sm" className="topbar-add touch-target relative" onClick={() => setOpen(true)}>
         <Plus />
         {t("newTask.button")}
       </Button>
@@ -114,7 +114,7 @@ export function TopBar({ onOpenDrawer, agentOpen, onToggleAgent }: { onOpenDrawe
   };
 
   return (
-    <header className="z-30 flex h-12 shrink-0 items-center gap-2 bg-frame px-3 sm:px-4">
+    <header className="app-topbar z-30 flex h-15 shrink-0 items-center gap-2 px-3 sm:px-4">
       <Button variant="ghost" size="icon" className="touch-target relative md:hidden" onClick={onOpenDrawer} aria-label={t("topbar.openMenu")}>
         <Menu />
       </Button>
@@ -130,7 +130,7 @@ export function TopBar({ onOpenDrawer, agentOpen, onToggleAgent }: { onOpenDrawe
               onChange={(e) => setQuery(e.target.value)}
               placeholder={t("topbar.search")}
               aria-label={t("topbar.search")}
-              className="h-8 border-transparent bg-card pl-8 hover:border-border focus-visible:border-ring dark:bg-accent"
+              className="topbar-search h-9 border-transparent pl-8 hover:border-border focus-visible:border-ring"
             />
           </form>
           {/* Phones: the search lives on the task list; this opens it. */}

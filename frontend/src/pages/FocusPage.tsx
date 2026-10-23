@@ -133,7 +133,7 @@ export default function FocusPage() {
         />
 
         <div className="focus-workspace">
-          <section aria-label={t("focus.timer")} className="focus-timer rounded-lg bg-subtle">
+          <section aria-label={t("focus.timer")} className="focus-timer glass-card">
             <Tabs className="focus-phases" value={phase} onValueChange={(value) => setChosen(value as TimerPhase)}>
               <TabsList aria-label={t("focus.phase")} className="focus-phase-list">
                 {TIMER_PHASES.map((p) => (
@@ -236,7 +236,7 @@ export default function FocusPage() {
           </section>
 
           <aside className="focus-aside grid h-fit gap-3">
-            <section aria-labelledby="focus-today" className="grid gap-1 rounded-lg bg-subtle p-4">
+            <section aria-labelledby="focus-today" className="glass-card grid gap-1 p-4">
               <h2 id="focus-today" className="text-sm font-semibold">
                 {t("focus.today")}
               </h2>

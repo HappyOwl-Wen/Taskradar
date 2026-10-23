@@ -143,7 +143,7 @@ export default function SettingsPage() {
       </Tabs>
 
       <div className="grid gap-6 lg:grid-cols-[12rem_minmax(0,1fr)]">
-        <nav className="hidden h-fit gap-0.5 lg:sticky lg:top-0 lg:grid" aria-label={t("settings.title")}>
+        <nav className="settings-navigation hidden h-fit gap-1 lg:sticky lg:top-0 lg:grid" aria-label={t("settings.title")}>
           {SECTIONS.map((s) => {
             const Icon = ICON[s];
             return (

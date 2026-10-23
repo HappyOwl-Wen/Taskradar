@@ -1,4 +1,5 @@
-import { ArrowRight, CircleCheckBig, FlaskConical, Play, Plus } from "lucide-react";
+import { ArrowRight, CircleCheckBig, Clock3, FlaskConical, ListTodo, MessageCircle, Play, Plus, Sun } from "lucide-react";
+import { DateTime } from "luxon";
 import { useState } from "react";
 import { Link } from "react-router";
 import { useTranslation } from "react-i18next";
@@ -96,7 +97,7 @@ function LaneCard({ lane, tasks, count }: { lane: Lane; tasks: TaskSummary[]; co
   const status = LANE_STATUS[lane];
   const Icon = STATUS_ICON[status];
   return (
-    <section aria-labelledby={`lane-${lane}`} className="grid min-w-0 content-start gap-1 rounded-lg bg-subtle p-2">
+    <section aria-labelledby={`lane-${lane}`} data-lane={lane} className="dashboard-lane grid min-w-0 content-start gap-2">
       <div className="flex min-h-8 items-center gap-2 px-2">
         <Icon className={cn("size-4", STATUS_TEXT[status])} aria-hidden />
         <h3 id={`lane-${lane}`} className="text-sm font-semibold">
@@ -107,7 +108,7 @@ function LaneCard({ lane, tasks, count }: { lane: Lane; tasks: TaskSummary[]; co
       {tasks.length ? (
         <ul className="grid gap-1">
           {tasks.map((task) => (
-            <li key={task.id} className="rounded-md bg-card">
+            <li key={task.id}>
               <Row task={task} lane={lane} />
             </li>
           ))}
@@ -151,10 +152,19 @@ export default function DashboardPage() {
   const counts = data.counts;
   const attention = data.attention;
   const nothingYet = counts.active === 0 && data.completed_recent.length === 0;
+  const today = DateTime.fromISO(data.today).setLocale(i18n.language);
+  const overview = [
+    { key: "open", value: counts.active, icon: ListTodo, to: "/tasks" },
+    { key: "working", value: counts.in_progress, icon: Clock3, to: "/tasks?status=in_progress" },
+    { key: "waiting", value: counts.waiting_for_reply, icon: MessageCircle, to: "/tasks?status=waiting_for_reply" },
+    { key: "completed", value: counts.completed_7d, icon: CircleCheckBig, to: "/tasks?status=completed" },
+  ] as const;
 
   return (
     <div className="grid gap-6">
-      <header className="grid gap-1">
+      <header className="dashboard-hero glass-card">
+        <div className="grid min-w-0 gap-1">
+        <p className="dashboard-eyebrow"><Sun className="size-3.5" aria-hidden />{t("dashboard.eyebrow")}</p>
         <h1 className="text-page font-semibold">{t("dashboard.greeting", { date: formatDate(data.today, i18n.language) })}</h1>
         <p className="text-sm text-muted-foreground">{summaryLine(data, t)}</p>
         {counts.sample_open ? (
@@ -166,7 +176,18 @@ export default function DashboardPage() {
             </Link>
           </p>
         ) : null}
+        </div>
+        <div className="dashboard-date" aria-hidden><span>{today.toFormat(i18n.language === "zh-CN" ? "M 月" : "MMM").toUpperCase()}</span><strong>{today.day}</strong></div>
       </header>
+
+      {!nothingYet ? <div className="dashboard-stats" aria-label={t("dashboard.overviewLabel")}>
+        {overview.map(({ key, value, icon: Icon, to }) => (
+          <Link key={key} to={to} className="dashboard-stat glass-card">
+            <span className="dashboard-stat-heading"><Icon aria-hidden />{t(`dashboard.overview.${key}`)}</span>
+            <span className="dashboard-stat-value">{value}</span>
+          </Link>
+        ))}
+      </div> : null}
 
       {nothingYet ? (
         <EmptyState
@@ -187,7 +208,7 @@ export default function DashboardPage() {
       ) : (
         <>
           {attention.length ? (
-            <section className="grid min-w-0 content-start gap-2">
+            <section className="dashboard-attention glass-card grid min-w-0 content-start gap-3">
               <div className="flex min-h-8 items-center justify-between gap-2">
                 <h2 className="text-section font-semibold">{t("dashboard.attention")}</h2>
                 {data.attention_total > attention.length ? (

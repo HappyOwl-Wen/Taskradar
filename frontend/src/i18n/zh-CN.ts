@@ -401,6 +401,9 @@ const zhCN = {
     sample_mismatch: "测试数据不能与真实任务合并。",
   },
   dashboard: {
+    eyebrow: "我的一天",
+    overviewLabel: "任务概览",
+    overview: { open: "未完成任务", working: "正在进行", waiting: "等待回复", completed: "近 7 天完成" },
     greeting: "今天是 {{date}}",
     summaryNone: "目前没有需要你关注的事项。",
     summaryNothingDue: "近期没有截止的事项，共 {{count}} 项未完成",

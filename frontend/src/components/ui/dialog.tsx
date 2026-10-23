@@ -10,9 +10,9 @@ export const Dialog = DialogPrimitive.Root;
 export const DialogTrigger = DialogPrimitive.Trigger;
 export const DialogClose = DialogPrimitive.Close;
 
-const overlayClass = "motion-overlay fixed inset-0 z-50 bg-black/40 dark:bg-black/55";
+const overlayClass = "glass-overlay motion-overlay fixed inset-0 z-50";
 const contentClass =
-  "fixed top-[50%] left-[50%] z-50 grid max-h-[calc(100dvh-2rem)] w-full max-w-[calc(100%-2rem)] translate-x-[-50%] translate-y-[-50%] gap-4 overflow-y-auto rounded-xl border bg-card p-6 shadow-[0_24px_64px_-12px_rgb(0_0_0/0.28)] outline-none sm:max-w-lg";
+  "glass-dialog fixed top-[50%] left-[50%] z-50 grid max-h-[calc(100dvh-2rem)] w-full max-w-[calc(100%-2rem)] translate-x-[-50%] translate-y-[-50%] gap-4 overflow-y-auto border p-6 outline-none sm:max-w-lg";
 
 /**
  * The buttons that finish a dialog. On phones they stay in view at the bottom while the content scrolls and

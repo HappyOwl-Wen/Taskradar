@@ -11,7 +11,7 @@ export function SelectTrigger({ className, children, ...props }: ComponentProps<
     <SelectPrimitive.Trigger
       data-slot="select-trigger"
       className={cn(
-        "flex h-8 w-full items-center justify-between gap-2 rounded-md border border-input bg-card px-3 text-sm whitespace-nowrap outline-none transition-[background-color,border-color,box-shadow] duration-(--duration-fast) hover:bg-card-hover focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/40 disabled:cursor-not-allowed disabled:opacity-45 data-[placeholder]:text-muted-foreground data-[state=open]:border-ring [&>span]:truncate",
+        "glass-field flex h-8 w-full items-center justify-between gap-2 border border-input px-3 text-sm whitespace-nowrap outline-none transition-[background-color,border-color,box-shadow] duration-(--duration-fast) hover:bg-card-hover focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/40 disabled:cursor-not-allowed disabled:opacity-45 data-[placeholder]:text-muted-foreground data-[state=open]:border-ring [&>span]:truncate",
         className,
       )}
       {...props}
@@ -31,7 +31,7 @@ export function SelectContent({ className, children, position = "popper", ...pro
         data-slot="select-content"
         position={position}
         className={cn(
-          "motion-popover relative z-50 max-h-(--radix-select-content-available-height) min-w-[8rem] overflow-x-hidden overflow-y-auto rounded-lg border bg-popover text-popover-foreground shadow-[0_8px_24px_-6px_rgb(0_0_0/0.18)]",
+          "glass-popover motion-popover relative z-50 max-h-(--radix-select-content-available-height) min-w-[8rem] overflow-x-hidden overflow-y-auto border text-popover-foreground",
           position === "popper" && "w-full min-w-(--radix-select-trigger-width) data-[side=bottom]:translate-y-1 data-[side=top]:-translate-y-1",
           className,
         )}

@@ -282,7 +282,7 @@ export default function TasksPage() {
         </div>
       </div>
 
-      <div>
+      <div className="tasks-list">
         <div className="flex min-h-10 flex-wrap items-center gap-x-3 gap-y-1.5 border-b px-3 py-1">
           {selecting ? (
             <>

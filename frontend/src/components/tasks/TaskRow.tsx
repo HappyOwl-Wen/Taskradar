@@ -131,7 +131,7 @@ export function TaskListItem({
       <div
         ref={root}
         className={cn(
-          "group relative @container flex min-h-12 items-center gap-3 px-3 py-2 transition-[background-color,opacity] duration-150 hover:bg-accent motion-reduce:transition-none",
+          "task-list-row group relative @container flex min-h-13 items-center gap-3 px-3 py-2.5 transition-[background-color,opacity] duration-150 hover:bg-accent motion-reduce:transition-none",
           (active || selected) && "bg-selected/70 hover:bg-selected",
           leaving && "opacity-40",
           marked,
@@ -157,7 +157,7 @@ export function TaskListItem({
     <div
       ref={root}
       className={cn(
-        "group relative @container flex items-start gap-3 rounded-lg px-3 py-2.5 transition-[background-color,opacity] duration-150 hover:bg-accent motion-reduce:transition-none",
+        "task-list-card group relative @container flex items-start gap-3 px-3 py-3 transition-[background-color,opacity] duration-150 hover:bg-accent motion-reduce:transition-none",
         active && "bg-selected shadow-[inset_3px_0_0_var(--primary)] hover:bg-selected",
         selected && !active && "bg-selected/60",
         leaving && "opacity-40",

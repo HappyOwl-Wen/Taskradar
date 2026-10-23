@@ -149,7 +149,7 @@ export function AgentSidebar({ open, onOpenChange }: { open: boolean; onOpenChan
     <DropdownMenuContent side="top" align="start">{(["off", "presets", "model"] as const).map((mode) => <DropdownMenuItem key={mode} onSelect={() => preferences.mutate({ prompt_suggestions: mode })}><span className="flex-1">{t(`agent.preferences.${mode === "off" ? "suggestionsOff" : mode === "presets" ? "suggestionsPresets" : "suggestionsModel"}`)}</span>{suggestionMode === mode ? <Check /> : null}</DropdownMenuItem>)}</DropdownMenuContent>
   </DropdownMenu>;
 
-  const body = <div className="flex h-full min-h-0 min-w-0 flex-col bg-card">
+  const body = <div className="agent-glass-body flex h-full min-h-0 min-w-0 flex-col">
     <header className="flex h-14 shrink-0 items-center gap-2 border-b px-4">
       <span className="grid size-8 place-items-center rounded-lg bg-primary/10 text-primary"><Bot className="size-[18px]" /></span>
       <div className="min-w-0 flex-1"><h2 className="text-sm font-semibold">{t("agent.title")}</h2><p className="truncate text-[11px] text-muted-foreground">{t("agent.subtitle")}</p></div>

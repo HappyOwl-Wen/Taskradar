@@ -7,6 +7,7 @@ import { taskScope, useNavMode } from "@/lib/navigation";
 import { useDashboard } from "@/lib/queries";
 import { formatClock, isActive, isRunning, useLiveTimers } from "@/lib/timers";
 import { cn } from "@/lib/utils";
+import { SidebarWeek } from "./SidebarWeek";
 
 interface NavItem {
   to: string;
@@ -55,7 +56,7 @@ const SETTINGS: NavItem = { to: "/settings", key: "settings", icon: Settings, is
 export function BrandMark({ className }: { className?: string }) {
   return (
     <svg viewBox="0 0 32 32" fill="none" aria-hidden className={cn("size-7 shrink-0", className)}>
-      <rect width="32" height="32" rx="8" fill="#4f46e5" />
+      <rect width="32" height="32" rx="10" fill="#a98be2" />
       <circle cx="16" cy="16" r="9" stroke="#fff" strokeOpacity=".45" strokeWidth="2" />
       <circle cx="16" cy="16" r="4.5" stroke="#fff" strokeOpacity=".75" strokeWidth="2" />
       <path d="M16 16 L23.5 9.5" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" />
@@ -68,7 +69,7 @@ export function BrandMark({ className }: { className?: string }) {
 export function Brand() {
   const { t } = useTranslation();
   return (
-    <div className="flex min-w-0 items-center gap-2.5">
+    <div className="sidebar-brand flex min-w-0 items-center gap-2.5">
       <BrandMark />
       <div className="grid min-w-0 leading-tight">
         <span className="truncate font-display text-[15px] font-semibold tracking-tight">TaskRadar</span>
@@ -117,21 +118,12 @@ function NavEntry({
       onClick={onNavigate}
       aria-current={current ? "page" : undefined}
       className={cn(
-        "group/nav relative flex rounded-md text-muted-foreground outline-none transition-colors duration-(--duration-fast) hover:bg-accent hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50 active:bg-accent-strong",
-        rail ? "h-14 flex-col items-center justify-center gap-1 px-1 text-[11px] leading-tight font-medium" : "h-9 items-center gap-3 px-3 text-sm font-medium",
-        current && "bg-card text-foreground shadow-[0_1px_2px_rgb(0_0_0/0.06)] hover:bg-card dark:bg-accent-strong dark:shadow-none",
+        "sidebar-entry group/nav relative flex text-muted-foreground outline-none transition-[color,background-color,box-shadow] duration-(--duration-normal) hover:bg-accent hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50 active:bg-accent-strong",
+        rail ? "h-14 flex-col items-center justify-center gap-1 px-1 text-[11px] leading-tight font-medium" : "h-11 items-center gap-3 px-3 text-sm font-medium",
       )}
     >
-      {/* Windows 11's selection mark: a short indigo bar at the left edge. */}
-      <span
-        aria-hidden
-        className={cn(
-          "absolute top-1/2 left-0 w-[3px] -translate-y-1/2 rounded-full bg-primary transition-[height,opacity] duration-(--duration-normal) ease-out",
-          current ? "h-4 opacity-100" : "h-2 opacity-0",
-        )}
-      />
-      <span className="relative">
-        <Icon className={cn("size-[18px]", current && "text-primary")} />
+      <span className="sidebar-icon relative">
+        <Icon className="size-[18px]" />
         {rail && count !== undefined ? <NavCount value={count} rail /> : null}
         {rail && live ? (
           <span
@@ -223,11 +215,11 @@ export function Sidebar({ onOpenDrawer }: { onOpenDrawer: () => void }) {
     <aside
       data-mode={rail ? "rail" : "expanded"}
       className={cn(
-        "hidden h-full shrink-0 flex-col overflow-x-hidden overflow-y-auto bg-frame pb-3 transition-[width] duration-(--duration-slow) ease-(--ease-move) md:flex",
-        rail ? "w-[76px] px-2" : "w-[232px] px-3",
+        "app-sidebar hidden h-full shrink-0 flex-col overflow-x-hidden overflow-y-auto pb-3 transition-[width] duration-(--duration-slow) ease-(--ease-move) md:flex",
+        rail ? "w-[76px] px-2" : "w-[244px] px-3",
       )}
     >
-      <div className={cn("flex h-12 shrink-0 items-center", rail ? "justify-center" : "gap-1")}>
+      <div className={cn("sidebar-brand-row flex h-16 shrink-0 items-center", rail ? "justify-center" : "gap-1")}>
         <Tip content={label} side="right">
           <button
             type="button"
@@ -250,6 +242,7 @@ export function Sidebar({ onOpenDrawer }: { onOpenDrawer: () => void }) {
         <SidebarNav rail={rail} />
       </div>
       <div className="mt-auto grid pt-3">
+        {!rail ? <SidebarWeek /> : null}
         <SettingsNav rail={rail} />
       </div>
     </aside>

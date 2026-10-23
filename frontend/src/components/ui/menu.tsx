@@ -8,7 +8,7 @@ export const DropdownMenuTrigger = MenuPrimitive.Trigger;
 export const DropdownMenuGroup = MenuPrimitive.Group;
 
 const panel =
-  "motion-popover z-50 min-w-[10rem] overflow-hidden rounded-lg border bg-popover p-1 text-popover-foreground shadow-[0_8px_24px_-6px_rgb(0_0_0/0.18)]";
+  "glass-popover motion-popover z-50 min-w-[10rem] overflow-hidden border p-1.5 text-popover-foreground";
 
 export function DropdownMenuContent({ className, sideOffset = 6, ...props }: ComponentProps<typeof MenuPrimitive.Content>) {
   return (
@@ -82,7 +82,7 @@ export function PopoverContent({ className, align = "end", sideOffset = 6, ...pr
         align={align}
         sideOffset={sideOffset}
         className={cn(
-          "motion-popover z-50 rounded-lg border bg-popover text-popover-foreground shadow-[0_8px_24px_-6px_rgb(0_0_0/0.18)] outline-none",
+          "glass-popover motion-popover z-50 border text-popover-foreground outline-none",
           className,
         )}
         {...props}

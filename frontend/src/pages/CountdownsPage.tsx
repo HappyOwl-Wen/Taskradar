@@ -92,7 +92,7 @@ function NewCountdown() {
   };
 
   return (
-    <form onSubmit={submit} aria-labelledby="new-countdown" className="grid h-fit gap-4 rounded-lg bg-subtle p-5">
+    <form onSubmit={submit} aria-labelledby="new-countdown" className="glass-card grid h-fit gap-4 p-5">
       <h2 id="new-countdown" className="text-section font-semibold">
         {t("countdown.new")}
       </h2>
@@ -162,7 +162,7 @@ function CountdownRow({ timer, remaining }: { timer: TimerView; remaining: numbe
         : t("countdown.endedAt", { time: timer.finished_at ? at(timer.finished_at) : "—" });
   const name = timer.label || t("countdown.unnamed");
   return (
-    <li className={cn("grid gap-2 rounded-md bg-card px-4 py-3", !active && "opacity-80")}>
+    <li className={cn("glass-card grid gap-2 px-4 py-3", !active && "opacity-80")}>
       <div className="flex items-center gap-3">
         <div className="grid min-w-0 flex-1 gap-0.5">
           <p className="flex min-w-0 items-center gap-2">
