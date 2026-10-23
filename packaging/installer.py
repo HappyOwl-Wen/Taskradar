@@ -33,7 +33,7 @@ PAGE = HERE / "installer.html"
 TEXTS: dict[str, dict[str, str]] = {
     "zh-CN": {
         "title": "安装 TaskRadar",
-        "tagline": "个人待办雷达：从邮件、PDF 和截图中找出要做的事。",
+        "tagline": "本地待办、日历与专注计时，也可连接 AI 助手安排计划。",
         "location": "安装位置",
         "per_user": "只为当前用户安装，不需要管理员权限。",
         "update": "已安装 {old}，将更新到 {new}。",
@@ -61,7 +61,7 @@ TEXTS: dict[str, dict[str, str]] = {
     },
     "en": {
         "title": "Install TaskRadar",
-        "tagline": "Personal obligation radar: finds what you have to do in mail, PDFs and screenshots.",
+        "tagline": "Local tasks, calendar planning and focus timers, with an optional AI assistant.",
         "location": "Install to",
         "per_user": "For the current user only; no administrator rights needed.",
         "update": "Version {old} is installed and will be updated to {new}.",

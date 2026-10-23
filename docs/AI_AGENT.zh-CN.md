@@ -59,7 +59,7 @@ Key 仅存入系统凭据库，前端只能知道是否已配置。三个协议�
 - **自动标题**：默认从首条消息提取，不增加 API 调用。在设置中选择「使用模型生成」，即可在首次成功回复后生成标题。
   「标题生成模型」可单独选择当前服务中的另一个模型，留空使用聊天模型。聊天菜单还可手动重命名或重新生成标题；
   自动生成不会覆盖手动标题，生成失败会保留原有标题。
-- **提示词建议**：在设置或输入框上方的灯泡菜单选择关闭、预设建议、模型生成后续建议。
+- **提示词建议**：在设置或输入框底部的灯泡菜单选择关闭、预设建议、模型生成后续建议。
   模型建议在成功回复后生成，也可手动刷新；点击建议只填入输入框，仍由用户发送。
 
 模型标题和模型建议会额外消耗当前服务的 API 额度，并发送有限的聊天上下文；这两类请求没有待办/日历工具。
@@ -87,7 +87,7 @@ Claude 总输入等于前三项之和。缺失字段显示「未返回」，不�
 若不支持此参数，可在设置中关闭。实际命中和费用以服务商返回值及账单为准，界面不估算货币费用。
 依据：[Claude Prompt caching](https://platform.claude.com/docs/en/build-with-claude/prompt-caching)。
 
-![本地模拟服务返回的缓存用量，仅用于验证统计展示，不代表真实供应商命中率或账单](screenshots/agent-cache-usage-zh.png)
+![0.3.0 本地模拟服务返回的缓存用量，仅用于验证统计展示，不代表真实供应商命中率或账单](screenshots/release-0.3.0-agent-cache-zh.jpg)
 
 ## 聊天与安排
 
@@ -140,11 +140,11 @@ Google 日程支持独立的说明与地点字段。
 用于检查完整聊天 → 方案 → 应用 → 待办/日历刷新流程，不接触真实账户。已检查宽/窄窗口、中文/英文和浅/深色。
 没有使用真实 API Key，因此真实供应商认证、账户额度、第三方兼容性及模型规划质量仍需配置后验证。
 
-![模型与思考等级集中在输入框工具栏，更多空间用于显示聊天](screenshots/agent-composer-compact-zh.png)
+![0.3.0 模型与思考等级集中在输入框工具栏，更多空间用于显示聊天](screenshots/release-0.3.0-calendar-agent-zh.jpg)
 
-![窄窗口也使用输入框底部的单行工具栏](screenshots/agent-composer-mobile-zh.png)
+![0.3.0 窄窗口也使用输入框底部的单行工具栏](screenshots/release-0.3.0-agent-mobile-zh.jpg)
 
-![深色英文界面中，YOLO 自动应用成功，日历显示已创建的工作时段和截止日](screenshots/agent-yolo-dark-en.png)
+![0.3.0 深色英文界面中，应用方案后，日历显示已创建的工作时段和截止日](screenshots/release-0.3.0-agent-dark-en.jpg)
 
 实现依据：[OpenAI Function calling](https://developers.openai.com/api/docs/guides/function-calling)、
 [OpenAI Models](https://developers.openai.com/api/reference/resources/models/methods/list)、

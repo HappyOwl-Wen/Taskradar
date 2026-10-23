@@ -18,8 +18,14 @@ TaskRadar {version} - 本地待办工具 / local to-do app
 
 数据
   数据库和日志保存在 %LOCALAPPDATA%\TaskRadar，不在程序文件夹里；更新、卸载或删除程序文件夹
-  都不会删除数据。Google 日历的授权保存在 Windows 凭据管理器中。
+  都不会删除数据。Google 日历的授权和 AI Agent 的 API Key 保存在 Windows 凭据管理器中。
   导出或删除全部数据：设置 → 数据与隐私。
+
+日历与 AI 助手
+  左侧「日历」查看截止日、工作时段和选中的 Google 日历。右上角机器人按钮打开可调整宽度的聊天侧栏。
+  AI Agent 为可选功能，需要在设置中填写自己的 Claude、OpenAI 或兼容服务 API Key。
+  消息和助手按需查询的相关待办/日历数据会发送至所选服务商，API 使用费用由服务商收取。
+  默认受限模式先预览再应用；YOLO 模式自动应用本轮方案。模型与思考等级在输入框底部切换。
 
 注意
 [folder]  便携版请让整个文件夹保持在一起：TaskRadar.exe 需要旁边的 _internal 文件夹。
@@ -35,7 +41,10 @@ reminders, the Pomodoro timer and countdowns go on; right-click its icon and cho
 let the close button quit, in the settings). No Python or Node.js needed; uses the Microsoft Edge WebView2 Runtime
 (part of Windows 11).
 Not code-signed: if Windows SmartScreen asks, choose "More info" and then "Run anyway".
-Data: %LOCALAPPDATA%\TaskRadar (outside the program folder); the Google Calendar sign-in in the Windows
-Credential Manager.
+Data: %LOCALAPPDATA%\TaskRadar (outside the program folder); Google Calendar sign-in and Agent API keys in the
+Windows Credential Manager. The calendar shows deadlines, work blocks and selected Google calendars.
+The optional AI Agent requires your own Claude, OpenAI or compatible API key. Messages and relevant workspace
+data queried by the Agent go to that provider, whose API charges apply. Restricted mode previews changes before
+Apply; optional YOLO applies the current turn's proposals automatically. Model/thinking controls are in the composer.
 [folder]Portable: keep the folder together (TaskRadar.exe needs its _internal folder).
 Autostart is optional (Settings -> System & advanced).

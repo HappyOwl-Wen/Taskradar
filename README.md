@@ -4,6 +4,9 @@
 ![Windows 10/11](https://img.shields.io/badge/Windows-10%20%7C%2011-0078D4)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
+**[Download TaskRadar 0.3.0 for Windows](https://github.com/HappyOwl-Wen/Taskradar/releases/tag/v0.3.0)**
+(pre-release: installer and portable ZIP). See [what changed since 0.2.0](docs/releases/v0.3.0.md).
+
 TaskRadar is a to-do app for Windows that keeps everything on your own computer. You write a to-do as one sentence
 ("周五前交房租", "Freitag 10 Uhr Zahnarzt", "submit report by Oct 20 5pm") and the date and time are recognised
 locally. Tasks move through *to do → in progress → waiting for reply → done*, and the home page shows them by status.
@@ -21,30 +24,35 @@ for chat, title and suggestion calls; actual cache support and billing depend on
 
 > 中文简介见下方 [中文快速上手](#中文快速上手)。The UI is Chinese by default and switchable to English.
 
-![TaskRadar on Windows 11: today's tasks by how soon they are due, the Pomodoro timer and a countdown running in the sidebar](docs/screenshots/today-light-zh.png)
+![TaskRadar 0.3.0: calendar planning and the AI Agent with compact composer controls](docs/screenshots/release-0.3.0-calendar-agent-zh.jpg)
 
-| The board by status | Pomodoro | Countdowns | Dark, English |
+| Today and task statuses | Calendar workspace | Dark, English | Compact mobile chat |
 | --- | --- | --- | --- |
-| ![Board](docs/screenshots/board-light-zh.png) | ![Pomodoro](docs/screenshots/focus-light-zh.png) | ![Countdowns](docs/screenshots/countdowns-light-zh.png) | ![Today in dark mode, English](docs/screenshots/today-dark-en.png) |
+| ![Today in 0.3.0](docs/screenshots/release-0.3.0-today-zh.jpg) | ![Calendar in 0.3.0](docs/screenshots/release-0.3.0-calendar-zh.jpg) | ![Compact Agent in dark mode](docs/screenshots/release-0.3.0-agent-dark-en.jpg) | ![Mobile Agent in 0.3.0](docs/screenshots/release-0.3.0-agent-mobile-zh.jpg) |
 
-All screenshots show invented tasks in a test data folder; more in [docs/screenshots](docs/screenshots).
+These screenshots show the 0.3.0 interface with synthetic tasks and a scripted local AI provider, not a live account.
+More in [docs/screenshots](docs/screenshots); older screenshots remain there as historical documentation.
 
 ---
 
-## What changed in this version
+## What changed in 0.3.0
 
-Earlier versions read Gmail, imported PDFs and screenshots and extracted tasks from them automatically, with a
-"To confirm" queue for what they found. That reading was not reliable enough: unrelated mails could end up as one
-task. This version is a plain to-do app instead:
+Compared with [0.2.0](https://github.com/HappyOwl-Wen/Taskradar/releases/tag/v0.2.0):
 
-* **Removed:** reading Gmail, importing files (with OCR), the demo mailbox, watched folders, the "To confirm"
-  queue, automatic merging, and the optional LLM extraction.
-* **Kept:** your tasks, including the ones earlier versions found (listed under "全部任务" with the quotes they
-  were found by), and Google Calendar. The mails and files earlier versions imported, and the old Gmail sign-in
-  and API key, stay until you delete them in Settings → 数据与隐私 (nothing is deleted automatically).
-* **New:** the board by status on the home page, deleting tasks, task views in the sidebar, the Pomodoro timer,
-  countdowns, the tray icon, Windows notifications for timers, a status icon in the top bar, and the guide in the
-  settings.
+* **AI Agent:** Claude, OpenAI and compatible APIs; normal questions and task/calendar proposals; Restricted and
+  optional YOLO modes; Markdown, model detection and thinking levels, automatic titles and prompt suggestions.
+  The resizable side panel uses compact controls in the composer. Claude prompt caching and reported token usage
+  cover chat, titles and suggestions. A user-supplied API key is required; usage is billed by the provider.
+* **Calendar workspace:** month, week and agenda views bring deadlines, work blocks and selected Google calendars
+  together. Plan local work, edit ordinary Google events with permission and conflict checks, see overlaps and
+  reserve preparation or commute buffers. Google access is optional.
+* **Task handling:** 30-day recycle bin and restore, batch rescheduling, more Chinese/German/English time expressions,
+  Ctrl+Enter to save and expandable notes. Starting a focus session moves its task to in progress.
+* **Focus and speed:** compact Pomodoro view, completion alarm that rings until stopped, and faster lists, home page
+  and calendar with large task collections. See [performance measurements](docs/PERFORMANCE.zh-CN.md).
+
+Existing tasks and settings are kept; local database migrations run at startup. The mail/file importer removed in
+0.2.0 remains removed. Old imported content and credentials are kept until deleted in Settings → 数据与隐私.
 
 ## Features
 
@@ -64,11 +72,13 @@ task. This version is a plain to-do app instead:
 | Overlap warnings and buffers | While a work block or Google event is planned, the form lists what it overlaps (work blocks, timed Google events of the selected calendars, to-dos with an appointment time) and offers the next free slot that day; saving stays possible. Preparation, commute or rest time can be reserved before and after any timed item, including read-only and recurring meetings (for every occurrence); it counts for the warnings and is drawn in the week view, and it stays on this computer | implemented, tested with Fake Calendar; see [calendar guide](docs/CALENDAR_WORKSPACE.zh-CN.md#冲突检测与缓冲) |
 | Data control | Export everything as JSON; delete single tasks; delete what earlier versions imported; delete all data (typed confirmation) | implemented, tested |
 | AI Agent | Dedicated chat side panel with Claude Messages, OpenAI Responses and third-party OpenAI-compatible APIs; ordinary Q&A, on-demand workspace queries, and reviewable task, work-block and Google-event proposals. API keys stay in the system credential store | implemented with simulated-provider tests and local HTTP/UI verification; configure Settings → AI Agent with your own API key for live use; see [Agent guide](docs/AI_AGENT.zh-CN.md) |
-| Desktop app | Its own window (Microsoft Edge WebView2 through pywebview), its local service on `127.0.0.1` only; size and position remembered; light and dark; Chinese and English; optional start with Windows (into the tray). `TaskRadar-Setup-<version>.exe` installs for your account without administrator rights and adds TaskRadar to the Start menu; uninstalling keeps your data. Also a portable zip | the program built from this version answered on its local address 3.5 s after starting with a new data folder and 2.1 s after starting again (one measurement each, on this computer); the folder build is 55.7 MB. Not code-signed; not tested on Windows 10 or on another computer |
+| Desktop app | Its own window (Microsoft Edge WebView2 through pywebview), its local service on `127.0.0.1` only; size and position remembered; light and dark; Chinese and English; optional start with Windows (into the tray). The installer runs for your account without administrator rights; uninstalling keeps your data. Also a portable ZIP | Windows x64 pre-release; see [release notes and verification](docs/releases/v0.3.0.md). Not code-signed; Windows 10 and other computers have not been tested |
 
 ## Install the desktop app
 
-Run `TaskRadar-Setup-<version>.exe` (built with `scripts\build-exe.ps1`, see
+Download **[TaskRadar-Setup-0.3.0.exe](https://github.com/HappyOwl-Wen/Taskradar/releases/download/v0.3.0/TaskRadar-Setup-0.3.0.exe)**
+or the **[portable ZIP](https://github.com/HappyOwl-Wen/Taskradar/releases/download/v0.3.0/TaskRadar-0.3.0-windows-x64.zip)**.
+Run the installer (built with `scripts\build-exe.ps1`, see
 [below](#build-the-desktop-app-and-its-installer)). It shows where TaskRadar goes
 (`%LOCALAPPDATA%\Programs\TaskRadar`, for your account only, no administrator rights), creates a Start menu entry
 (which also lets Windows show TaskRadar's notifications on the screen) and, if you leave the box ticked, a desktop
@@ -150,15 +160,16 @@ reconnect. Disconnecting revokes the token.
 
 ## Privacy and permission model
 
-* Everything is stored on your computer (`%LOCALAPPDATA%\TaskRadar`). The only connection to the internet is Google
-  Calendar, and only if you connect it.
+* Tasks, calendars and chat records are stored on your computer (`%LOCALAPPDATA%\TaskRadar`). Connecting Google
+  Calendar sends calendar requests to Google. Enabling the optional Agent sends messages and relevant queried
+  workspace data to your configured AI provider; model detection also queries that provider's model list.
 * The local service binds to `127.0.0.1` only; a Host-header allow-list blocks DNS rebinding; every state-changing
   request needs a per-process CSRF token and passes Origin/`Sec-Fetch-Site` checks; a strict Content-Security-Policy
   applies.
 * Every side effect outside TaskRadar's own data (calendar writes and deletions, autostart, the Start menu entry,
   notifications, Google sign-in and sign-out, export, deleting everything) goes through one permission guard and is
   written to an audit log. Autostart and the Start menu entry are created only after your confirmation.
-* Secrets (the Google client and token) live in the Windows Credential Manager, never in the database, the logs (a
+* Secrets (the Google client/token and Agent API keys) live in the Windows Credential Manager, never in the database, the logs (a
   redaction filter masks tokens) or Git.
 
 See [SECURITY.md](SECURITY.md) for the threat model.
@@ -167,13 +178,14 @@ See [SECURITY.md](SECURITY.md) for the threat model.
 
 ```powershell
 cd backend
-.venv\Scripts\python.exe -m pytest            # 177 tests
+.venv\Scripts\python.exe -m pytest            # 430 tests on Windows
 .venv\Scripts\python.exe -m ruff check .
 .venv\Scripts\python.exe -m ruff format --check .
 .venv\Scripts\python.exe -m mypy
 
 cd ..\frontend
-npm run lint; npm run typecheck; npm test      # 99 tests
+npm run lint; npm run typecheck; npm test      # 185 tests
+npm run build
 ```
 
 The workflow in `.github/workflows/ci.yml` runs the same checks on Ubuntu on every push; the Windows-only tests
@@ -217,8 +229,9 @@ TaskRadar.cmd       double-click launcher (window; --browser)     Setup.cmd   on
 
 ## 中文快速上手
 
-1. 安装 Python 3.12+ 和 Node.js 20+，双击 `Setup.cmd` 完成一次性安装（无需管理员权限）。
-2. 双击 `TaskRadar.cmd` 启动：TaskRadar 在自己的窗口中打开。点窗口的 × 后，它留在任务栏右下角的托盘里继续提醒和计时；
+1. 从 [0.3.0 Release](https://github.com/HappyOwl-Wen/Taskradar/releases/tag/v0.3.0) 下载安装包或便携 ZIP；无需 Python 或 Node.js。
+   从源码运行时，安装 Python 3.12+ 和 Node.js 20+，双击 `Setup.cmd` 完成一次性安装。
+2. 从开始菜单或便携文件夹启动 `TaskRadar.exe`（源码版双击 `TaskRadar.cmd`）：TaskRadar 在自己的窗口中打开。点窗口的 × 后，它留在任务栏右下角的托盘里继续提醒和计时；
    在托盘图标上右键选“退出 TaskRadar”才会退出（可以在“设置 → 常规”中改为点 × 直接退出）。
 3. 添加待办：任意页面右上角「添加待办」，写一句话即可，例如“周五前交房租”“明天下午3点开组会”，日期和时间会自动识别。
    首页按“需要关注”和“按状态”（待办 / 进行中 / 等待回复）显示任务；点“开始”即移到“进行中”；“…”菜单里可以忽略或删除任务。删除后在侧边栏「回收站」保留 30 天，可单项或批量恢复原状态、备注和变更记录；到期自动清理，也可确认后提前彻底删除。
@@ -232,6 +245,9 @@ TaskRadar.cmd       double-click launcher (window; --browser)     Setup.cmd   on
 8. 打包成桌面应用：`powershell -ExecutionPolicy Bypass -File scripts\build-exe.ps1`，得到安装程序和便携版。安装程序只为当前用户
    安装到 `%LOCALAPPDATA%\Programs\TaskRadar`（不需要管理员权限），并添加开始菜单项；可在“设置 → 应用”中卸载（数据保留）。
    程序没有数字签名，第一次运行时 Windows 可能提示“已保护你的电脑”，点“更多信息”→“仍要运行”。
+9. 「日历」集中显示截止日、工作时段及选中的 Google 日历，支持重叠提示和缓冲时间。右上角机器人按钮打开 AI 聊天侧栏；
+   在「设置 → AI Agent」配置自己的 API Key 后，可问答或安排待办与日程。默认受限模式先预览再应用；YOLO 模式会自动应用本轮方案。
+   消息和相关工作区内容会发送给所选服务商，API 使用费用由服务商收取。详见 [Agent 指南](docs/AI_AGENT.zh-CN.md)。
 
 ## Author
 
