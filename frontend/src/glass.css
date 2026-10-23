@@ -22,8 +22,9 @@
   .app-page { margin-top: -72px; padding-top: 72px; border-radius: 28px; background: var(--page-tint); }
   .app-topbar { position: relative; height: 60px; margin: 12px 12px 0; border-radius: 999px; -webkit-backdrop-filter: var(--liquid-filter, blur(2px) saturate(120%)); backdrop-filter: var(--liquid-filter, blur(2px) saturate(120%)); }
   .topbar-search { background: rgb(255 255 255 / .15); border-radius: 999px; box-shadow: inset 0 1px 2px rgb(48 26 73 / 0.08), 0 1px 0 var(--glass-highlight); }
-  .topbar-add { box-shadow: 0 3px 12px color-mix(in srgb, var(--primary) 20%, transparent), inset 0 1px 0 rgb(255 255 255 / 0.2); }
-  .app-topbar [data-slot="button"]:has(> svg:only-child) { border-radius: 50%; }
+  .topbar-add { height: 36px; padding-inline: 14px; border-radius: 14px; }
+  .topbar-add > svg { color: var(--primary); }
+  .app-topbar [data-slot="button"][data-size^="icon"] { border-radius: 50%; }
 
   /* The same optical lens in a dark tint, so the scene is still visible through navigation. */
   .app-sidebar,
@@ -104,6 +105,14 @@
     background-image: linear-gradient(155deg, rgb(255 255 255 / 0.13), transparent 65%);
     box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.2), 0 3px 9px color-mix(in srgb, var(--primary) 13%, transparent);
   }
+  .glass-action {
+    background-color: color-mix(in srgb, var(--primary) 18%, var(--glass-raised));
+    border-color: var(--glass-stroke);
+    box-shadow: inset 1px 1px 0 var(--glass-highlight), inset -1px -1px 1px var(--glass-rim-shadow), 0 3px 10px color-mix(in srgb, var(--primary) 12%, transparent);
+    -webkit-backdrop-filter: var(--liquid-filter, blur(1px));
+    backdrop-filter: var(--liquid-filter, blur(1px));
+  }
+  .glass-action:hover { background-color: color-mix(in srgb, var(--primary) 25%, var(--glass-raised)); }
   .glass-outline { background: var(--glass-raised); box-shadow: inset 0 1px 0 var(--glass-highlight), 0 2px 4px rgb(40 23 63 / 0.025); -webkit-backdrop-filter: var(--liquid-filter, blur(1px)); backdrop-filter: var(--liquid-filter, blur(1px)); }
   .glass-field { background: color-mix(in srgb, var(--card) 26%, transparent); border-radius: 12px; }
   .glass-overlay { background: rgb(25 18 38 / 0.12); }
@@ -117,6 +126,7 @@
   }
   .glass-dialog { border-radius: 26px; }
   .glass-popover { border-radius: 17px; }
+  .glass-popover { background-color: var(--glass-menu); }
   .glass-segmented {
     gap: 3px;
     height: 38px;

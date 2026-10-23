@@ -18,8 +18,16 @@ describe("sidebar calendar shortcuts", () => {
     render(<MemoryRouter><SidebarWeek /></MemoryRouter>);
     const today = screen.getByRole("link", { name: "Saturday, October 24, 2026" });
     expect(today).toHaveAttribute("aria-current", "date");
-    expect(today).toHaveAttribute("href", "/calendar?date=2026-10-24");
-    expect(screen.getByRole("link", { name: "Monday, October 19, 2026" })).toHaveAttribute("href", "/calendar?date=2026-10-19");
+    expect(today).toHaveAttribute("href", "/calendar?date=2026-10-24&view=timeGridDay");
+    expect(screen.getByRole("link", { name: "Monday, October 19, 2026" })).toHaveAttribute("href", "/calendar?date=2026-10-19&view=timeGridDay");
+  });
+
+  it("marks the selected calendar date while keeping today identifiable", () => {
+    render(<MemoryRouter initialEntries={["/calendar?date=2026-10-23&view=timeGridDay"]}><SidebarWeek /></MemoryRouter>);
+    expect(screen.getByRole("link", { name: "Friday, October 23, 2026" })).toHaveAttribute("aria-current", "date");
+    const today = screen.getByRole("link", { name: "Saturday, October 24, 2026" });
+    expect(today).not.toHaveAttribute("aria-current");
+    expect(today).toHaveAttribute("data-today", "true");
   });
 
   it("moves the today marker when the configured timezone crosses midnight", () => {

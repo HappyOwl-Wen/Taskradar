@@ -10,6 +10,7 @@ import { calendarApi, type CalendarItem, type CalendarView } from "@/lib/calenda
 import { qk } from "@/lib/queries";
 import type { GoogleStatus, Settings } from "@/lib/types";
 import CalendarPage from "./CalendarPage";
+import { SidebarWeek } from "@/components/layout/SidebarWeek";
 
 const items: CalendarItem[] = ["2026-10-01", "2026-10-22", "2026-10-23", "2026-10-24", "2026-10-30", "2026-11-05"].map((date) => ({
   id: date, kind: "deadline", title: `Plan ${date}`, start: date, end: `${date}T23:59:59`,
@@ -33,6 +34,7 @@ function mount(path = "/calendar", timezone = "Europe/Berlin", connected = false
   client.setQueryData(qk.settings, settings);
   client.setQueryData(qk.google, google);
   render(<QueryClientProvider client={client}><MemoryRouter initialEntries={[path]}>
+    <SidebarWeek />
     <Link to="/calendar">Open calendar</Link><Link to="/other">Leave calendar</Link><Link to="/calendar?date=2026-10-30">Date shortcut</Link>
     <Routes><Route path="/calendar" element={<CalendarPage />} /><Route path="/other" element={<p>Other page</p>} /></Routes>
   </MemoryRouter></QueryClientProvider>);
@@ -67,7 +69,7 @@ beforeEach(async () => {
 });
 
 describe("calendar view preference and automatic refresh", () => {
-  it.each([["Month", "dayGridMonth"], ["Week", "timeGridWeek"], ["Agenda", "listMonth"]])("restores the last %s view when reopened", async (label, view) => {
+  it.each([["Month", "dayGridMonth"], ["Week", "timeGridWeek"], ["Day", "timeGridDay"], ["Agenda", "listMonth"]])("restores the last %s view when reopened", async (label, view) => {
     localStorage.setItem("taskradar.calendar.view", view === "dayGridMonth" ? "listMonth" : "dayGridMonth");
     mount();
     await userEvent.click(screen.getByRole("button", { name: label }));
@@ -141,6 +143,46 @@ afterEach(() => {
 });
 
 describe("calendar agenda navigation", () => {
+  it("opens a linked day despite a different saved calendar view", async () => {
+    localStorage.setItem("taskradar.calendar.view", "dayGridMonth");
+    mount("/calendar?date=2026-10-23&view=timeGridDay");
+    expect(screen.getByRole("button", { name: /^Day$/ })).toHaveAttribute("aria-pressed", "true");
+    await screen.findByText("Plan 2026-10-23");
+    expect(calendarApi.view).toHaveBeenLastCalledWith("2026-10-23", "2026-10-24");
+    expect(screen.queryByText("Plan 2026-10-24")).not.toBeInTheDocument();
+    expect(document.querySelectorAll(".fc-col-header-cell")).toHaveLength(1);
+  });
+
+  it("shows the clicked day's plans and follows another sidebar date without leaving the calendar", async () => {
+    mount();
+    await screen.findByText("Plan 2026-10-23");
+    await userEvent.click(screen.getByRole("link", { name: "Friday, October 23, 2026" }));
+    await waitFor(() => expect(calendarApi.view).toHaveBeenLastCalledWith("2026-10-23", "2026-10-24"));
+    expect(screen.getByRole("button", { name: /^Day$/ })).toHaveAttribute("aria-pressed", "true");
+    await screen.findByText("Plan 2026-10-23");
+    await userEvent.click(screen.getByRole("link", { name: "Saturday, October 24, 2026" }));
+    await screen.findByText("Plan 2026-10-24");
+    expect(calendarApi.view).toHaveBeenLastCalledWith("2026-10-24", "2026-10-25");
+    expect(screen.queryByText("Plan 2026-10-23")).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Saturday, October 24, 2026" })).toHaveAttribute("aria-current", "date");
+  });
+
+  it("keeps the sidebar and date field in sync with daily previous/next navigation and shows empty days", async () => {
+    mount("/calendar?date=2026-10-23&view=timeGridDay");
+    await screen.findByText("Plan 2026-10-23");
+    await userEvent.click(screen.getByRole("button", { name: "Next period" }));
+    await screen.findByText("Plan 2026-10-24");
+    expect(screen.getByLabelText("Go to date")).toHaveValue("2026-10-24");
+    expect(screen.getByRole("link", { name: "Saturday, October 24, 2026" })).toHaveAttribute("aria-current", "date");
+    await userEvent.click(screen.getByRole("button", { name: "Next period" }));
+    await screen.findByText(i18n.t("workbench.empty"));
+    expect(calendarApi.view).toHaveBeenLastCalledWith("2026-10-25", "2026-10-26");
+    expect(screen.queryByText("Plan 2026-10-24")).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Previous period" }));
+    await screen.findByText("Plan 2026-10-24");
+    expect(screen.getByLabelText("Go to date")).toHaveValue("2026-10-24");
+  });
+
   it("follows a sidebar date shortcut while the calendar is already open", async () => {
     mount();
     await userEvent.click(screen.getByRole("button", { name: "Agenda" }));

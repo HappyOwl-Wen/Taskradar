@@ -1,6 +1,7 @@
 /** A rounded lens with a flat, clear centre and a curved optical bevel. No screen pixels are captured. */
 export interface LensGeometry { width: number; height: number; radius: number }
 export const DISPLACEMENT_SCALE = 64;
+export const LIQUID_LAYOUT_EVENT = "taskradar:liquid-layout";
 
 /** The inverse sample offset used by SVG feDisplacementMap, in CSS pixels. */
 export function lensOffset(x: number, y: number, { width, height, radius }: LensGeometry): [number, number] {

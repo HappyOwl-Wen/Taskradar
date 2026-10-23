@@ -1,4 +1,5 @@
 const calendarZh = {
+  day: "日",
   title: "日历工作台", subtitle: "截止日期、工作时段与 Google 日程，一起安排。", nav: "日历",
   today: "今天", prev: "上一周期", next: "下一周期", jump: "跳转日期", month: "月", week: "周", agenda: "日程列表",
   newEvent: "新建 Google 日程", newBlock: "安排工作时段", refresh: "刷新", sources: "显示来源", local: "本地任务与工作时段",

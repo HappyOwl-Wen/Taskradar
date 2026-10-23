@@ -1,5 +1,6 @@
 @import "tailwindcss";
 @import "./glass.css";
+@import "./liquid-motion.css";
 
 /* Bundled font, used offline. See public/fonts/Outfit-OFL.txt for its SIL Open Font License. */
 @font-face {
@@ -64,6 +65,7 @@
   --glass-surface: rgb(255 255 255 / 0.14);
   --glass-raised: rgb(255 255 255 / 0.24);
   --glass-popover: rgb(255 253 255 / 0.62);
+  --glass-menu: rgb(252 250 255 / 0.94);
   --glass-stroke: rgb(255 255 255 / 0.68);
   --glass-highlight: rgb(255 255 255 / 0.94);
   --glass-rim-shadow: rgb(35 49 64 / 0.2);
@@ -125,6 +127,7 @@
   --glass-surface: rgb(23 28 45 / 0.16);
   --glass-raised: rgb(37 38 57 / 0.24);
   --glass-popover: rgb(25 27 43 / 0.72);
+  --glass-menu: rgb(32 30 46 / 0.95);
   --glass-stroke: rgb(225 234 255 / 0.34);
   --glass-highlight: rgb(240 244 255 / 0.66);
   --glass-rim-shadow: rgb(0 0 0 / 0.5);
@@ -371,7 +374,7 @@
   }
   /* A page that is opened fades in from slightly below. */
   .motion-page {
-    animation: tr-page-in var(--duration-slow) var(--ease-out);
+    animation: tr-section-in 360ms var(--ease-out);
   }
   .motion-row-out {
     display: grid;

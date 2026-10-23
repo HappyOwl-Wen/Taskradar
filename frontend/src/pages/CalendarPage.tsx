@@ -30,7 +30,7 @@ import "@/components/calendar/calendar.css";
 
 const plugins = [dayGridPlugin, timeGridPlugin, listPlugin, interactionPlugin, luxonPlugin];
 const ICONS = { deadline: Flag, work: Clock3, google: Cloud };
-const VIEWS = [["dayGridMonth", "month"], ["timeGridWeek", "week"], ["listMonth", "agenda"]] as const;
+const VIEWS = [["dayGridMonth", "month"], ["timeGridWeek", "week"], ["timeGridDay", "day"], ["listMonth", "agenda"]] as const;
 const VIEW_KEY = "taskradar.calendar.view";
 type DisplayView = typeof VIEWS[number][0];
 
@@ -134,7 +134,8 @@ export default function CalendarPage() {
     observer.observe(canvas.current);
     return () => { observer.disconnect(); cancelAnimationFrame(frame); };
   }, []);
-  const [view, setView] = useState(initialCalendarView);
+  const linkedView = VIEWS.find(([value]) => value === params.get("view"))?.[0];
+  const [view, setView] = useState(() => linkedView ?? initialCalendarView());
   useEffect(() => {
     try { localStorage.setItem(VIEW_KEY, view); } catch { /* Optional view preference. */ }
   }, [view]);
@@ -144,11 +145,13 @@ export default function CalendarPage() {
   const agendaScrolled = useRef("");
   const linkedDate = params.get("date");
   useEffect(() => {
-    if (!linkedDate) return;
+    if (!linkedDate && !linkedView) return;
     agendaTarget.current = linkedDate;
     agendaScrolled.current = "";
-    calendar.current?.getApi().gotoDate(linkedDate);
-  }, [linkedDate, location.key]);
+    const api = calendar.current?.getApi();
+    if (linkedView && api?.view.type !== linkedView) api?.changeView(linkedView, linkedDate ?? undefined);
+    else if (linkedDate) api?.gotoDate(linkedDate);
+  }, [linkedDate, linkedView, location.key]);
   const [local, setLocal] = useState(true);
   const [completed, setCompleted] = useState(true);
   const [editor, setEditor] = useState<EditorSeed | null>(null);
@@ -164,7 +167,7 @@ export default function CalendarPage() {
   const autoRefreshed = useRef("");
   const scrolledRange = useRef("");
   useEffect(() => {
-    if (view !== "timeGridWeek" || !data) return;
+    if ((view !== "timeGridWeek" && view !== "timeGridDay") || !data) return;
     const key = `${view}/${range.start}`;
     if (scrolledRange.current === key) return;
     scrolledRange.current = key;
@@ -210,6 +213,7 @@ export default function CalendarPage() {
     setView(next);
     if (next === "listMonth") focusAgenda();
     calendar.current?.getApi().changeView(next, next === "listMonth" ? todayIn(timezone) : undefined);
+    setParams((previous) => { const nextParams = new URLSearchParams(previous); nextParams.set("view", next); if (next === "listMonth") nextParams.set("date", todayIn(timezone)); return nextParams; }, { replace: true });
   };
   const changeTime = (event: EventApi, revert: () => void) => {
     const item = data?.items.find((i) => i.id === event.id);
@@ -231,7 +235,7 @@ export default function CalendarPage() {
     id: item.id, title: item.title, start: item.start, end: item.end, allDay: item.all_day,
     editable: item.editable && item.kind !== "deadline", backgroundColor: item.color, borderColor: item.color,
     classNames: [`calendar-${item.kind}`, item.task_status === "completed" ? "calendar-completed" : ""], extendedProps: { item },
-  })), ...(view === "timeGridWeek" ? bufferBands(shown) : [])];
+  })), ...(view === "timeGridWeek" || view === "timeGridDay" ? bufferBands(shown) : [])];
   const bandLabel = (band: Band) => t("workbench.bufferBand", { kind: t(`workbench.kind_${band.kind}`), minutes: band.minutes });
   const renderEvent = ({ event, timeText }: EventContentArg) => {
     const band = event.extendedProps.band as Band | undefined;
@@ -252,8 +256,8 @@ export default function CalendarPage() {
       <Button variant="ghost" size="icon" aria-label={t("workbench.next")} onClick={() => calendar.current?.getApi().next()}><ChevronRight /></Button>
       <h2 className="mr-auto min-w-36 text-base font-semibold" aria-live="polite">{range.title}</h2>
       <Input type="date" aria-label={t("workbench.jump")} className="w-37" value={params.get("date") ?? undefined} onChange={(e) => { if (e.target.value) { focusAgenda(e.target.value); calendar.current?.getApi().gotoDate(e.target.value); } }} />
-      <div className="calendar-view-switch glass-segmented flex" role="group" aria-label={t("workbench.title")}>
-        {VIEWS.map(([v, key]) => <Button key={v} size="sm" variant={view === v ? "secondary" : "ghost"} aria-pressed={view === v} onClick={() => changeView(v)}>{t(`workbench.${key}`)}</Button>)}
+      <div className="calendar-view-switch glass-segmented flex" data-selection-scope="segmented" role="group" aria-label={t("workbench.title")}>
+        {VIEWS.map(([v, key]) => <Button key={v} size="sm" variant="ghost" className="liquid-option" aria-pressed={view === v} onClick={() => changeView(v)}>{t(`workbench.${key}`)}</Button>)}
       </div>
     </div>
     <div className="calendar-filters flex flex-wrap items-center gap-x-4 gap-y-2 text-sm" aria-label={t("workbench.sources")}>
@@ -288,11 +292,12 @@ export default function CalendarPage() {
       </div>
     </div>
     {error ? <ErrorState error={error} onRetry={() => void refetch()} /> : null}
+    {view === "timeGridDay" && data && !shown.length ? <p className="glass-card px-4 py-3 text-sm text-muted-foreground">{t("workbench.empty")}</p> : null}
     <div ref={canvas} className="calendar-canvas min-w-0 overflow-hidden">
       <FullCalendar ref={calendar} plugins={plugins} initialView={view} initialDate={params.get("date") ?? undefined} locale={i18n.language === "zh-CN" ? zhLocale : "en"}
         timeZone={timezone} headerToolbar={false} height={view === "dayGridMonth" ? "auto" : 560} firstDay={1} fixedWeekCount={false} nowIndicator allDaySlot
         dayHeaderContent={(info) => {
-          if (view !== "timeGridWeek") return info.text;
+          if (view !== "timeGridWeek" && view !== "timeGridDay") return info.text;
           const day = DateTime.fromJSDate(info.date, { zone: timezone }).setLocale(i18n.language);
           return <span className="calendar-day-heading"><span>{day.toFormat("ccc")}</span><strong>{day.day}</strong></span>;
         }}
@@ -300,7 +305,14 @@ export default function CalendarPage() {
         slotDuration="00:30:00" displayEventEnd eventTimeFormat={{ hour: "2-digit", minute: "2-digit", hour12: false }}
         allDayText={t("workbench.allDay")} noEventsText={t("workbench.empty")} events={events} eventContent={renderEvent}
         eventClick={(info) => { info.jsEvent.preventDefault(); setDetail(info.event.extendedProps.item as CalendarItem); }}
-        datesSet={(info) => setRange({ start: info.startStr.slice(0, 10), end: info.endStr.slice(0, 10), title: info.view.title })}
+        datesSet={(info) => {
+          setRange({ start: info.startStr.slice(0, 10), end: info.endStr.slice(0, 10), title: info.view.title });
+          const active = VIEWS.find(([value]) => value === info.view.type)?.[0];
+          if (active) setView(active);
+          if (active === "timeGridDay" && linkedView === "timeGridDay" && params.get("date") !== info.startStr.slice(0, 10)) {
+            setParams((previous) => { const next = new URLSearchParams(previous); next.set("date", info.startStr.slice(0, 10)); return next; }, { replace: true });
+          }
+        }}
         eventDidMount={({ el, event }) => {
           const item = event.extendedProps.item as CalendarItem;
           if (item?.color) el.style.setProperty("--event-tint", item.color);

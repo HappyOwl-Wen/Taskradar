@@ -12,6 +12,7 @@ export const buttonVariants = cva(
     variants: {
       variant: {
         default: "glass-primary bg-primary text-primary-foreground hover:bg-primary-hover active:bg-primary-hover active:text-primary-foreground/85",
+        glass: "glass-action border text-foreground hover:text-foreground active:text-foreground/85",
         secondary: "bg-secondary text-secondary-foreground hover:bg-card-hover active:bg-card-active",
         outline: "glass-outline border border-border text-foreground hover:bg-card-hover active:bg-card-active active:text-foreground/80",
         ghost: "text-foreground hover:bg-accent active:bg-accent-strong active:text-foreground/80",

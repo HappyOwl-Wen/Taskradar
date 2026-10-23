@@ -26,7 +26,7 @@ function NavDrawer({ open, onOpenChange, onRestoreFocus }: { open: boolean; onOp
         className="top-2 left-2 flex h-[calc(100dvh-1rem)] max-h-[calc(100dvh-1rem)] w-72 max-w-[calc(100vw-1rem)] translate-x-0 translate-y-0 flex-col overflow-hidden p-0"
       >
         <DialogTitle className="sr-only">{t("nav.mainNav")}</DialogTitle>
-        <div className="nav-drawer-body flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-3">
+        <div className="nav-drawer-body flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-3" data-selection-scope="navigation">
           <div className="flex h-10 shrink-0 items-center px-2 pr-10">
             <Brand />
           </div>

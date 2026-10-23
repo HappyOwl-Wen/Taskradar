@@ -38,9 +38,9 @@ function NewTodoButton() {
   const [open, setOpen] = useState(false);
   return (
     <>
-      <Button size="sm" className="topbar-add touch-target relative" onClick={() => setOpen(true)}>
+      <Button variant="glass" size="sm" className="topbar-add touch-target relative h-9 rounded-[14px] px-3.5" onClick={() => setOpen(true)}>
         <Plus />
-        {t("newTask.button")}
+        <span className="max-[380px]:sr-only">{t("newTask.button")}</span>
       </Button>
       <TaskEditDialog open={open} onOpenChange={setOpen} />
     </>

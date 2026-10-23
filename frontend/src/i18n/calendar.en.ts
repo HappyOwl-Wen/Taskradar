@@ -1,5 +1,6 @@
 import type zh from "./calendar.zh";
 const calendarEn: Record<keyof typeof zh, string> = {
+  day: "Day",
   title: "Calendar workspace", subtitle: "Deadlines, work blocks and Google events in one place.", nav: "Calendar",
   today: "Today", prev: "Previous period", next: "Next period", jump: "Go to date", month: "Month", week: "Week", agenda: "Agenda",
   newEvent: "New Google event", newBlock: "Plan a work block", refresh: "Refresh", sources: "Show sources", local: "Local tasks & work blocks",

@@ -214,6 +214,7 @@ export function Sidebar({ onOpenDrawer }: { onOpenDrawer: () => void }) {
   return (
     <aside
       data-mode={rail ? "rail" : "expanded"}
+      data-selection-scope="navigation"
       className={cn(
         "app-sidebar hidden h-full shrink-0 flex-col overflow-x-hidden overflow-y-auto pb-3 transition-[width] duration-(--duration-slow) ease-(--ease-move) md:flex",
         rail ? "w-[76px] px-2" : "w-[244px] px-3",

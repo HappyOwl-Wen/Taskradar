@@ -10,6 +10,7 @@
 - 原始界面分支：`codex/ui-before-liquid-glass-20261024`
 - 原始界面提交：`b35361e29d30ff263d51203615cf001f894ab3bb`
 - 第一版磨砂方案另存为标签：`ui-frosted-iteration-20261024`
+- 弹性切换与日历快捷入口改动前：`ui-before-liquid-motion-20261024`
 - 当前方案分支：`codex/liquid-glass-ui`
 
 存档保留了修改开始前尚未提交的桌面服务、日历页面、测试和文档，不仅是最后一个历史版本。
@@ -36,7 +37,7 @@ Canvas 不可用时保留 CSS 材质，避免影响软件功能。
 
 ## 验证
 
-- 前端 212 项测试、ESLint、TypeScript 与生产构建全部通过。
+- 前端 220 项测试、ESLint、TypeScript 与生产构建全部通过。
 - 透镜中心不偏移、相对边缘对称、圆角双轴折射、小尺寸边界及 Canvas 失败回退测试。
 - 侧边栏日期快捷入口、时区跨日和日历内日期跳转测试。
 - 桌面启动与重启相关的 51 项后端测试，以及改动的 Python 文件的 Ruff 检查。
@@ -57,6 +58,27 @@ Canvas 不可用时保留 CSS 材质，避免影响软件功能。
 已验证触发问题的 1088 × 956、设备像素比 1.25 的布局，以及 360 × 320 和 840 × 480 的真实页面视口。
 新增三项集成回归测试，覆盖独立 Portal、底层禁用、焦点约束、Esc 恢复和导航后的交互恢复。
 修复截图为 `liquid-glass-navigation-fixed.png`，短窗口滚动截图为 `liquid-glass-navigation-viewports.png`。
+
+### 共享弹性切换、菜单可读性与日期快捷入口
+
+导航、任务筛选、设置分区、番茄钟阶段、倒计时方式、日历视图和侧栏日期统一使用持续存在的玻璃选中层。
+选中层以 580 ms 阻尼弹簧移动，包含有限的过冲、轻微拉伸和跳跃；连续点击会从当前显示位置重新计算。
+通过 Web Animations API 提交 transform 关键帧，浏览器合成动画，静止时没有逐帧 JavaScript 计算。
+移动时保留原有 SVG 背景折射滤镜，目标尺寸变化时先同步透镜位移贴图；系统要求减少动画时直接定位。
+对应内容也有轻量入场动画。新增分组可通过 `data-selection-scope` 使用相同实现。
+
+“添加待办”改为 36 px 高、14 px 圆角的玻璃按钮。原来的 `svg:only-child` 选择器会忽略文字节点，
+误将图标加文字的按钮设为圆形；现在仅对显式的图标尺寸按钮应用圆形边框。
+下拉菜单使用独立的读取底色（浅色 94%、深色 95%），边缘继续保留折射与反光，避免透出下方文字和按钮。
+
+侧栏每一天直接进入 `/calendar?date=YYYY-MM-DD&view=timeGridDay`，覆盖之前保存的月/周视图偏好。
+日视图查询单日范围，展示当天截止任务、工作时段和日程；空日期显示提示。前后翻日会同步 URL、日期输入和侧栏选中状态。
+今天用独立标记保留，与当前浏览的日期区分。
+
+新增测试覆盖弹簧起止位置、过冲上限、反向运动、日视图偏好、侧栏连续跳日、前后翻日及空日期。
+隔离演示数据库中已实测上述各类切换，检查动画运行时折射滤镜持续存在，并验证菜单文字清晰。
+截图：`liquid-glass-select-readable.png`、`liquid-glass-day-shortcut.png`、`liquid-glass-task-switch.png`。
+实现：`frontend/src/components/ui/LiquidSelectionEffects.tsx`、`frontend/src/lib/liquidMotion.ts` 和 `frontend/src/liquid-motion.css`。
 
 ## 回到原始界面
 

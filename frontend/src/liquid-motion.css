@@ -1,0 +1,39 @@
+@layer components {
+  [data-selection-scope] { position: relative; isolation: isolate; }
+  .liquid-selection {
+    left: 0; top: 0; z-index: -1; transform-origin: top left;
+    pointer-events: none; border: 1px solid var(--glass-stroke);
+    background-color: color-mix(in srgb, var(--selected) 76%, var(--glass-raised));
+    -webkit-backdrop-filter: var(--liquid-filter, blur(1px) saturate(130%));
+    backdrop-filter: var(--liquid-filter, blur(1px) saturate(130%));
+    box-shadow: inset 1px 1px 1px var(--glass-highlight), inset -1px -1px 1px var(--glass-rim-shadow), 0 3px 9px rgb(35 25 60 / .1);
+  }
+  .app-sidebar > .liquid-selection, .nav-drawer-body > .liquid-selection { background-color: rgb(210 183 249 / .86); }
+  [data-selection-scope="navigation"][data-selection-ready="true"] .sidebar-entry[aria-current="page"] { background: transparent; box-shadow: none; }
+  [data-selection-scope="navigation"][data-selection-ready="true"] .settings-option[aria-current="page"] { background: transparent; }
+  .settings-option[aria-current="page"] { background: var(--selected); color: var(--selected-foreground); }
+  .liquid-tabs[data-variant="underline"] { min-height: 40px; padding: 3px; gap: 4px; }
+  .liquid-option { border-radius: 12px; }
+  .liquid-tabs[data-variant="underline"]:not([data-selection-ready="true"]) [data-state="active"] { background: var(--selected); }
+  .glass-segmented[data-selection-ready="true"] > [data-state="active"] { background: transparent; box-shadow: none; }
+  .sidebar-week-days[data-selection-ready="true"] a[aria-current="date"] { background: transparent; }
+  .sidebar-week-days > .liquid-selection { background-color: rgb(210 183 249 / .86); }
+  .sidebar-week-days a[data-today="true"]:not([aria-current="date"]) { position: relative; }
+  .sidebar-week-days a[data-today="true"]:not([aria-current="date"])::after { content: ""; position: absolute; bottom: 1px; width: 3px; height: 3px; border-radius: 50%; background: var(--primary); }
+  @keyframes tr-section-in {
+    from { opacity: 0; transform: translateY(10px) scale(.992); }
+    65% { opacity: 1; transform: translateY(-2px) scale(1.002); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
+  }
+  .motion-page, .motion-section { animation: tr-section-in 360ms var(--ease-out); }
+  @media (prefers-reduced-motion: reduce) {
+    .motion-page, .motion-section { animation: none; }
+  }
+  @media (prefers-reduced-transparency: reduce) {
+    .liquid-selection { background: var(--selected); -webkit-backdrop-filter: none; backdrop-filter: none; }
+    .app-sidebar > .liquid-selection, .nav-drawer-body > .liquid-selection, .sidebar-week-days > .liquid-selection { background: #c9acee; }
+  }
+  @media (forced-colors: active) {
+    .liquid-selection { background: Canvas; border-color: Highlight; -webkit-backdrop-filter: none; backdrop-filter: none; }
+  }
+}

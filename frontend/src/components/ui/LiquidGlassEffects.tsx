@@ -1,7 +1,7 @@
 import { useEffect, useId, useRef } from "react";
-import { DISPLACEMENT_SCALE, lensMap } from "@/lib/liquidGlass";
+import { DISPLACEMENT_SCALE, LIQUID_LAYOUT_EVENT, lensMap } from "@/lib/liquidGlass";
 
-const SURFACES = ".app-topbar, .app-sidebar, .glass-dialog, .nav-drawer, .glass-popover, .glass-card, .calendar-toolbar, .calendar-view-switch, .glass-outline, .agent-glass-body, .dashboard-date, .timer-alarm-dialog";
+const SURFACES = ".app-topbar, .app-sidebar, .glass-dialog, .nav-drawer, .glass-popover, .glass-card, .calendar-toolbar, .calendar-view-switch, .glass-outline, .glass-action, .liquid-selection, .agent-glass-body, .dashboard-date, .timer-alarm-dialog";
 const SVG = "http://www.w3.org/2000/svg";
 interface Surface { filter: SVGFilterElement; image: SVGFEImageElement; key: string }
 
@@ -35,6 +35,7 @@ export function LiquidGlassEffects() {
       surfaces.delete(element);
     };
     const update = () => {
+      window.clearTimeout(scheduled);
       scheduled = 0;
       for (const [element, surface] of surfaces) if (!element.isConnected || !element.matches(SURFACES) || reduced.matches) remove(element, surface);
       if (reduced.matches) return;
@@ -106,6 +107,7 @@ export function LiquidGlassEffects() {
     document.addEventListener("pointermove", move, { passive: true });
     reduced.addEventListener("change", schedule);
     window.addEventListener("resize", schedule, { passive: true });
+    document.addEventListener(LIQUID_LAYOUT_EVENT, update);
     update();
     return () => {
       mutation.disconnect(); resize.disconnect();
@@ -113,6 +115,7 @@ export function LiquidGlassEffects() {
       document.removeEventListener("pointermove", move);
       reduced.removeEventListener("change", schedule);
       window.removeEventListener("resize", schedule);
+      document.removeEventListener(LIQUID_LAYOUT_EVENT, update);
       for (const [element, surface] of surfaces) remove(element, surface);
       maps.clear();
     };

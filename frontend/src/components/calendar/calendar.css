@@ -14,7 +14,8 @@
 .calendar-toolbar > input[type=date] { width: 142px; border-color: var(--border); }
 .calendar-view-switch { align-items: center; backdrop-filter: var(--liquid-filter, blur(1px)); }
 .calendar-view-switch > button { height: 30px; padding-inline: 16px; }
-.calendar-view-switch > button[aria-pressed=true] { background: var(--glass-raised); color: var(--primary); box-shadow: 0 2px 7px rgb(40 23 63 / .09), inset 0 1px 0 var(--glass-highlight); }
+.calendar-view-switch > button[aria-pressed=true] { color: var(--primary); }
+.calendar-view-switch:not([data-selection-ready=true]) > button[aria-pressed=true] { background: var(--glass-raised); box-shadow: 0 2px 7px rgb(40 23 63 / .09), inset 0 1px 0 var(--glass-highlight); }
 .calendar-filters { padding: 0 3px; font-size: 12px; color: var(--muted-foreground); }
 .calendar-filters > label { border: 1px solid var(--glass-stroke); border-radius: 999px; padding: 6px 10px; background: var(--glass-surface); }
 .calendar-filters input[type=checkbox] { accent-color: var(--primary); }

@@ -17,7 +17,7 @@ export interface ButtonProps extends ComponentProps<"button">, VariantProps<type
 export function Button({ className, variant, size, asChild = false, loading, type, disabled, children, ...props }: ButtonProps) {
   if (asChild) {
     return (
-      <Slot.Root data-slot="button" className={cn(buttonVariants({ variant, size, className }))} {...props}>
+      <Slot.Root data-slot="button" data-size={size ?? "default"} data-variant={variant ?? "default"} className={cn(buttonVariants({ variant, size, className }))} {...props}>
         {children}
       </Slot.Root>
     );
@@ -25,6 +25,8 @@ export function Button({ className, variant, size, asChild = false, loading, typ
   return (
     <button
       data-slot="button"
+      data-size={size ?? "default"}
+      data-variant={variant ?? "default"}
       type={type ?? "button"}
       className={cn(buttonVariants({ variant, size, className }))}
       disabled={disabled || loading}

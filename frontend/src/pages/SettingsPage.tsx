@@ -143,7 +143,7 @@ export default function SettingsPage() {
       </Tabs>
 
       <div className="grid gap-6 lg:grid-cols-[12rem_minmax(0,1fr)]">
-        <nav className="settings-navigation hidden h-fit gap-1 lg:sticky lg:top-0 lg:grid" aria-label={t("settings.title")}>
+        <nav className="settings-navigation hidden h-fit gap-1 lg:sticky lg:top-0 lg:grid" data-selection-scope="navigation" aria-label={t("settings.title")}>
           {SECTIONS.map((s) => {
             const Icon = ICON[s];
             return (
@@ -153,12 +153,10 @@ export default function SettingsPage() {
                 onClick={() => select(s)}
                 aria-current={section === s ? "page" : undefined}
                 className={cn(
-                  "relative flex h-8 items-center gap-2.5 rounded-md px-2.5 text-left text-sm text-muted-foreground transition-colors duration-(--duration-fast) outline-none hover:bg-accent hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/40 active:bg-accent-strong",
-                  section === s && "bg-accent font-medium text-foreground",
+                  "settings-option relative flex h-8 items-center gap-2.5 rounded-md px-2.5 text-left text-sm text-muted-foreground transition-colors duration-(--duration-fast) outline-none hover:bg-accent hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/40 active:bg-accent-strong",
+                  section === s && "font-medium text-foreground",
                 )}
               >
-                {/* The same selection mark as the main navigation. */}
-                <span aria-hidden className={cn("absolute top-1/2 left-0 h-4 w-[3px] -translate-y-1/2 rounded-full bg-primary transition-opacity", section === s ? "opacity-100" : "opacity-0")} />
                 <Icon className={cn("size-4", section === s && "text-primary")} />
                 {t(`settings.sections.${s}`)}
               </button>
@@ -170,7 +168,7 @@ export default function SettingsPage() {
           {error ? <ErrorState error={error} onRetry={() => void refetch()} /> : null}
           {settings ? (
             <DirtyReporter.Provider value={report}>
-              <SectionBody key={section} section={section} settings={settings} />
+              <div key={section} className="motion-section grid gap-6"><SectionBody section={section} settings={settings} /></div>
             </DirtyReporter.Provider>
           ) : null}
         </div>
