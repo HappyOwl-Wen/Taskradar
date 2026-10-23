@@ -13,7 +13,7 @@ from sqlalchemy import select
 
 from taskradar.connectors.errors import ConflictError, ConnectorError, NotFoundError, PreconditionError
 from taskradar.db.calendar_models import CalendarDraft, CalendarSource, CalendarWindow, GoogleEvent, WorkBlock
-from taskradar.db.models import CalendarLink
+from taskradar.db.models import CalendarLink, Task
 from taskradar.db.session import transaction
 from taskradar.domain.calendar import EventForm, simple_event
 from taskradar.domain.schemas import DueInfo
@@ -114,7 +114,7 @@ class CalendarEditor:
                     block = session.get(WorkBlock, draft.work_block_id)
                     if not block or (block.event_id and draft.operation == "create"):
                         raise CalendarSyncError("linked_event_exists", "This work block is already linked", 409)
-                    task = self.c.tasks.get(session, block.task_id) if block.task_id else None
+                    task = session.get(Task, block.task_id) if block.task_id else None
                     if task and task.sample:
                         raise CalendarSyncError("sample_task", "Test tasks cannot be sent to Google", 409)
                 if draft.event_id and session.scalar(
@@ -250,6 +250,7 @@ class CalendarEditor:
                 select(WorkBlock).where(WorkBlock.calendar_id == calendar_id, WorkBlock.event_id == event_id)
             )
             if existing and existing.task_id:
+                self.c.tasks.get(session, existing.task_id)
                 return {"task_id": existing.task_id}
             source = session.get(CalendarSource, calendar_id)
             row = session.get(GoogleEvent, (calendar_id, event_id))

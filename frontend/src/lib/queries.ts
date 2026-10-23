@@ -8,6 +8,7 @@ export const qk = {
   dashboard: ["dashboard"] as const,
   tasks: (query: TaskQuery) => ["tasks", query] as const,
   task: (id: string) => ["task", id] as const,
+  trash: (query: { q?: string; offset?: number }) => ["trash", query] as const,
   settings: ["settings"] as const,
   system: ["system"] as const,
   systemSummary: ["system-summary"] as const,
@@ -26,6 +27,9 @@ export const useTasks = (query: TaskQuery) =>
 export const useTask = (id: string | undefined) =>
   useQuery({ queryKey: qk.task(id ?? ""), queryFn: () => api.task(id ?? ""), enabled: Boolean(id) });
 
+export const useTrash = (query: { q?: string; offset?: number }) =>
+  useQuery({ queryKey: qk.trash(query), queryFn: () => api.trash(query), placeholderData: keepPreviousData, refetchInterval: 60_000 });
+
 /** Refetch everything on screen except the session (CSRF token) query. */
 export function refreshAll(queryClient: QueryClient): Promise<void> {
   return queryClient.invalidateQueries({ predicate: (query) => query.queryKey[0] !== "session" });
@@ -33,7 +37,7 @@ export function refreshAll(queryClient: QueryClient): Promise<void> {
 
 /** Refetch the tasks on screen: the board, the lists and a task's page. */
 export function refreshTasks(queryClient: QueryClient): Promise<void> {
-  return queryClient.invalidateQueries({ predicate: (query) => ["dashboard", "tasks", "task"].includes(String(query.queryKey[0])) });
+  return queryClient.invalidateQueries({ predicate: (query) => ["dashboard", "tasks", "task", "trash"].includes(String(query.queryKey[0])) });
 }
 
 export const useSettings = () => useQuery({ queryKey: qk.settings, queryFn: api.settings, staleTime: 60_000 });

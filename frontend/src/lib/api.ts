@@ -11,6 +11,7 @@ import type {
   SystemSummary,
   TaskDetail,
   TaskSummary,
+  TaskTrash,
   TimerPhase,
   TimerAlarmState,
   TimersOverview,
@@ -139,7 +140,7 @@ export interface TaskQuery extends Query {
 /** What can be done to a running (or finished) timer. */
 export type TimerAction = "pause" | "resume" | "skip" | "restart" | "cancel";
 
-/** What a selection of tasks can be set to at once ("todo" reopens; "delete" removes them for good). */
+/** What a selection of tasks can be set to at once ("delete" moves them to the recycle bin). */
 export type BatchAction = "todo" | "in_progress" | "waiting_for_reply" | "complete" | "dismiss" | "delete";
 
 export interface TaskPatch {
@@ -167,7 +168,10 @@ export const api = {
       "/api/tasks/batch",
       { ids, action },
     ),
-  deleteTask: (id: string) => del<{ deleted: string; calendar_warning?: string }>(`/api/tasks/${id}`),
+  deleteTask: (id: string) => del<{ deleted: string; undo_event_id?: number; calendar_warning?: string }>(`/api/tasks/${id}`),
+  trash: (query: { q?: string; offset?: number } = {}) => get<TaskTrash>("/api/trash", { ...query, limit: 100 }),
+  restoreTasks: (ids: string[]) => post<{ changed: string[]; count: number }>("/api/trash/batch", { ids, action: "restore" }),
+  purgeTasks: (ids: string[]) => post<{ changed: string[]; count: number }>("/api/trash/batch", { ids, action: "delete", confirm: true }),
   setSample: (id: string, sample: boolean) => post<TaskDetail>(`/api/tasks/${id}/sample`, { sample }),
   undo: (eventId: number) => post<TaskDetail>(`/api/events/${eventId}/undo`),
   calendarPreview: (id: string) => get<CalendarPreview>(`/api/tasks/${id}/calendar/preview`),

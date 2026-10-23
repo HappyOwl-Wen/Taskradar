@@ -241,6 +241,7 @@ class Task(Base):
     confirmed_at: Mapped[dt.datetime | None] = mapped_column(default=None)
     completed_at: Mapped[dt.datetime | None] = mapped_column(default=None)
     dismissed_at: Mapped[dt.datetime | None] = mapped_column(default=None)
+    deleted_at: Mapped[dt.datetime | None] = mapped_column(default=None, index=True)
 
     sources: Mapped[list[TaskSource]] = relationship(
         back_populates="task", cascade="all, delete-orphan", passive_deletes=True, order_by="TaskSource.id"

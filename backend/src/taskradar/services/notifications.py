@@ -61,6 +61,7 @@ class NotificationService:
                     Task.status.in_([s.value for s in ACTIVE_STATUSES]),
                     Task.due_date.isnot(None),
                     Task.sample.is_(False),  # demo / test data never reminds
+                    Task.deleted_at.is_(None),
                 )
             ).all()
             for task in tasks:
@@ -149,7 +150,7 @@ class NotificationService:
 def _real(stmt: Select[Any]) -> Select[Any]:
     """Leave out notifications about tasks that were later marked as test data."""
     return stmt.outerjoin(Task, Task.id == Notification.task_id).where(
-        or_(Notification.task_id.is_(None), Task.sample.is_(False))
+        or_(Notification.task_id.is_(None), Task.sample.is_(False) & Task.deleted_at.is_(None))
     )
 
 

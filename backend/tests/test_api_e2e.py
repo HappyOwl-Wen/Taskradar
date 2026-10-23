@@ -136,11 +136,14 @@ def test_batch_changes_and_deleting_tasks(api: Any) -> None:
     assert api.post("/api/tasks/batch", json={"ids": [a], "action": "restore"}).status_code == 422
 
     deleted = api.post("/api/tasks/batch", json={"ids": [a, c], "action": "delete"}).json()
-    assert deleted == {"deleted": [a, c], "count": 2, "calendar_not_removed": []}
+    assert deleted["deleted"] == [a, c] and deleted["count"] == 2 and deleted["calendar_not_removed"] == []
+    assert len(deleted["undo_event_ids"]) == 2
     assert [t["title"] for t in api.get("/api/tasks").json()["items"]] == ["B"]
     assert api.post("/api/tasks/batch", json={"ids": ["missing"], "action": "delete"}).status_code == 404
-    assert api.delete(f"/api/tasks/{b}").json() == {"deleted": b}
+    single = api.delete(f"/api/tasks/{b}").json()
+    assert single["deleted"] == b and single["undo_event_id"]
     assert api.get("/api/tasks").json()["total"] == 0
+    assert api.get("/api/trash").json()["total"] == 3
 
 
 def test_task_editing_and_validation(api: Any) -> None:

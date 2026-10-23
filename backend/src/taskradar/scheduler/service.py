@@ -93,6 +93,7 @@ class SchedulerService:
         jobs = [
             ("reminders", self.reminders, settings.reminders.scan_interval_minutes),
             ("calendar-workspace", self.calendar, settings.calendar.background_sync_minutes),
+            ("trash-cleanup", self.trash, 60),
         ]
         for job_id, fn, minutes in jobs:
             self.scheduler.add_job(
@@ -124,6 +125,10 @@ class SchedulerService:
 
     def calendar(self) -> None:
         self.c.workspace.refresh(background=True)
+
+    def trash(self) -> None:
+        with self.c.workspace.lock:
+            self.c.data.purge_expired_tasks()
 
     # ------------------------------------------------------------------------------------------
 

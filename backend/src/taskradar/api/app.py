@@ -52,6 +52,7 @@ def create_app(
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+        container.data.purge_expired_tasks()
         if scheduler is not None:
             scheduler.start()
         try:

@@ -1,4 +1,4 @@
-import { CalendarDays, Hourglass, LayoutDashboard, ListTodo, Menu, PenLine, Settings, Timer, type LucideIcon } from "lucide-react";
+import { CalendarDays, Hourglass, LayoutDashboard, ListTodo, Menu, PenLine, Settings, Timer, Trash2, type LucideIcon } from "lucide-react";
 import { Link, useLocation, type Location } from "react-router";
 import { useTranslation } from "react-i18next";
 import { Tip } from "@/components/ui/menu";
@@ -10,7 +10,7 @@ import { cn } from "@/lib/utils";
 
 interface NavItem {
   to: string;
-  key: "dashboard" | "allTasks" | "mine" | "calendar" | "workbench" | "focus" | "countdowns" | "settings";
+  key: "dashboard" | "allTasks" | "mine" | "calendar" | "workbench" | "focus" | "countdowns" | "settings" | "trash";
   icon: LucideIcon;
   isActive: (location: Location) => boolean;
 }
@@ -26,6 +26,7 @@ const NAV: { group: "main" | "tasks" | "focus"; items: NavItem[] }[] = [
       { to: "/tasks", key: "allTasks", icon: ListTodo, isActive: (l) => taskScope(l) === "all" },
       { to: "/tasks?scope=mine", key: "mine", icon: PenLine, isActive: (l) => taskScope(l) === "mine" },
       { to: "/tasks?scope=calendar", key: "calendar", icon: CalendarDays, isActive: (l) => taskScope(l) === "calendar" },
+      { to: "/trash", key: "trash", icon: Trash2, isActive: (l) => l.pathname === "/trash" },
     ],
   },
   {

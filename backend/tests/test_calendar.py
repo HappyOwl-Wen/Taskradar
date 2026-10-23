@@ -263,8 +263,10 @@ def test_dismissing_or_deleting_a_task_removes_its_event(api: Any, calendar_clie
         == "removed"
     )
     gone = api.post("/api/tasks/batch", json={"ids": [batch_deleted], "action": "delete"}).json()
-    assert gone == {"deleted": [batch_deleted], "count": 1, "calendar_not_removed": []}
-    assert api.delete(f"/api/tasks/{deleted}").json() == {"deleted": deleted}
+    assert gone["deleted"] == [batch_deleted] and gone["count"] == 1 and gone["calendar_not_removed"] == []
+    assert gone["undo_event_ids"]
+    single = api.delete(f"/api/tasks/{deleted}").json()
+    assert single["deleted"] == deleted and single["undo_event_id"]
     assert api.get(f"/api/tasks/{deleted}").status_code == 404
     batch = api.post("/api/tasks/batch", json={"ids": [batch_a, batch_b], "action": "dismiss"}).json()
     assert batch["count"] == 2 and batch["calendar_not_removed"] == []
@@ -289,7 +291,8 @@ def test_removal_rule_can_be_switched_off_and_failures_are_reported(
     api.put("/api/settings", json={"calendar": {"remove_on_dismiss": True}})
     calendar_client.fail_with = TransientError("offline")
     deleted = api.delete(f"/api/tasks/{offline}").json()
-    assert deleted == {"deleted": offline, "calendar_warning": "event_not_removed"}  # the task is gone anyway
+    assert deleted["deleted"] == offline and deleted["calendar_warning"] == "event_not_removed"
+    assert deleted["undo_event_id"]  # The task can be recovered even when Google is offline.
 
 
 def test_the_automatic_rule_adds_new_tasks_once_and_respects_a_removal(

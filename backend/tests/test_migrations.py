@@ -82,6 +82,7 @@ def test_existing_demo_tasks_become_samples_and_real_ones_stay_real(config: AppC
     upgrade_to_head(engine)
     with engine.connect() as conn:
         flags = dict(conn.execute(text("SELECT id, sample FROM tasks")).all())
+        assert all(deleted_at is None for deleted_at in conn.execute(text("SELECT deleted_at FROM tasks")).scalars())
     assert flags == {"demo": 1, "real": 0, "mixed": 0, "manual": 0}
     engine.dispose()
 

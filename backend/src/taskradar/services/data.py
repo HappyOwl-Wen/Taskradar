@@ -38,6 +38,7 @@ from taskradar.db.models import (
     Timer,
 )
 from taskradar.db.session import transaction
+from taskradar.services.tasks import TRASH_RETENTION
 
 
 def _iso(value: Any) -> Any:
@@ -111,12 +112,11 @@ class DataService:
         if self.config.files_dir.exists():
             shutil.rmtree(self.config.files_dir, ignore_errors=True)
 
-    def delete_task(self, task_id: str) -> None:
+    def purge_expired_tasks(self) -> int:
+        """Expiry is based on UTC elapsed time, including time spent with the app closed."""
         with transaction(self._factory) as session:
-            task = session.get(Task, task_id)
-            if task is None:
-                raise LookupError("Task not found")
-            session.delete(task)
+            result = session.execute(delete(Task).where(Task.deleted_at <= self.clock() - TRASH_RETENTION))
+            return int(getattr(result, "rowcount", 0) or 0)
 
     def delete_all(self) -> dict[str, int]:
         """Remove all tasks, timers, imported items, history and stored file copies.

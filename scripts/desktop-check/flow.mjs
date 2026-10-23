@@ -78,14 +78,14 @@ await sleep(400);
 await c.shot(`${outDir}/04-in-progress.png`);
 windowShot("04-in-progress-window.png");
 
-// 4. Delete the second for good (its status menu -> 删除任务…)
+// 4. Move the second to the recycle bin (its status menu -> 删除任务…)
 await c.click(`section[aria-labelledby="lane-todo"] li button[aria-label^="状态："]`);
 await c.click("[role=menuitem]", "删除任务…");
 await c.waitFor(`document.querySelector("[role=alertdialog]")?.textContent.includes(${JSON.stringify(`删除「${second}」？`)})`, 10000, "the delete question");
 await sleep(300);
 await c.shot(`${outDir}/05-delete.png`);
-await c.click("[role=alertdialog] button", "永久删除");
-await toast("已删除 1 项任务");
+await c.click("[role=alertdialog] button", "移入回收站");
+await toast("已将 1 项任务移入回收站");
 await c.waitFor(`!${lane("todo")}.includes(${JSON.stringify(second)})`, 10000, "gone from the board");
 step(4, "deleted", second);
 

@@ -83,7 +83,9 @@ class StatusSummaryService:
                 select(CalendarLink.status, func.count())
                 .join(Task, Task.id == CalendarLink.task_id)
                 .where(
-                    CalendarLink.status.in_(("failed", "out_of_sync")), Task.status.not_in(("completed", "dismissed"))
+                    CalendarLink.status.in_(("failed", "out_of_sync")),
+                    Task.status.not_in(("completed", "dismissed")),
+                    Task.deleted_at.is_(None),
                 )
                 .group_by(CalendarLink.status)
             ).all()
@@ -93,7 +95,11 @@ class StatusSummaryService:
             select(func.count())
             .select_from(CalendarLink)
             .join(Task, Task.id == CalendarLink.task_id)
-            .where(CalendarLink.status != "removed", Task.status.not_in(("completed", "dismissed")))
+            .where(
+                CalendarLink.status != "removed",
+                Task.status.not_in(("completed", "dismissed")),
+                Task.deleted_at.is_(None),
+            )
         )
         if in_calendar and not self._calendar_connected():
             # Tasks are in Google Calendar, but changes can no longer reach it.

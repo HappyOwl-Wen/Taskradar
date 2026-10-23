@@ -422,10 +422,13 @@ class CalendarWorkspace:
         items: list[dict[str, Any]] = []
         unscheduled = []
         with transaction(self.c.factory) as session:
-            tasks = session.scalars(select(Task).where(Task.sample.is_(False), Task.status != "dismissed")).all()
+            tasks = session.scalars(
+                select(Task).where(Task.sample.is_(False), Task.status != "dismissed", Task.deleted_at.is_(None))
+            ).all()
             links = {link.task_id: link for link in session.scalars(select(CalendarLink))}
             blocks = session.scalars(select(WorkBlock)).all()
             task_map = {t.id: t for t in tasks}
+            trashed_ids = set(session.scalars(select(Task.id).where(Task.deleted_at.isnot(None))))
             sources = {s.id: s for s in session.scalars(select(CalendarSource))}
             remote: dict[tuple[str, str], dict[str, Any]] = {}
             windows = session.scalars(
@@ -497,6 +500,7 @@ class CalendarWorkspace:
                             else not block.event_id,
                             "html_link": safe_link(event) if event else None,
                             "task_status": task_map[block.task_id].status if block.task_id in task_map else None,
+                            "task_id": block.task_id if block.task_id not in trashed_ids else None,
                         }
                     )
                     items.append(item)
@@ -655,6 +659,7 @@ class CalendarWorkspace:
 
     def task_blocks(self, task_id: str) -> list[dict[str, Any]]:
         with transaction(self.c.factory) as session:
+            self.c.tasks.get(session, task_id)
             return [block_dict(b) for b in session.scalars(select(WorkBlock).where(WorkBlock.task_id == task_id))]
 
     @staticmethod

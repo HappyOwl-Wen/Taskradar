@@ -156,6 +156,8 @@ class Actor(StrEnum):
 
 class EventType(StrEnum):
     CREATED = "created"
+    TRASHED = "trashed"
+    RESTORED = "restored"
     STATUS_CHANGED = "status_changed"
     FIELDS_UPDATED = "fields_updated"
     SOURCE_ATTACHED = "source_attached"

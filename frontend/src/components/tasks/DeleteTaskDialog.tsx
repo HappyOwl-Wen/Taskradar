@@ -3,10 +3,7 @@ import { ConfirmDialog } from "@/components/ui/dialog";
 import { api } from "@/lib/api";
 import { useAction, useSettings } from "@/lib/queries";
 
-/**
- * Deleting tasks for good, after a question that says what happens: the tasks and their history are gone (unlike
- * "dismiss", which keeps them), and their Google Calendar events go too when the user wants that.
- */
+/** Move tasks to the recycle bin, explaining the retention period and Google Calendar side effects. */
 export function DeleteTasksDialog({
   ids,
   title,
@@ -24,11 +21,12 @@ export function DeleteTasksDialog({
   const { t } = useTranslation();
   const { data: settings } = useSettings();
   // Both answers carry what useAction needs to warn about an event that stayed in Google Calendar.
-  const remove = useAction(async (): Promise<{ deleted?: unknown; calendar_warning?: string; calendar_not_removed?: string[] }> => {
+  const remove = useAction(async (): Promise<{ deleted?: unknown; undo_event_id?: number; undo_event_ids?: number[]; calendar_warning?: string; calendar_not_removed?: string[] }> => {
     if (ids.length === 1) return api.deleteTask(ids[0]);
     return api.batch(ids, "delete");
   }, {
     success: t("deleteTasks.done", { count: ids.length }),
+    undo: (result) => result.undo_event_ids ?? result.undo_event_id,
     onSuccess: () => {
       onOpenChange(false);
       onDeleted?.();

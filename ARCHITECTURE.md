@@ -153,13 +153,24 @@ migrations build exactly the schema the models describe.
 
 All routes live under `/api` (OpenAPI docs at `/api/docs`): the dashboard and tasks (`/dashboard`, `/tasks` with
 `status`, `manual` and `in_calendar` filters, `/tasks/quick-parse`, `/tasks/{id}/status`, `/tasks/batch` with
-`delete`, `DELETE /tasks/{id}`, `/events/{id}/undo`, `/tasks/{id}/calendar/preview|remove`), timers (`/timers`,
+`delete`, `DELETE /tasks/{id}` to move tasks to the recycle bin, `/trash` with search and pagination,
+`/trash/batch` to restore or explicitly confirm permanent deletion, `/events/{id}/undo`,
+`/tasks/{id}/calendar/preview|remove`), timers (`/timers`,
 `/timers/pomodoro`, `/timers/countdowns`, `/timers/{id}/pause|resume|skip|restart|cancel`, `/timers/clear-finished`),
 integrations (`/integrations/google/*`, `/oauth/google/callback`) and the system (`/session`, `/system/status`,
 `/system/summary`, `/settings`, `/notifications`, `/data/export`, `/data/legacy`, `/data/delete-imported`,
 `/data/delete-all`, `/system/autostart`, `/system/start-menu`, and `/desktop/state|activate` in the desktop app).
 Errors use one envelope: `{"error": {"code", "message", "recoverable", "details"}}`; the UI translates the codes.
 Changes answer with what the UI shows next (a task with its `undo_event_id`, or all timers).
+
+Task deletion sets an indexed UTC `tasks.deleted_at` timestamp and records an undoable `trashed` event without
+changing the original task status or removing its history and associations. Active lists, statistics, reminders,
+calendar deadlines and task mutations exclude these rows. Restoration clears the timestamp and records a
+`restored` event; older delete toasts cannot restore a subsequent deletion. Retention is 30 elapsed days; startup,
+an hourly scheduler job and recycle-bin reads permanently delete expired rows using database foreign-key cascades.
+Restoration also checks expiry directly. Timers and independent work blocks survive permanent deletion with null
+task links. Google Calendar removal follows the existing setting at the time of moving to the bin; restoring a task
+does not recreate removed remote events automatically. Exports include recoverable tasks and their deletion times.
 
 ## Frontend
 

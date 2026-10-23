@@ -65,6 +65,25 @@ export interface Evidence {
   kind: "action" | "deadline" | "completion" | "context";
 }
 
+export interface TrashedTask {
+  id: string;
+  title: string;
+  description: string;
+  status: TaskStatus;
+  category: Category;
+  due_date: string | null;
+  due_time: string | null;
+  deleted_at: string;
+  expires_at: string;
+  days_remaining: number;
+}
+
+export interface TaskTrash {
+  items: TrashedTask[];
+  total: number;
+  retention_days: number;
+}
+
 /** A mail an earlier version imported (kept until the user deletes the imported content). */
 export interface MessageBrief {
   id: number;

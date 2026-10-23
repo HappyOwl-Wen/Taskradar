@@ -103,6 +103,9 @@ STATUS_LABELS_ZH = {
     "dismissed": "已忽略",
 }
 
+TRASH_RETENTION_DAYS = 30
+TRASH_RETENTION = dt.timedelta(days=TRASH_RETENTION_DAYS)
+
 
 class TaskService:
     def __init__(self, clock: Callable[[], dt.datetime] = utcnow) -> None:
@@ -110,9 +113,53 @@ class TaskService:
 
     def get(self, session: Session, task_id: str) -> Task:
         task = session.get(Task, task_id)
-        if task is None:
+        if task is None or task.deleted_at is not None:
             raise TaskNotFound("Task not found")
         return task
+
+    def get_trashed(self, session: Session, task_id: str) -> Task:
+        task = session.get(Task, task_id)
+        if task is None:
+            raise TaskNotFound("Task not found")
+        if task.deleted_at is None:
+            raise RevertConflict("Task is not in the recycle bin", code="task_not_in_trash")
+        if task.deleted_at + TRASH_RETENTION <= self.clock():
+            raise TaskNotFound("Task retention period has expired", code="task_trash_expired")
+        return task
+
+    def trash(self, session: Session, task: Task) -> TaskEvent:
+        # Keep the original status, deadlines, source evidence and history intact.
+        self.get(session, task.id)
+        task.deleted_at = task.updated_at = self.clock()
+        return self.record(
+            session,
+            task,
+            EventType.TRASHED,
+            Actor.USER,
+            "移入回收站",
+            data={"deleted_at": task.deleted_at.isoformat()},
+            revertible=True,
+        )
+
+    def restore(self, session: Session, task: Task) -> TaskEvent:
+        self.get_trashed(session, task.id)
+        deleted_at = task.deleted_at
+        task.deleted_at = None
+        task.updated_at = self.clock()
+        event = self.record(
+            session,
+            task,
+            EventType.RESTORED,
+            Actor.USER,
+            "从回收站恢复任务",
+            data={"deleted_at": _jsonable(deleted_at)},
+        )
+        # An earlier delete toast must not undo a later trip through the recycle bin.
+        for previous in task.events:
+            if previous.event_type == EventType.TRASHED and previous.reverted_at is None:
+                previous.reverted_at = self.clock()
+                previous.reverted_by_event_id = event.id
+        return event
 
     def record(
         self,
@@ -373,6 +420,14 @@ class TaskService:
             raise RevertConflict("This change was already undone")
         task = event.task
         data = event.data or {}
+
+        if event.event_type == EventType.TRASHED.value:
+            self.get_trashed(session, task.id)
+            if _jsonable(task.deleted_at) != data.get("deleted_at"):
+                raise RevertConflict("The task has been deleted again since")
+            return self.restore(session, task)
+
+        self.get(session, task.id)  # Old history cannot mutate a task while it is in the recycle bin.
 
         if event.event_type == EventType.STATUS_CHANGED.value:
             if task.status != data["after"]["status"]:

@@ -44,7 +44,7 @@ task. This version is a plain to-do app instead:
 | --- | --- | --- |
 | To-dos in one sentence | "添加待办" on every page: one sentence in Chinese, German or English; the date and time are recognised locally and shown in editable fields before saving (relative dates count from the moment of typing; a date without a time stays date-only). Category, priority and notes wait under "更多选项" | implemented, tested, verified in the desktop window |
 | Statuses you can see | To do, in progress, waiting for reply, done, dismissed. The home page lists what is overdue or due soon (with each task's status) and below it a board with one lane per status; "开始" moves a to-do to "进行中" in one click; every list shows the status of tasks that are not plain to-dos | implemented, tested, verified in the desktop window |
-| Deleting | "删除任务…" in every task's menu and for a selection of tasks, after a question that says what happens (gone for good, unlike "忽略"); the task's Google Calendar event goes too (a setting) | implemented, tested, verified in the desktop window |
+| Recycle bin | "删除任务…" moves one or several tasks to the sidebar's recycle bin for 30 days; restore their original status, notes and history, undo a deletion immediately, or confirm permanent deletion. Expired tasks are cleaned up at startup and hourly while running. Google events follow the calendar removal setting; removed events can be added again after restoring the task | implemented, tested |
 | Views in the sidebar | 全部任务, 我创建的 (your own to-dos) and Google 日历 (tasks with an event in TaskRadar's calendar), each with the tabs open / to do / in progress / waiting / done / dismissed / all | implemented, tested |
 | Pomodoro | Focus 25 min, short break 5 min, a long break of 15 min after 4 Pomodoros (all adjustable); pause, resume, skip to the next phase, stop; breaks and focus sessions can start by themselves; a focus session can be linked to a task, and a to-do it is linked to moves to "进行中"; today's count; the sidebar shows the time left | implemented, tested, verified in the desktop window |
 | Countdowns | For a duration (presets from 1 minute to 1 hour, or hours/minutes/seconds; can be paused and run again) or until a moment in your time zone; several at once; the sidebar shows the one that ends first | implemented, tested; a 5-second and a 3-second countdown ended on their own in the desktop window with their notification |
@@ -211,7 +211,7 @@ TaskRadar.cmd       double-click launcher (window; --browser)     Setup.cmd   on
 2. 双击 `TaskRadar.cmd` 启动：TaskRadar 在自己的窗口中打开。点窗口的 × 后，它留在任务栏右下角的托盘里继续提醒和计时；
    在托盘图标上右键选“退出 TaskRadar”才会退出（可以在“设置 → 常规”中改为点 × 直接退出）。
 3. 添加待办：任意页面右上角「添加待办」，写一句话即可，例如“周五前交房租”“明天下午3点开组会”，日期和时间会自动识别。
-   首页按“需要关注”和“按状态”（待办 / 进行中 / 等待回复）显示任务；点“开始”即移到“进行中”；“…”菜单里可以忽略或删除任务。
+   首页按“需要关注”和“按状态”（待办 / 进行中 / 等待回复）显示任务；点“开始”即移到“进行中”；“…”菜单里可以忽略或删除任务。删除后在侧边栏「回收站」保留 30 天，可单项或批量恢复原状态、备注和变更记录；到期自动清理，也可确认后提前彻底删除。
 4. 左侧边栏：全部任务、我创建的、Google 日历三个视图；“专注”下是番茄钟和倒计时，运行时侧边栏直接显示剩余时间。
 5. Windows 通知：番茄钟每个阶段结束、倒计时结束和任务提醒都会发出 Windows 通知。**只有开始菜单中有 TaskRadar 时，
    Windows 才会把通知弹到屏幕上**；安装版会自动添加，从源代码运行时请在「设置 → 提醒与通知」中点「添加到开始菜单」（会先询问）。

@@ -205,8 +205,8 @@ class TimerService:
             "phase": timer.phase,
             "mode": timer.mode,
             "label": timer.label,
-            "task_id": timer.task_id,
-            "task_title": timer.task.title if timer.task is not None else None,
+            "task_id": timer.task_id if timer.task is not None and timer.task.deleted_at is None else None,
+            "task_title": timer.task.title if timer.task is not None and timer.task.deleted_at is None else None,
             "cycle": timer.cycle,
             "status": timer.status,
             "duration_seconds": timer.duration_seconds,
@@ -264,8 +264,10 @@ class TimerService:
         now = self.clock()
         replaced: int | None = None
         with self._lock, transaction(self._factory) as session:
-            if task_id is not None and session.get(Task, task_id) is None:
-                raise TimerError("task_not_found", "Task not found", 404)
+            if task_id is not None:
+                task = session.get(Task, task_id)
+                if task is None or task.deleted_at is not None:
+                    raise TimerError("task_not_found", "Task not found", 404)
             current = self._current_pomodoro(session)
             if current is not None:
                 self._end(current, "skipped", now)
@@ -330,7 +332,12 @@ class TimerService:
     def _work_on(self, session: Session, timer: Timer, actor: Actor) -> None:
         """A focus session on a to-do: the to-do is being worked on now (as its "开始" button does); undoable."""
         task = timer.task
-        if timer.phase != "focus" or task is None or task.status != TaskStatus.CONFIRMED.value:
+        if (
+            timer.phase != "focus"
+            or task is None
+            or task.deleted_at is not None
+            or task.status != TaskStatus.CONFIRMED.value
+        ):
             return  # a task waiting for a reply, done or dismissed keeps its status
         self.tasks.change_status(
             session, task, TaskStatus.IN_PROGRESS, actor=actor, reason="pomodoro", summary="开始专注：待办 → 进行中"

@@ -4,13 +4,14 @@ from __future__ import annotations
 
 import datetime as dt
 import logging
+import math
 from collections.abc import Iterable
 from typing import Any, Literal
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, Field, field_validator
-from sqlalchemy import or_, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session, selectinload
 
 from taskradar.api.deps import get_container, thresholds_for
@@ -33,6 +34,7 @@ from taskradar.domain.schemas import DueInfo
 from taskradar.extraction.quick_add import MAX_QUICK_TEXT, parse_quick_task
 from taskradar.extraction.temporal_calendar import wall_time_status
 from taskradar.services.calendar_sync import CalendarSyncError
+from taskradar.services.tasks import TRASH_RETENTION, TRASH_RETENTION_DAYS
 
 log = logging.getLogger(__name__)
 router = APIRouter(prefix="/api", tags=["tasks"])
@@ -61,7 +63,7 @@ _PRIORITY_ORDER = {"high": 0, "medium": 1, "low": 2}
 
 def _detail(c: Container, session: Session, task_id: str) -> dict[str, Any]:
     task = session.scalar(select(Task).options(*_TASK_LOAD, selectinload(Task.events)).where(Task.id == task_id))
-    if task is None:
+    if task is None or task.deleted_at is not None:
         raise ApiError("task_not_found", "Task not found", 404)
     links = []
     for link in session.scalars(
@@ -69,7 +71,7 @@ def _detail(c: Container, session: Session, task_id: str) -> dict[str, Any]:
     ):
         other_id = link.other_task_id if link.task_id == task_id else link.task_id
         other = session.get(Task, other_id)
-        if other is not None:
+        if other is not None and other.deleted_at is None:
             links.append(
                 {
                     "kind": link.kind,
@@ -118,7 +120,7 @@ def dashboard(c: Container = Depends(get_container)) -> dict[str, Any]:
     thresholds = thresholds_for(c)
     today = local_today(now, c.settings.get().general.timezone)
     with transaction(c.factory) as session:
-        tasks = session.scalars(select(Task).options(*_TASK_LOAD)).all()
+        tasks = session.scalars(select(Task).where(Task.deleted_at.is_(None)).options(*_TASK_LOAD)).all()
         # Test data is listed elsewhere (marked as such) but never counts here.
         sample_open = sum(1 for t in tasks if t.sample and t.status in _OPEN)
         items = [task_summary(t, now=now, thresholds=thresholds) for t in tasks if not t.sample]
@@ -208,7 +210,7 @@ def list_tasks(
     now = c.clock()
     thresholds = thresholds_for(c)
     with transaction(c.factory) as session:
-        stmt = select(Task).options(*_TASK_LOAD)
+        stmt = select(Task).where(Task.deleted_at.is_(None)).options(*_TASK_LOAD)
         if status:
             stmt = stmt.where(Task.status.in_(status))
         if category:
@@ -482,14 +484,74 @@ def batch(body: BatchBody, c: Container = Depends(get_container)) -> dict[str, A
 
 
 def _delete_tasks(c: Container, ids: list[str]) -> dict[str, Any]:
-    """Delete tasks for good (after the user confirmed it); their calendar events go too, if the user wants that."""
+    """Keep tasks and history for 30 days; honour the existing Google Calendar removal setting."""
+    with c.workspace.lock:
+        with transaction(c.factory) as session:
+            for task_id in ids:
+                c.tasks.get(session, task_id)  # Validate the whole batch before any side effects.
+        not_removed = _remove_calendar_events(c, ids)
+        with transaction(c.factory) as session:
+            events = [c.tasks.trash(session, c.tasks.get(session, task_id)).id for task_id in ids]
+    return {"deleted": ids, "count": len(ids), "calendar_not_removed": not_removed, "undo_event_ids": events}
+
+
+@router.get("/trash")
+def list_trash(
+    q: str | None = None,
+    limit: int = Query(default=100, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
+    c: Container = Depends(get_container),
+) -> dict[str, Any]:
+    with c.workspace.lock:
+        c.data.purge_expired_tasks()
+    now = c.clock()
     with transaction(c.factory) as session:
-        for task_id in ids:
-            c.tasks.get(session, task_id)  # 404 before anything is touched
-    not_removed = _remove_calendar_events(c, ids)
-    for task_id in ids:
-        c.data.delete_task(task_id)
-    return {"deleted": ids, "count": len(ids), "calendar_not_removed": not_removed}
+        stmt = select(Task).where(Task.deleted_at > now - TRASH_RETENTION)
+        if q and q.strip():
+            like = f"%{q.strip()}%"
+            stmt = stmt.where(or_(Task.title.ilike(like), Task.description.ilike(like)))
+        total = session.scalar(select(func.count()).select_from(stmt.subquery())) or 0
+        tasks = session.scalars(stmt.order_by(Task.deleted_at.desc(), Task.id).offset(offset).limit(limit)).all()
+        items = []
+        for task in tasks:
+            assert task.deleted_at is not None
+            expires_at = task.deleted_at + TRASH_RETENTION
+            items.append(
+                {
+                    "id": task.id,
+                    "title": task.title,
+                    "description": task.description,
+                    "status": task.status,
+                    "category": task.category,
+                    "due_date": task.due_date.isoformat() if task.due_date else None,
+                    "due_time": task.due_time,
+                    "deleted_at": task.deleted_at.isoformat(),
+                    "expires_at": expires_at.isoformat(),
+                    "days_remaining": max(1, math.ceil((expires_at - now).total_seconds() / 86400)),
+                }
+            )
+    return {"items": items, "total": total, "retention_days": TRASH_RETENTION_DAYS}
+
+
+class TrashBatchBody(BaseModel):
+    ids: list[str] = Field(min_length=1, max_length=500)
+    action: Literal["restore", "delete"]
+    confirm: bool = False
+
+
+@router.post("/trash/batch")
+def trash_batch(body: TrashBatchBody, c: Container = Depends(get_container)) -> dict[str, Any]:
+    if body.action == "delete" and not body.confirm:
+        raise ApiError("confirmation_required", "Confirm permanent deletion from the recycle bin", 400)
+    ids = list(dict.fromkeys(body.ids))
+    with c.workspace.lock, transaction(c.factory) as session:
+        tasks = [c.tasks.get_trashed(session, task_id) for task_id in ids]
+        for task in tasks:
+            if body.action == "restore":
+                c.tasks.restore(session, task)
+            else:
+                session.delete(task)
+    return {"changed": ids, "count": len(ids)}
 
 
 class SampleBody(BaseModel):
@@ -515,14 +577,15 @@ def set_sample(task_id: str, body: SampleBody, c: Container = Depends(get_contai
 @router.delete("/tasks/{task_id}")
 def delete_task(task_id: str, c: Container = Depends(get_container)) -> dict[str, Any]:
     result = _delete_tasks(c, [task_id])
+    response = {"deleted": task_id, "undo_event_id": result["undo_event_ids"][0]}
     if result["calendar_not_removed"]:
-        return {"deleted": task_id, "calendar_warning": "event_not_removed"}  # it has to be deleted in Google Calendar
-    return {"deleted": task_id}
+        response["calendar_warning"] = "event_not_removed"
+    return response
 
 
 @router.post("/events/{event_id}/undo")
 def undo(event_id: int, c: Container = Depends(get_container)) -> dict[str, Any]:
-    with transaction(c.factory) as session:
+    with c.workspace.lock, transaction(c.factory) as session:
         revert = c.tasks.revert_event(session, event_id, actor=Actor.USER)
         task_id = revert.task_id
     with transaction(c.factory) as session:
