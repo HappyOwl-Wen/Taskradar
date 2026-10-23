@@ -124,7 +124,14 @@
     -webkit-backdrop-filter: var(--liquid-filter, blur(2px) saturate(120%));
     backdrop-filter: var(--liquid-filter, blur(2px) saturate(120%));
   }
-  .glass-dialog { border-radius: 26px; }
+  /* An opaque reading area prevents text behind a modal from competing with its form.
+     The transparent border remains a refractive glass rim, including while the content scrolls. */
+  .glass-dialog {
+    border: 5px solid transparent;
+    border-radius: 26px;
+    background-color: var(--popover);
+    background-clip: padding-box;
+  }
   .glass-popover { border-radius: 17px; }
   .glass-popover { background-color: var(--glass-menu); }
   .glass-segmented {

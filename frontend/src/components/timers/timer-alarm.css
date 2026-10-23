@@ -9,9 +9,10 @@
   width: min(26rem, calc(100% - 1rem));
   max-height: calc(100dvh - 1rem);
   padding: 1.5rem;
-  border: 1px solid var(--glass-stroke);
+  border: 5px solid transparent;
   border-radius: 26px;
-  background: var(--glass-popover);
+  background: var(--popover);
+  background-clip: padding-box;
   color: var(--foreground);
   box-shadow: var(--glass-shadow-float), inset 0 1px 0 var(--glass-highlight);
   -webkit-backdrop-filter: var(--liquid-filter, blur(2px) saturate(120%));

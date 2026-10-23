@@ -11,6 +11,7 @@
 - 原始界面提交：`b35361e29d30ff263d51203615cf001f894ab3bb`
 - 第一版磨砂方案另存为标签：`ui-frosted-iteration-20261024`
 - 弹性切换与日历快捷入口改动前：`ui-before-liquid-motion-20261024`
+- 弹窗正文可读性修复前：`ui-before-dialog-reading-20261024`
 - 当前方案分支：`codex/liquid-glass-ui`
 
 存档保留了修改开始前尚未提交的桌面服务、日历页面、测试和文档，不仅是最后一个历史版本。
@@ -79,6 +80,17 @@ Canvas 不可用时保留 CSS 材质，避免影响软件功能。
 隔离演示数据库中已实测上述各类切换，检查动画运行时折射滤镜持续存在，并验证菜单文字清晰。
 截图：`liquid-glass-select-readable.png`、`liquid-glass-day-shortcut.png`、`liquid-glass-task-switch.png`。
 实现：`frontend/src/components/ui/LiquidSelectionEffects.tsx`、`frontend/src/lib/liquidMotion.ts` 和 `frontend/src/liquid-motion.css`。
+
+### 表单弹窗正文遮挡
+
+通用表单、确认框和计时结束提醒使用不透明的 `--popover` 正文底色，阻止下方任务文字穿透。
+通过 `background-clip: padding-box` 将底色限制在正文区域，外侧保留 5 px 的透明折射边缘与高光。
+背景由弹窗自身绘制，滚动时无需额外的绝对定位遮挡层；也不依靠提高模糊强度消除重影。
+导航抽屉继续使用独立材质。
+
+隔离演示数据中验证了浅色、深色和展开“更多选项”的表单，确认正文不透字、SVG 折射滤镜继续存在，
+浏览器没有运行错误。220 项前端测试、ESLint 和 TypeScript/生产构建均通过。
+截图：`liquid-glass-dialog-readable.png`、`liquid-glass-dialog-readable-dark.png`。
 
 ## 回到原始界面
 

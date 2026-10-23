@@ -12,7 +12,7 @@ export const DialogClose = DialogPrimitive.Close;
 
 const overlayClass = "glass-overlay motion-overlay fixed inset-0 z-50";
 const contentClass =
-  "fixed top-[50%] left-[50%] z-50 grid max-h-[calc(100dvh-2rem)] w-full max-w-[calc(100%-2rem)] translate-x-[-50%] translate-y-[-50%] gap-4 overflow-y-auto border p-6 outline-none sm:max-w-lg";
+  "fixed top-[50%] left-[50%] z-50 grid max-h-[calc(100dvh-2rem)] w-full max-w-[calc(100%-2rem)] translate-x-[-50%] translate-y-[-50%] gap-4 overflow-y-auto p-6 outline-none sm:max-w-lg";
 
 /**
  * The buttons that finish a dialog. On phones they stay in view at the bottom while the content scrolls and
