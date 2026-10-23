@@ -187,7 +187,7 @@ export const api = {
     return request<GoogleStatus["client"]>("POST", "/api/integrations/google/client-config", { form });
   },
   deleteClientConfig: () => del<GoogleStatus["client"]>("/api/integrations/google/client-config"),
-  connectGoogle: (service: "calendar") => post<{ auth_url: string }>(`/api/integrations/google/${service}/connect`),
+  connectGoogle: (service: "calendar", access: "app" | "read" | "edit" = "app") => post<{ auth_url: string }>(`/api/integrations/google/${service}/connect`, { access }),
   disconnectGoogle: (service: "calendar") => post<{ connected: boolean }>(`/api/integrations/google/${service}/disconnect`),
   updateDesktopState: (state: { unsaved?: boolean; theme?: "light" | "dark"; language?: "zh-CN" | "en" }) =>
     put<{ ok: boolean }>("/api/desktop/state", state),

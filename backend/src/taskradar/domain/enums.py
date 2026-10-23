@@ -125,6 +125,7 @@ SAMPLE_SOURCE_KINDS: frozenset[str] = frozenset({SourceKind.DEMO_MAIL.value, Sou
 
 
 class JobKind(StrEnum):
+    CALENDAR_SYNC = "calendar_sync"
     GMAIL_SYNC = "gmail_sync"
     FOLDER_SCAN = "folder_scan"
     FILE_IMPORT = "file_import"

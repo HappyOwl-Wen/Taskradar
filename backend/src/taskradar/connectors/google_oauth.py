@@ -1,7 +1,7 @@
 """Google OAuth 2.0 for installed (desktop) apps with PKCE and loopback redirect.
 
-Only Google Calendar is authorized, with the minimum scope ``calendar.app.created`` (TaskRadar can only manage
-the calendar and events it creates itself). Earlier versions could also read Gmail (``gmail.readonly``); such a
+Only Google Calendar is authorized, with staged app-created, existing-calendar read and optional event write grants.
+Earlier versions could also read Gmail (``gmail.readonly``); such a
 stored sign-in is only ever deleted (and revoked at Google), never used.
 
 Tokens are stored in the OS credential store via :mod:`taskradar.security.secrets`.
@@ -28,6 +28,14 @@ log = logging.getLogger(__name__)
 os.environ.setdefault("OAUTHLIB_RELAX_TOKEN_SCOPE", "1")
 
 CALENDAR_SCOPES = ["https://www.googleapis.com/auth/calendar.app.created"]
+LIST_SCOPE = "https://www.googleapis.com/auth/calendar.calendarlist.readonly"
+READ_SCOPE = "https://www.googleapis.com/auth/calendar.events.readonly"
+WRITE_SCOPE = "https://www.googleapis.com/auth/calendar.events"
+ACCESS_SCOPES = {
+    "app": CALENDAR_SCOPES,
+    "read": [*CALENDAR_SCOPES, LIST_SCOPE, READ_SCOPE],
+    "edit": [*CALENDAR_SCOPES, LIST_SCOPE, READ_SCOPE, WRITE_SCOPE],
+}
 SERVICES: dict[str, tuple[list[str], str]] = {
     "calendar": (CALENDAR_SCOPES, sk.GOOGLE_TOKEN_CALENDAR),
 }
@@ -46,6 +54,7 @@ class _Pending:
     service: str
     flow: Any
     created: dt.datetime
+    scopes: list[str]
 
 
 def validate_client_config(raw: bytes | str) -> dict[str, Any]:
@@ -89,6 +98,8 @@ class GoogleOAuthManager:
         # app opens Google in the system browser). ``seq`` grows with every result.
         self.last_result: dict[str, Any] | None = None
         self._results = 0
+        # The composition root binds this to the workspace's single-account check.
+        self.validate_account: Callable[[Any, set[str]], None] | None = None
 
     # -- client configuration ----------------------------------------------------------------
 
@@ -113,7 +124,7 @@ class GoogleOAuthManager:
 
     # -- authorization flow ------------------------------------------------------------------
 
-    def start(self, service: str) -> str:
+    def start(self, service: str, access: str = "app") -> str:
         if service not in SERVICES:
             raise OAuthError("unknown_service", f"Unknown service {service}")
         cfg = self.client_config()
@@ -121,7 +132,10 @@ class GoogleOAuthManager:
             raise OAuthError("client_not_configured", "Upload your Google OAuth client JSON first")
         from google_auth_oauthlib.flow import Flow
 
-        scopes, _ = SERVICES[service]
+        if access not in ACCESS_SCOPES:
+            raise OAuthError("invalid_access", "Unknown calendar access level")
+        # Reconnect never silently downgrades an existing grant; cancelled upgrades never replace it.
+        scopes = sorted(set(ACCESS_SCOPES[access]) | set(self.granted_scopes()))
         flow = Flow.from_client_config(
             cfg, scopes=scopes, redirect_uri=self.redirect_uri, autogenerate_code_verifier=True
         )
@@ -129,7 +143,7 @@ class GoogleOAuthManager:
         with self._lock:
             now = self.clock()
             self._pending = {k: v for k, v in self._pending.items() if now - v.created < PENDING_TTL}
-            self._pending[state] = _Pending(service, flow, now)
+            self._pending[state] = _Pending(service, flow, now, scopes)
         return str(url)
 
     def complete(self, *, state: str | None, code: str | None, error: str | None) -> str:
@@ -137,6 +151,8 @@ class GoogleOAuthManager:
             pending = self._pending.pop(state or "", None)
         if pending is None:
             raise OAuthError("invalid_state", "The authorization request expired or is unknown; please try again")
+        if self.clock() - pending.created >= PENDING_TTL:
+            raise OAuthError("invalid_state", "The authorization request expired; please try again")
         if error:
             raise OAuthError("access_denied", "Authorization was cancelled or denied")
         if not code:
@@ -148,11 +164,15 @@ class GoogleOAuthManager:
                 "token_exchange_failed", f"Could not complete authorization: {exc.__class__.__name__}"
             ) from exc
         creds = pending.flow.credentials
-        scopes, token_key = SERVICES[pending.service]
+        _, token_key = SERVICES[pending.service]
         granted = set(getattr(creds, "granted_scopes", None) or creds.scopes or [])
-        if granted and not set(scopes) <= granted:
+        if not set(pending.scopes) <= granted:
             raise OAuthError("scope_not_granted", "The required permission was not granted")
-        self.secrets.set(token_key, creds.to_json())
+        if self.validate_account:
+            self.validate_account(creds, granted)
+        token = json.loads(creds.to_json())
+        token["scopes"] = sorted(granted)
+        self.secrets.set(token_key, json.dumps(token))
         return pending.service
 
     def record_result(self, service: str | None, error: str | None) -> None:
@@ -165,17 +185,37 @@ class GoogleOAuthManager:
     def connected(self, service: str) -> bool:
         return bool(self.secrets.get(SERVICES[service][1]))
 
+    def granted_scopes(self) -> list[str]:
+        raw = self.secrets.get(sk.GOOGLE_TOKEN_CALENDAR)
+        if not raw:
+            return []
+        try:
+            value = json.loads(raw).get("scopes", [])
+            return value.split() if isinstance(value, str) else list(value)
+        except (ValueError, TypeError, AttributeError):
+            return []
+
+    def capabilities(self) -> dict[str, Any]:
+        scopes = self.granted_scopes()
+        return {
+            "connected": self.connected("calendar"),
+            "scopes": scopes,
+            "read": LIST_SCOPE in scopes and (READ_SCOPE in scopes or WRITE_SCOPE in scopes),
+            "edit": WRITE_SCOPE in scopes,
+            "app": CALENDAR_SCOPES[0] in scopes,
+        }
+
     def credentials(self, service: str) -> Any:
         from google.auth.exceptions import RefreshError
         from google.auth.transport.requests import Request
         from google.oauth2.credentials import Credentials
 
-        scopes, token_key = SERVICES[service]
+        _, token_key = SERVICES[service]
         raw = self.secrets.get(token_key)
         if not raw:
             raise AuthRequiredError(f"{service} is not connected")
         try:
-            creds = Credentials.from_authorized_user_info(json.loads(raw), scopes)
+            creds = Credentials.from_authorized_user_info(json.loads(raw))
         except (ValueError, KeyError) as exc:
             raise AuthRequiredError("The stored authorization is invalid; please reconnect") from exc
         if not creds.valid:

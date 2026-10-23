@@ -1,18 +1,19 @@
-"""Google OAuth (Calendar, app-created events only) setup and status."""
+"""Google OAuth setup, staged calendar grants and actual authorization status."""
 
 from __future__ import annotations
 
 import logging
 from html import escape
-from typing import Any
+from typing import Any, Literal
 from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, File, Request, UploadFile
 from fastapi.responses import HTMLResponse, RedirectResponse
+from pydantic import BaseModel
 
 from taskradar.api.deps import get_container
 from taskradar.api.errors import ApiError
-from taskradar.connectors.google_oauth import CALENDAR_SCOPES, SERVICES, OAuthError
+from taskradar.connectors.google_oauth import SERVICES, OAuthError
 from taskradar.container import Container
 from taskradar.security.permissions import SideEffect
 
@@ -25,7 +26,7 @@ def google_status(c: Container = Depends(get_container)) -> dict[str, Any]:
     return {
         "client": c.oauth.client_status(),
         "redirect_uri": c.oauth.redirect_uri,
-        "calendar": {**c.calendar.status(), "scopes": CALENDAR_SCOPES},
+        "calendar": {**c.calendar.status(), **c.oauth.capabilities()},
         "last_authorization": c.oauth.last_result,
     }
 
@@ -44,12 +45,16 @@ def delete_client_config(c: Container = Depends(get_container)) -> dict[str, Any
     return c.oauth.client_status()
 
 
+class ConnectBody(BaseModel):
+    access: Literal["app", "read", "edit"] = "app"
+
+
 @router.post("/integrations/google/{service}/connect")
-def connect(service: str, c: Container = Depends(get_container)) -> dict[str, Any]:
+def connect(service: str, body: ConnectBody = ConnectBody(), c: Container = Depends(get_container)) -> dict[str, Any]:
     if service not in SERVICES:
         raise ApiError("unknown_service", "Unknown service", 404)
     c.guard.check(SideEffect.OAUTH_CONNECT, target=service)
-    return {"auth_url": c.oauth.start(service)}
+    return {"auth_url": c.oauth.start(service, body.access)}
 
 
 @router.post("/integrations/google/{service}/disconnect")

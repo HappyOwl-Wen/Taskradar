@@ -42,6 +42,14 @@ class ConflictError(ConnectorError):
     recoverable = False
 
 
+class PreconditionError(ConflictError):
+    code = "event_conflict"
+
+
+class SyncTokenExpired(ConnectorError):
+    code = "sync_token_expired"
+
+
 class PermanentError(ConnectorError):
     code = "permanent_error"
     recoverable = False
@@ -110,6 +118,8 @@ def map_http_error(
         return AuthRequiredError("The Google authorization does not include the required permission")
     if status == 404:
         return NotFoundError("Resource not found")
+    if status == 412:
+        return PreconditionError("The event changed in Google Calendar")
     if status >= 500:
         return TransientError(f"{api} server error ({status})")
     return PermanentError(f"{api} request failed ({status} {reason})".strip())

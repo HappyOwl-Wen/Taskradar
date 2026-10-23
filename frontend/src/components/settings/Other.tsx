@@ -215,6 +215,7 @@ export function DataSection() {
   const deleteAll = useAction(() => api.deleteAll(), {
     success: t("settings.data.deletedAll"),
     onSuccess: () => {
+      localStorage.removeItem("taskradar.calendar.editor");
       setOpen(false);
       setPhrase("");
     },

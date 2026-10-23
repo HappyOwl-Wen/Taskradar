@@ -52,7 +52,7 @@ task. This version is a plain to-do app instead:
 | Tray | Closing the window keeps TaskRadar in the notification area (switchable in Settings → 常规): click the icon to open the window, right-click to quit (asking about unsaved changes first). The icon's tooltip shows a running timer ("专注中 · 剩 25 分钟 · 1 个倒计时"). Starting TaskRadar again brings the window out of the tray | implemented, tested, verified in the desktop window (the tooltip read through UI Automation) |
 | Reminders | Overdue, due within 24 hours, 3 days or 7 days (configurable); a date-only deadline counts until the end of that day; daylight saving time is handled; each reminder once, none after completion | implemented, tested |
 | Status at a glance | An icon in the top bar is green while everything works; otherwise it says what needs attention and where to fix it (calendar events that failed, reminder checks that fail, background service stopped, notifications that Windows will not show) | implemented, tested |
-| Google Calendar (optional) | Separate sign-in with the `calendar.app.created` permission only; a task with a date is written into a calendar named "TaskRadar" after a preview and a click (or automatically for categories you choose); events are updated in place and removed again with their task; TaskRadar only touches its own events | implemented, tested with a fake Calendar; verified with one real account in an earlier version (this version moved some helpers but did not change how the calendar is written) |
+| Calendar workspace | Month, week and agenda views for local deadlines, work blocks and selected Google calendars; cached multi-calendar reads, staged OAuth permissions, ordinary event editing, drafts, ETag conflicts and linked-task de-duplication | implemented with Fake Calendar tests; see [calendar guide](docs/CALENDAR_WORKSPACE.zh-CN.md) and [verification](docs/CALENDAR_VERIFICATION.zh-CN.md); real account authorization needs user validation |
 | Data control | Export everything as JSON; delete single tasks; delete what earlier versions imported; delete all data (typed confirmation) | implemented, tested |
 | Desktop app | Its own window (Microsoft Edge WebView2 through pywebview), its local service on `127.0.0.1` only; size and position remembered; light and dark; Chinese and English; optional start with Windows (into the tray). `TaskRadar-Setup-<version>.exe` installs for your account without administrator rights and adds TaskRadar to the Start menu; uninstalling keeps your data. Also a portable zip | the program built from this version answered on its local address 3.5 s after starting with a new data folder and 2.1 s after starting again (one measurement each, on this computer); the folder build is 55.7 MB. Not code-signed; not tested on Windows 10 or on another computer |
 
@@ -107,8 +107,8 @@ one, delete one, complete one, the Pomodoro timer, a countdown, the guide) and s
 
 ## Connecting Google Calendar (optional)
 
-These are the only steps that need you personally; TaskRadar never sees your Google password and only asks for
-access to calendars it creates itself.
+These steps need you personally; TaskRadar never sees your Google password. The original permission is limited to
+app-created calendars; reading and editing existing calendars require separate, explicit upgrades in Settings.
 
 1. Open the [Google Cloud Console](https://console.cloud.google.com/) and create a project (e.g. "TaskRadar").
 2. *APIs & Services → Library*: enable the **Google Calendar API**.
@@ -119,6 +119,13 @@ access to calendars it creates itself.
    in your default browser; sign in and approve. The window takes the result over.
 6. Tasks are written only after you open a task, check the preview and confirm (or for the categories you choose
    for automatic writing).
+
+For the calendar workspace, choose **Read existing Google calendars** to add `calendar.calendarlist.readonly` and
+`calendar.events.readonly`. Choose **Enable Google event editing** only when wanted, to add `calendar.events`.
+Add these scopes in your Google Cloud consent screen as needed. Then refresh the calendar list, select calendars,
+choose the default destination and enable editing in TaskRadar. Cancelling an upgrade keeps the original grant.
+Google scopes and the app's calendar filters are different controls; details, offline behavior and deletion rules
+are in the [calendar workspace guide](docs/CALENDAR_WORKSPACE.zh-CN.md).
 
 The client JSON and the token are stored in the Windows Credential Manager, not in files. While the Google project
 is in *Testing* status, Google expires the sign-in after 7 days; TaskRadar then says so and keeps all data until you
@@ -204,7 +211,7 @@ TaskRadar.cmd       double-click launcher (window; --browser)     Setup.cmd   on
 6. 这一版不再读取 Gmail、不再导入文件、不再有“待确认”。以前版本找到的任务都保留；以前导入的邮件和文件、旧的 Gmail 授权
    和 API Key 可以在「设置 → 数据与隐私」中删除（不会自动删除）。
 7. 连接 Google 日历（可选）需要你本人在 Google Cloud Console 创建“桌面应用”OAuth 客户端并登录授权，步骤见上文
-   [Connecting Google Calendar](#connecting-google-calendar-optional)。TaskRadar 只申请访问它自己创建的日历。
+   [Connecting Google Calendar](#connecting-google-calendar-optional)。原授权只覆盖应用创建的日历；读取、编辑已有日历需要主动升级授权。
 8. 打包成桌面应用：`powershell -ExecutionPolicy Bypass -File scripts\build-exe.ps1`，得到安装程序和便携版。安装程序只为当前用户
    安装到 `%LOCALAPPDATA%\Programs\TaskRadar`（不需要管理员权限），并添加开始菜单项；可在“设置 → 应用”中卸载（数据保留）。
    程序没有数字签名，第一次运行时 Windows 可能提示“已保护你的电脑”，点“更多信息”→“仍要运行”。

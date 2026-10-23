@@ -20,6 +20,7 @@ from taskradar.notify import windows as windows_notifications
 from taskradar.security.permissions import PermissionGuard
 from taskradar.security.secrets import KeyringSecretStore, SecretStore
 from taskradar.services.calendar_sync import CalendarSyncService
+from taskradar.services.calendar_workspace import CalendarWorkspace
 from taskradar.services.data import DataService
 from taskradar.services.jobs import JobRunner
 from taskradar.services.notifications import NotificationService
@@ -46,6 +47,7 @@ class Container:
     data: DataService
     status: StatusSummaryService
     timers: TimerService
+    workspace: CalendarWorkspace = field(init=False)
     extras: dict[str, Any] = field(default_factory=dict)
 
     def dispose(self) -> None:
@@ -89,7 +91,7 @@ def build_container(
     )
     toast = toast or windows_notifications.show
     notifications = NotificationService(factory, settings=settings, guard=guard, jobs=jobs, clock=clock, toast=toast)
-    return Container(
+    container = Container(
         config=config,
         engine=engine,
         factory=factory,
@@ -106,3 +108,7 @@ def build_container(
         status=StatusSummaryService(factory, calendar_connected=lambda: oauth.connected("calendar"), clock=clock),
         timers=TimerService(factory, settings=settings, guard=guard, tasks=tasks, toast=toast, clock=clock),
     )
+    container.workspace = CalendarWorkspace(container)
+    calendar.lock = container.workspace.lock
+    oauth.validate_account = container.workspace.validate_account
+    return container

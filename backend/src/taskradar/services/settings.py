@@ -55,6 +55,9 @@ class NotificationSettings(_Section):
 
 
 class CalendarSettings(_Section):
+    default_calendar_id: str | None = None
+    google_edit_enabled: bool = False
+    background_sync_minutes: int = Field(default=5, ge=2, le=60)
     calendar_name: str = Field(default="TaskRadar", min_length=1, max_length=100)
     auto_sync_enabled: bool = False
     auto_sync_categories: list[Category] = Field(default_factory=list)

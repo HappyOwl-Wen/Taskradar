@@ -6,6 +6,7 @@ written to ``audit_log`` - allowed or not - so it is always traceable who could 
 
 from __future__ import annotations
 
+import json
 import logging
 from enum import StrEnum
 from typing import Any
@@ -22,6 +23,8 @@ log = logging.getLogger(__name__)
 
 
 class SideEffect(StrEnum):
+    GOOGLE_EVENT_WRITE = "calendar.event_write"
+    GOOGLE_EVENT_DELETE = "calendar.event_delete"
     CALENDAR_WRITE = "calendar.write"
     CALENDAR_DELETE = "calendar.delete"
     AUTOSTART_MODIFY = "autostart.modify"
@@ -88,6 +91,32 @@ class PermissionGuard:
 
     def _evaluate(self, action: SideEffect, target: str | None, ctx: dict[str, Any]) -> tuple[bool, str, str]:
         settings = self._settings.get()
+        if action in (SideEffect.CALENDAR_WRITE, SideEffect.CALENDAR_DELETE):
+            raw = self._secret(sk.GOOGLE_TOKEN_CALENDAR)
+            try:
+                token = json.loads(raw or "{}")
+                scopes = token.get("scopes", [])
+                if isinstance(scopes, str):
+                    scopes = scopes.split()
+                if "scopes" in token and not set(scopes) & {
+                    "https://www.googleapis.com/auth/calendar.app.created",
+                    "https://www.googleapis.com/auth/calendar.events",
+                }:
+                    return False, "calendar_scope_required", "The stored Google grant cannot write calendar events"
+            except (ValueError, TypeError, AttributeError):
+                return False, "calendar_not_connected", "The stored authorization is invalid"
+        if action in (SideEffect.GOOGLE_EVENT_WRITE, SideEffect.GOOGLE_EVENT_DELETE):
+            if not self._secret(sk.GOOGLE_TOKEN_CALENDAR):
+                return False, "calendar_not_connected", "Google Calendar is not connected"
+            if not ctx.get("user_confirmed"):
+                return False, "confirmation_required", "Confirm the event and target calendar first"
+            if not ctx.get("scope_allowed") or not ctx.get("app_allowed"):
+                return False, "calendar_scope_required", "Enable the appropriate Google editing permission"
+            if not ctx.get("selected"):
+                return False, "calendar_not_selected", "This calendar is not selected in TaskRadar"
+            if ctx.get("access_role") not in ("owner", "writer"):
+                return False, "calendar_read_only", "This calendar is read-only"
+            return True, "allowed", "confirmed event operation in a selected writable calendar"
         if action == SideEffect.CALENDAR_WRITE:
             if not self._secret(sk.GOOGLE_TOKEN_CALENDAR):
                 return False, "calendar_not_connected", "Google Calendar is not connected"

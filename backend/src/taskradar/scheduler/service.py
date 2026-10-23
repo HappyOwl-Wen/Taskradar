@@ -86,12 +86,13 @@ class SchedulerService:
             self.scheduler.remove_job(f"timer-{timer_id}")
 
     def _on_settings_changed(self, settings: AppSettings, sections: set[str]) -> None:
-        if "reminders" in sections:
+        if sections & {"reminders", "calendar"}:
             self._configure(settings)
 
     def _configure(self, settings: AppSettings) -> None:
         jobs = [
             ("reminders", self.reminders, settings.reminders.scan_interval_minutes),
+            ("calendar-workspace", self.calendar, settings.calendar.background_sync_minutes),
         ]
         for job_id, fn, minutes in jobs:
             self.scheduler.add_job(
@@ -120,6 +121,9 @@ class SchedulerService:
 
     def reminders(self) -> None:
         self.c.notifications.scan(JobTrigger.SCHEDULED)
+
+    def calendar(self) -> None:
+        self.c.workspace.refresh(background=True)
 
     # ------------------------------------------------------------------------------------------
 

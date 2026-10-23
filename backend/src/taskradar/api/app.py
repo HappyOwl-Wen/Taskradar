@@ -16,8 +16,8 @@ from fastapi.staticfiles import StaticFiles
 from taskradar import __version__
 from taskradar.api.errors import install_error_handlers
 from taskradar.api.middleware import SecurityMiddleware
+from taskradar.api.routes import calendar_workspace, integrations, system, tasks, timers
 from taskradar.api.routes import desktop as desktop_routes
-from taskradar.api.routes import integrations, system, tasks, timers
 from taskradar.container import Container
 from taskradar.desktop.bridge import DesktopBridge
 from taskradar.services.system import AutostartManager, StartMenuEntry
@@ -90,7 +90,14 @@ def create_app(
     )
     install_error_handlers(app)
 
-    for router in (system.router, tasks.router, timers.router, integrations.router, desktop_routes.router):
+    for router in (
+        system.router,
+        tasks.router,
+        timers.router,
+        integrations.router,
+        desktop_routes.router,
+        calendar_workspace.router,
+    ):
         app.include_router(router)
 
     @app.api_route("/api/{rest:path}", methods=["GET", "POST", "PUT", "PATCH", "DELETE"], include_in_schema=False)

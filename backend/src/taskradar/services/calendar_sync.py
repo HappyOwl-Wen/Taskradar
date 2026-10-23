@@ -1,8 +1,7 @@
 """Google Calendar sync for confirmed tasks.
 
 * Preview first; writing requires explicit confirmation (or an opt-in auto-sync rule).
-* Events go into a dedicated "TaskRadar" calendar; the OAuth scope only allows calendars created by
-  TaskRadar, so other events can never be modified.
+* Task mirrors go into the dedicated "TaskRadar" calendar and retain their task-ID ownership checks.
 * Deterministic event IDs + a stored link make writes idempotent (no duplicates on retry).
 * Deadlines and appointments are rendered differently and labelled clearly.
 * No attendees, no invitations (``sendUpdates="none"``).
@@ -15,6 +14,7 @@ import datetime as dt
 import hashlib
 import json
 import logging
+import threading
 from collections.abc import Callable
 from typing import Any
 from zoneinfo import ZoneInfo
@@ -25,6 +25,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from taskradar.connectors.calendar import CalendarClient
 from taskradar.connectors.errors import ApiNotEnabledError, ConflictError, ConnectorError, NotFoundError
 from taskradar.db.base import utcnow
+from taskradar.db.calendar_models import CalendarSource
 from taskradar.db.models import CalendarLink, Setting, Task
 from taskradar.db.session import transaction
 from taskradar.deadlines.engine import parse_hhmm
@@ -145,6 +146,7 @@ class CalendarSyncService:
         self.connected = connected
         self.base_url = base_url
         self.clock = clock
+        self.lock = threading.RLock()
 
     # -- state -------------------------------------------------------------------------------
 
@@ -199,6 +201,10 @@ class CalendarSyncService:
             }
 
     def sync(self, task_id: str, *, user_confirmed: bool, auto_rule: bool = False) -> dict[str, Any]:
+        with self.lock:
+            return self._sync(task_id, user_confirmed=user_confirmed, auto_rule=auto_rule)
+
+    def _sync(self, task_id: str, *, user_confirmed: bool, auto_rule: bool = False) -> dict[str, Any]:
         settings = self.settings.get()
         with transaction(self._factory) as session:
             task = self.tasks.get(session, task_id)
@@ -226,6 +232,9 @@ class CalendarSyncService:
             )
             digest = payload_hash(body)
             state = self._state(session)
+            source = session.get(CalendarSource, state.get("calendar_id", ""))
+            if source and not source.selected:
+                raise CalendarSyncError("calendar_not_selected", "Select the TaskRadar calendar before writing", 403)
             link = session.scalar(select(CalendarLink).where(CalendarLink.task_id == task_id))
             if link is not None and link.status == "synced" and link.payload_hash == digest:
                 return {**link_to_dict(link), "unchanged": True}
@@ -244,7 +253,7 @@ class CalendarSyncService:
                 and link.calendar_id == calendar_id
                 and link.status in ("synced", "out_of_sync", "failed")
             ):
-                result = self._update_owned(client, calendar_id, link.event_id or event_id, task_id, body)
+                result = self._update_owned(client, calendar_id, link.event_id or event_id, task_id, body, link.etag)
             else:
                 try:
                     result = client.insert_event(calendar_id, {**body, "id": event_id})
@@ -259,6 +268,18 @@ class CalendarSyncService:
         with transaction(self._factory) as session:
             state["calendar_id"] = calendar_id
             self._save_state(session, state)
+            if session.get(CalendarSource, calendar_id) is None:
+                session.add(
+                    CalendarSource(
+                        id=calendar_id,
+                        summary=settings.calendar.calendar_name,
+                        timezone=settings.general.timezone,
+                        access_role="owner",
+                        app_created=True,
+                        selected=True,
+                    )
+                )
+                session.flush()
             task = self.tasks.get(session, task_id)
             link = session.scalar(select(CalendarLink).where(CalendarLink.task_id == task_id))
             if link is None:
@@ -277,9 +298,12 @@ class CalendarSyncService:
             link.synced_due_version = due_version
             link.html_link = result.get("htmlLink")
             link.payload_hash = digest
+            link.etag = result.get("etag")
+            link.remote_payload = result
             link.last_error = None
             link.attempts = (link.attempts or 0) + 1
             link.last_synced_at = self.clock()
+            self._update_workspace_cache(session, calendar_id, result)
             session.flush()
             self.tasks.record(
                 session,
@@ -292,12 +316,21 @@ class CalendarSyncService:
             return link_to_dict(link)
 
     def remove(self, task_id: str, *, user_confirmed: bool, auto_rule: bool = False) -> dict[str, Any]:
+        with self.lock:
+            return self._remove(task_id, user_confirmed=user_confirmed, auto_rule=auto_rule)
+
+    def _remove(self, task_id: str, *, user_confirmed: bool, auto_rule: bool = False) -> dict[str, Any]:
         """Delete the task's event from the TaskRadar calendar - only the event TaskRadar created for it."""
         with transaction(self._factory) as session:
             task = self.tasks.get(session, task_id)
             link = session.scalar(select(CalendarLink).where(CalendarLink.task_id == task_id))
             if link is None or link.status == "removed":
                 raise CalendarSyncError("not_in_calendar", "This task has no event in the calendar", 404)
+            source = session.get(CalendarSource, link.calendar_id)
+            if source and not source.selected:
+                raise CalendarSyncError(
+                    "calendar_not_selected", "Select the TaskRadar calendar before removing events", 403
+                )
             try:
                 self.guard.check(
                     SideEffect.CALENDAR_DELETE,
@@ -314,7 +347,7 @@ class CalendarSyncService:
         if calendar_id != "pending":  # a write that never reached Google left nothing behind
             client = self.client_factory()
             try:
-                self._delete_owned(client, calendar_id, event_id, task_id)
+                self._delete_owned(client, calendar_id, event_id, task_id, link.etag)
             except CalendarSyncError:
                 raise
             except ConnectorError as exc:
@@ -330,6 +363,7 @@ class CalendarSyncService:
             link.payload_hash = None
             link.last_error = None
             link.last_synced_at = self.clock()
+            self._update_workspace_cache(session, calendar_id, {"id": event_id, "status": "cancelled"})
             session.flush()
             self.tasks.record(
                 session,
@@ -342,7 +376,9 @@ class CalendarSyncService:
             return link_to_dict(link)
 
     @staticmethod
-    def _delete_owned(client: CalendarClient, calendar_id: str, event_id: str, task_id: str) -> None:
+    def _delete_owned(
+        client: CalendarClient, calendar_id: str, event_id: str, task_id: str, etag: str | None = None
+    ) -> None:
         try:
             current = client.get_event(calendar_id, event_id)
         except NotFoundError:
@@ -352,8 +388,15 @@ class CalendarSyncService:
         owner = ((current.get("extendedProperties") or {}).get("private") or {}).get("taskradar_task_id")
         if owner != task_id:
             raise CalendarSyncError("event_not_owned", "Refusing to delete an event that TaskRadar did not create", 409)
+        if etag and current.get("etag") != etag:
+            raise CalendarSyncError(
+                "event_conflict", "The event changed; review it before removing it", 409, details={"remote": current}
+            )
         with contextlib.suppress(NotFoundError):  # deleted meanwhile
-            client.delete_event(calendar_id, event_id)
+            if current.get("etag"):
+                client.delete_conditional(calendar_id, event_id, current["etag"])
+            else:
+                client.delete_event(calendar_id, event_id)
 
     def _ensure_calendar(self, client: CalendarClient, state: dict[str, Any], name: str, tz: str) -> str:
         calendar_id = state.get("calendar_id")
@@ -362,8 +405,20 @@ class CalendarSyncService:
         return client.create_calendar(name, tz)
 
     @staticmethod
+    def _update_workspace_cache(session: Session, calendar_id: str, event: dict[str, Any]) -> None:
+        from taskradar.services.calendar_editor import CalendarEditor
+
+        if session.get(CalendarSource, calendar_id):
+            CalendarEditor._cache_event(session, calendar_id, event)
+
+    @staticmethod
     def _update_owned(
-        client: CalendarClient, calendar_id: str, event_id: str, task_id: str, body: dict[str, Any]
+        client: CalendarClient,
+        calendar_id: str,
+        event_id: str,
+        task_id: str,
+        body: dict[str, Any],
+        etag: str | None = None,
     ) -> dict[str, Any]:
         try:
             current = client.get_event(calendar_id, event_id)
@@ -372,7 +427,18 @@ class CalendarSyncService:
         owner = ((current.get("extendedProperties") or {}).get("private") or {}).get("taskradar_task_id")
         if owner != task_id:
             raise CalendarSyncError("event_not_owned", "Refusing to modify an event that TaskRadar did not create", 409)
-        return client.update_event(calendar_id, event_id, body)
+        if etag and current.get("etag") != etag:
+            raise CalendarSyncError(
+                "event_conflict",
+                "The Google event changed; review both versions in the calendar",
+                409,
+                details={"remote": current},
+            )
+        if current.get("etag"):
+            # Task mirrors own the title and time, not notes or other user-added Google fields.
+            mapped = {key: body[key] for key in ("summary", "start", "end", "transparency")}
+            return client.patch_event(calendar_id, event_id, mapped, current["etag"])
+        return client.update_event(calendar_id, event_id, {**current, **body})
 
     def _record_failure(self, task_id: str, calendar_id: str, exc: ConnectorError, *, removing: bool = False) -> None:
         with transaction(self._factory) as session:

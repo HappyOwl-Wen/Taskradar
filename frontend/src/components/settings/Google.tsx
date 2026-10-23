@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
+import { CalendarConnections } from "@/components/calendar/CalendarConnections";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/dialog";
 import { Checkbox, Field, Input, Label, SwitchRow } from "@/components/ui/form";
@@ -43,7 +44,7 @@ function useConnect(service: "calendar") {
     return () => clearInterval(timer);
   }, [waitingSince, queryClient, service, t]);
 
-  const action = useAction(() => api.connectGoogle(service), {
+  const action = useAction((access: "app" | "read" | "edit" | undefined) => access ? api.connectGoogle(service, access) : api.connectGoogle(service), {
     invalidate: false,
     onSuccess: ({ auth_url }) => {
       if (isDesktopApp()) {
@@ -252,7 +253,7 @@ export function CalendarSection({ settings }: { settings: Settings }) {
             <Badge tone="success">
               <CalendarCheck /> {t("settings.calendar.connected", { name: google?.calendar.calendar_name ?? v.calendar_name })}
             </Badge>
-            <span className="text-[13px] text-muted-foreground">{t("settings.calendar.ownCalendarOnly")}</span>
+            <span className="text-[13px] text-muted-foreground">{t(google?.calendar.read ? "workbench.accessRead" : "settings.calendar.ownCalendarOnly")}</span>
           </div>
           <div className="flex flex-wrap gap-2">
             <Button variant="outline" size="sm" onClick={() => connect.mutate(undefined)} disabled={!clientReady || connect.waiting} loading={connect.isPending}>
@@ -282,6 +283,7 @@ export function CalendarSection({ settings }: { settings: Settings }) {
           </Step>
         </ol>
       ) : null}
+      <CalendarConnections onConnect={(access) => connect.mutate(access)} ready={clientReady} busy={connect.isPending || connect.waiting} />
       <div className="grid gap-4 border-t pt-4">
         <div className="grid gap-4 sm:grid-cols-2">
           <Field label={t("settings.calendar.calendarName")} htmlFor="set-cal-name">

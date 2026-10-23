@@ -17,6 +17,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from taskradar import __version__
 from taskradar.config import AppConfig
 from taskradar.db.base import utcnow
+from taskradar.db.calendar_models import CalendarDraft, CalendarSource, CalendarWindow, GoogleEvent, WorkBlock
 from taskradar.db.models import (
     AuditLog,
     CalendarLink,
@@ -77,6 +78,10 @@ class DataService:
                 "documents": [_row(d) for d in session.scalars(select(Document))],
                 "document_pages": [_row(p, content_fields) for p in session.scalars(select(DocumentPage))],
                 "calendar_links": [_row(c) for c in session.scalars(select(CalendarLink))],
+                "work_blocks": [_row(b) for b in session.scalars(select(WorkBlock))],
+                "calendar_drafts": [_row(d) for d in session.scalars(select(CalendarDraft))],
+                "calendar_sources": [_row(s, {"sync_token"}) for s in session.scalars(select(CalendarSource))],
+                "google_events": [_row(e) for e in session.scalars(select(GoogleEvent))],
                 "sync_jobs": [_row(j) for j in session.scalars(select(SyncJob))],
                 "timers": [_row(t) for t in session.scalars(select(Timer))],
             }
@@ -121,6 +126,11 @@ class DataService:
         counts: dict[str, int] = {}
         with transaction(self._factory) as session:
             for model in (
+                CalendarDraft,
+                WorkBlock,
+                CalendarWindow,
+                GoogleEvent,
+                CalendarSource,
                 Timer,
                 Notification,
                 CalendarLink,

@@ -1,6 +1,8 @@
 import type { Messages } from "./types";
+import calendarEn from "./calendar.en";
 
 const en: Messages = {
+  workbench: calendarEn,
   app: {
     tagline: "Personal to-do radar",
     backendDown: "Cannot reach the local TaskRadar service",
@@ -305,6 +307,17 @@ const en: Messages = {
     conflict: "Data conflict. Refresh and try again.",
     gmail_not_connected: "Gmail is not connected.",
     calendar_not_connected: "Google Calendar is not connected. Authorize it in the settings first.",
+    event_conflict: "The Google event changed. Your input is kept; compare both versions before submitting.",
+    complex_event: "This recurring, invited or special event must be edited in Google Calendar.",
+    calendar_scope_required: "The current grant cannot edit this calendar. Upgrade permissions in Calendar settings.",
+    calendar_read_only: "The target calendar is read-only. Choose a writable calendar.",
+    calendar_not_selected: "Select the target calendar before operating on it.",
+    calendar_account_mismatch: "This workspace is linked to another Google account. Use the original account.",
+    invalid_event_time: "Invalid times. Check dates, time zone and daylight saving overlap selections.",
+    draft_target_locked: "This operation was already attempted. Retry or resolve the draft before changing its target.",
+    linked_event_edit: "Edit the linked Google event, or unlink it before changing the local work block.",
+    linked_event_exists: "This work block already has a Google link. Refresh before continuing.",
+    linked_task_event: "This is a task deadline mirror. Edit it through the linked task.",
     task_not_confirmed: "Only confirmed tasks can be added to the calendar.",
     task_without_date: "The task has no date, so it cannot be added to the calendar.",
     confirmation_required: "This action needs your explicit confirmation.",

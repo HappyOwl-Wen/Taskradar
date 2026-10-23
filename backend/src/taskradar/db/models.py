@@ -37,6 +37,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
+from taskradar.db import calendar_models as calendar_models
 from taskradar.db.base import Base, utcnow
 
 
@@ -410,6 +411,9 @@ class SyncJob(Base):
 
 class CalendarLink(Base):
     __tablename__ = "calendar_links"
+
+    etag: Mapped[str | None] = mapped_column(String(256), default=None)
+    remote_payload: Mapped[dict[str, Any]] = mapped_column(default=dict, server_default="{}")
     __table_args__ = (UniqueConstraint("task_id", "calendar_id"),)
 
     id: Mapped[int] = mapped_column(primary_key=True)

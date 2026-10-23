@@ -1,4 +1,7 @@
+import calendarZh from "./calendar.zh";
+
 const zhCN = {
+  workbench: calendarZh,
   app: {
     tagline: "个人待办雷达",
     backendDown: "无法连接到 TaskRadar 本地服务",
@@ -303,6 +306,17 @@ const zhCN = {
     conflict: "数据冲突，请刷新后重试。",
     gmail_not_connected: "尚未连接 Gmail。",
     calendar_not_connected: "尚未连接 Google 日历，请先在设置中授权。",
+    event_conflict: "Google 上的日程已变化。输入已保留，请比较双方版本后再提交。",
+    complex_event: "此日程包含重复、受邀或特殊内容，请在 Google Calendar 网页中编辑。",
+    calendar_scope_required: "当前授权不足，请在 Google 日历设置中升级编辑权限。",
+    calendar_read_only: "目标日历只有读取权限，请选择可写日历。",
+    calendar_not_selected: "请先选中目标日历，再进行操作。",
+    calendar_account_mismatch: "此工作区已关联其他 Google 账号，请使用原账号。",
+    invalid_event_time: "起止时间无效，请检查日期、时区和夏令时的重复时间选择。",
+    draft_target_locked: "这份操作已尝试提交，请先重试或处理现有草稿再更换目标。",
+    linked_event_edit: "请通过关联的 Google 日程编辑此工作时段，或先解除关联。",
+    linked_event_exists: "此工作时段已有 Google 关联，请刷新后继续。",
+    linked_task_event: "这是任务的截止镜像，请从关联任务中修改。",
     task_not_confirmed: "只有已确认的任务才能写入日历。",
     task_without_date: "任务没有截止日期，无法写入日历。",
     confirmation_required: "此操作需要你明确确认。",

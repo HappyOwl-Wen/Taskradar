@@ -313,7 +313,7 @@ export interface SystemSummary {
 export interface GoogleStatus {
   client: { configured: boolean; client_id_hint?: string };
   redirect_uri: string;
-  calendar: { connected: boolean; calendar_id: string | null; calendar_name: string; scopes: string[] };
+  calendar: { connected: boolean; calendar_id: string | null; calendar_name: string; scopes: string[]; read?: boolean; edit?: boolean; app?: boolean };
   /** How the last authorization ended (``seq`` grows with each one); null before the first. */
   last_authorization?: { seq: number; service: "calendar" | null; ok: boolean; error: string | null } | null;
 }

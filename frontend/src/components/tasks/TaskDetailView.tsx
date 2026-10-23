@@ -4,6 +4,7 @@ import { Link, useNavigate } from "react-router";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
+import { TaskWorkBlocks } from "@/components/calendar/TaskWorkBlocks";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger, Tip } from "@/components/ui/menu";
 import { EmptyState, ErrorState, LoadingRows } from "@/components/ui/states";
@@ -205,6 +206,7 @@ export function TaskDetailView({
 
   const side = (
     <div className="grid min-w-0 grid-cols-1 content-start gap-3">
+      <TaskWorkBlocks taskId={task.id} />
       {calendar}
       {history}
     </div>
@@ -294,6 +296,7 @@ export function TaskDetailView({
         <div className="grid grid-cols-[minmax(0,1fr)] gap-8 xl:grid-cols-[minmax(0,1fr)_20rem]">
           {main}
           <aside className="grid min-w-0 grid-cols-1 content-start gap-3">
+            <TaskWorkBlocks taskId={task.id} />
             {calendar}
             {history}
           </aside>

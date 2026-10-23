@@ -9,8 +9,8 @@ is Google Calendar, reached through a guarded connector and only when the user c
 
 ## Design principles
 
-1. **Local first, least privilege.** Loopback-only HTTP, a calendar permission limited to calendars TaskRadar
-   created, nothing else leaves the computer. Every side effect outside TaskRadar's own data passes one permission
+1. **Local first, least privilege.** Loopback-only HTTP, staged Google grants (app-created calendars, existing-calendar
+   reads, then optional event writes). Only selected calendars are cached. Every external side effect passes one permission
    guard and is written to an audit log.
 2. **Deterministic dates.** One-sentence to-dos are parsed by code in three languages. A date without a time stays
    date-only (never an invented 23:59); relative dates count from the moment of typing.
@@ -128,6 +128,8 @@ history after a confirmation, and its calendar event if the setting says so.
 | `tasks` | Title, description, category, priority, status, deadline fields, `manual` (the user's own to-dos), `sample` (test data) |
 | `task_events` | History with before/after values and revert markers |
 | `calendar_links` | Google event IDs, sync status and payload hash per task |
+| `calendar_sources`, `google_events`, `calendar_windows` | Selected calendars and actual ACL hints; unexpanded incremental collections; separately fetched bounded instance snapshots |
+| `work_blocks`, `calendar_drafts` | Independent local work plans with optional task/event links; durable explicit-submit outbox with base and conflicting remote versions |
 | `timers` | Pomodoro phases and countdowns: kind, phase, mode, label, task, cycle, status, duration, time left, end time |
 | `notifications` | In-app notifications (reminders, timer ends) with de-duplication keys and whether Windows showed them |
 | `settings`, `sync_jobs`, `audit_log` | Typed settings sections, job runs (reminder checks), permission decisions |
@@ -205,6 +207,21 @@ are packed where the code finds them through `__file__`; of the Google client's 
 is kept; the WinRT bindings for notifications are included; Pillow (a development tool here) is left out.
 
 ## Decisions and trade-offs
+
+### Calendar workspace
+
+`services/calendar_workspace.py` provides the local-first read model, per-calendar cache sync and safe task mappings;
+`services/calendar_editor.py` owns durable drafts, permission checks and conditional mutations. Both reuse the existing
+OAuth manager, Credential Manager, permission audit, JobRunner and APScheduler. Legacy task mirroring shares the same
+mutation lock. Cache reads do not wait for Google network operations.
+
+Collection sync uses unexpanded events with a syncToken and no date bounds. Visible windows use a separate bounded
+expanded query without a syncToken, so Google owns recurrence and exceptions. Each paginated snapshot is replaced only
+after all pages arrive; 410 rebuilds only that calendar's remote collection. Tasks, work plans and pending drafts survive.
+Writes use stable event IDs on creation and ETag If-Match on edits/deletions. The frontend never handles Google tokens.
+
+FullCalendar Standard 6.x (MIT), with Luxon named-time-zone support, is loaded on demand. Details of field mappings,
+deletion rules, grants, scope limitations and component selection are in [the calendar guide](docs/CALENDAR_WORKSPACE.zh-CN.md).
 
 * **A plain to-do app instead of automatic extraction.** Reading mails and documents produced tasks that needed a
   review queue and could merge unrelated mails; writing a to-do in one sentence is fast and always right.

@@ -10,7 +10,7 @@ import { cn } from "@/lib/utils";
 
 interface NavItem {
   to: string;
-  key: "dashboard" | "allTasks" | "mine" | "calendar" | "focus" | "countdowns" | "settings";
+  key: "dashboard" | "allTasks" | "mine" | "calendar" | "workbench" | "focus" | "countdowns" | "settings";
   icon: LucideIcon;
   isActive: (location: Location) => boolean;
 }
@@ -18,7 +18,8 @@ interface NavItem {
 // Today first; then the tasks by where they come from (all of them, the user's own, the ones in Google Calendar);
 // then the timers.
 const NAV: { group: "main" | "tasks" | "focus"; items: NavItem[] }[] = [
-  { group: "main", items: [{ to: "/", key: "dashboard", icon: LayoutDashboard, isActive: (l) => l.pathname === "/" }] },
+  { group: "main", items: [{ to: "/", key: "dashboard", icon: LayoutDashboard, isActive: (l) => l.pathname === "/" },
+    { to: "/calendar", key: "workbench", icon: CalendarDays, isActive: (l) => l.pathname === "/calendar" }] },
   {
     group: "tasks",
     items: [
@@ -138,7 +139,7 @@ function NavEntry({
           />
         ) : null}
       </span>
-      <span className={cn("min-w-0 truncate", rail ? "max-w-full" : "flex-1")}>{t(`nav.${item.key}`)}</span>
+      <span className={cn("min-w-0 truncate", rail ? "max-w-full" : "flex-1")}>{item.key === "workbench" ? t("workbench.nav") : t(`nav.${item.key}`)}</span>
       {!rail && count !== undefined ? <NavCount value={count} /> : null}
       {live ? (
         <span className={cn("text-xs font-semibold tabular-nums", rail ? "sr-only" : LIVE_TONE[live.tone].text)}>

@@ -21,6 +21,7 @@ const TaskDetailPage = lazy(() => import("@/pages/TaskDetailPage"));
 const SettingsPage = lazy(() => import("@/pages/SettingsPage"));
 const FocusPage = lazy(() => import("@/pages/FocusPage"));
 const CountdownsPage = lazy(() => import("@/pages/CountdownsPage"));
+const CalendarPage = lazy(() => import("@/pages/CalendarPage"));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -48,6 +49,7 @@ const router = createBrowserRouter([
       { path: "tasks/:id", element: page(<TaskDetailPage />) },
       { path: "focus", element: page(<FocusPage />), handle: { fullHeight: true } },
       { path: "timers", element: page(<CountdownsPage />) },
+      { path: "calendar", element: page(<CalendarPage />) },
       { path: "settings", element: page(<SettingsPage />) },
       // Pages of removed features (review queue, importing, processing figures): old links land somewhere useful.
       { path: "inbox", element: <Navigate to="/tasks" replace /> },

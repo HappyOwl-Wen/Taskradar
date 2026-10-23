@@ -1,0 +1,36 @@
+.calendar-workspace { --fc-border-color: var(--border); --fc-page-bg-color: var(--background); --fc-neutral-bg-color: var(--subtle); --fc-list-event-hover-bg-color: var(--accent); --fc-today-bg-color: color-mix(in srgb, var(--primary) 5%, transparent); --fc-now-indicator-color: var(--destructive); --fc-small-font-size: .8em; }
+.calendar-select { width: 100%; min-height: 32px; padding: 5px 8px; border: 1px solid var(--input); border-radius: 6px; background: var(--card); color: var(--foreground); font-size: 13px; }
+.calendar-select:focus-visible { outline: 3px solid color-mix(in srgb, var(--ring) 40%, transparent); }
+.calendar-workspace .fc { font-size: 13px; }
+.calendar-workspace .fc th { padding: 6px 0; font-weight: 500; color: var(--muted-foreground); background: var(--subtle); }
+.calendar-workspace .fc-scrollgrid { border: 0; }
+.calendar-workspace .fc-daygrid-day-number { margin: 4px; min-width: 26px; text-align: center; border-radius: 100%; }
+.calendar-workspace .fc-day-today .fc-daygrid-day-number { background: var(--primary); color: var(--primary-foreground); }
+.calendar-workspace .fc-daygrid-day-frame { min-height: 58px; }
+.calendar-workspace .fc .fc-daygrid-body .fc-daygrid-day-events { min-height: 1em; margin-bottom: 4px; }
+.calendar-workspace .fc-event { border-radius: 4px; border-width: 0 0 0 3px; cursor: pointer; padding: 2px 4px; background: var(--selected); color: var(--foreground); }
+.calendar-workspace .fc-event-main { color: var(--foreground); }
+.calendar-workspace .fc-event:focus-visible { outline: 3px solid var(--ring); outline-offset: 1px; }
+.calendar-workspace .calendar-deadline { background: color-mix(in srgb, var(--high) 12%, var(--card)) !important; border-left-style: dashed; }
+.calendar-workspace .calendar-work { background: color-mix(in srgb, var(--primary) 12%, var(--card)) !important; }
+.calendar-workspace .calendar-google { background: color-mix(in srgb, var(--progress) 10%, var(--card)) !important; }
+.calendar-workspace .calendar-completed { opacity: .65; }
+.calendar-workspace .calendar-completed .calendar-event-text { text-decoration: line-through; }
+.calendar-event-content { display: flex; align-items: flex-start; gap: 4px; overflow: hidden; font-size: 11px; line-height: 1.45; }
+.calendar-event-content > svg { flex-shrink: 0; margin-top: 2px; }
+.calendar-event-text { overflow: hidden; text-overflow: ellipsis; }
+.calendar-event-title { display: block; overflow: hidden; text-overflow: ellipsis; font-weight: 500; }
+.calendar-event-text small { display: block; font-size: 10px; font-weight: normal; color: var(--muted-foreground); }
+.calendar-workspace .fc-timegrid-slot { height: 27px; }
+.calendar-workspace .fc-timegrid-event .calendar-event-content { height: 100%; white-space: normal; overflow: hidden; }
+.calendar-workspace .fc-timegrid-event .calendar-event-text small { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.calendar-workspace .fc-list-event .calendar-event-content { font-size: 13px; padding: 3px; }
+.calendar-workspace .fc-list-day-cushion { background: var(--subtle); }
+.calendar-workspace .fc-popover { background: var(--card); border: 1px solid var(--border); box-shadow: 0 8px 24px #0002; z-index: 20; }
+@media (max-width: 700px) {
+  .calendar-workspace .fc-daygrid-day-frame { min-height: 80px; }
+  .calendar-workspace .fc-daygrid-event .calendar-event-content { font-size: 10px; }
+  .calendar-workspace .fc-daygrid-event .calendar-event-text small { display: none; }
+  .calendar-workspace .fc-timegrid { min-width: 680px; }
+  .calendar-canvas { overflow-x: auto; }
+}

@@ -70,9 +70,18 @@ the Credential Manager), and the security of Google's services.
 
 ### Permissions (least privilege)
 
-* Google Calendar: `https://www.googleapis.com/auth/calendar.app.created` only — access to calendars TaskRadar
-  created, nothing else. Events go into a dedicated "TaskRadar" calendar, never with attendees, with
-  `sendUpdates=none`; before updating or deleting an event TaskRadar checks that it carries its own task ID.
+* Google Calendar has staged grants: `calendar.app.created` for the original TaskRadar calendar;
+  `calendar.calendarlist.readonly` + `calendar.events.readonly` for existing-calendar reads; optional
+  `calendar.events` for editing. The app explains each upgrade before opening Google's consent. Actual granted
+  scopes are stored with credentials, cancelled upgrades preserve them, and reconnects check the workspace's account.
+* App-selected calendars are an additional boundary, not a narrower Google OAuth grant. Ordinary event writes check
+  the actual grant, the app editing switch, the selected destination, fresh CalendarList accessRole and explicit
+  object/destination confirmation. Google checks the ACL again on the request. Recurring, invited and special events
+  use Google's webpage for edits. No invitations are sent (`sendUpdates=none`). Original task mirrors retain their
+  task-ID ownership check. Updates/deletions use ETag conditions rather than overwriting concurrent edits.
+* Remote event snapshots, work blocks and unsent drafts are local data in SQLite. Drafts never submit automatically.
+  Offline failures, expired sync tokens and per-calendar failures cannot rebuild local tasks or discard pending edits.
+  Unfinished form input also stays in the current browser/WebView's local storage until submitted or discarded.
 * OAuth uses the installed-application flow with PKCE, a `state` value that expires after 15 minutes and a loopback
   redirect URI. Only Desktop-type client configurations are accepted; missing scopes are rejected. Disconnecting
   revokes the token at Google.
