@@ -8,6 +8,8 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
+from taskradar.domain.calendar_buffers import Buffer
+
 
 def local_instant(value: str, timezone: str, fold: int | None = None) -> dt.datetime:
     zone = ZoneInfo(timezone)
@@ -33,6 +35,8 @@ class EventForm(BaseModel):
     timezone: str = "Europe/Berlin"
     start_fold: Literal[0, 1] | None = None
     end_fold: Literal[0, 1] | None = None
+    # Local only, never part of google_body(); None leaves an item's stored buffers unchanged.
+    buffer: Buffer | None = None
 
     @field_validator("title")
     @classmethod

@@ -86,3 +86,19 @@ class CalendarDraft(Base):
     last_error: Mapped[str | None] = mapped_column(String(100), default=None)
     result: Mapped[dict[str, Any]] = mapped_column(default=dict)
     updated_at: Mapped[dt.datetime] = mapped_column(default=utcnow, onupdate=utcnow)
+
+
+class CalendarBuffer(Base):
+    """Prep, commute or rest time reserved around one item; local only, never sent to Google.
+
+    The key is the item's view id ("work:<block>", "google:<calendar>:<event>") or, for every occurrence of a
+    recurring Google event, "series:<calendar>:<recurring event>".
+    """
+
+    __tablename__ = "calendar_buffers"
+    item_key: Mapped[str] = mapped_column(String(1600), primary_key=True)
+    before_minutes: Mapped[int] = mapped_column(default=0)
+    before_kind: Mapped[str] = mapped_column(String(16), default="prep")
+    after_minutes: Mapped[int] = mapped_column(default=0)
+    after_kind: Mapped[str] = mapped_column(String(16), default="rest")
+    updated_at: Mapped[dt.datetime] = mapped_column(default=utcnow, onupdate=utcnow)

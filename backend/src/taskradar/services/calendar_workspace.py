@@ -23,6 +23,7 @@ from taskradar.db.models import CalendarLink, Setting, Task
 from taskradar.db.session import transaction
 from taskradar.domain.calendar import EventForm, simple_event
 from taskradar.domain.enums import Actor, JobKind, JobStatus, JobTrigger
+from taskradar.services.calendar_conflicts import attach_buffers, store_buffer, work_key
 from taskradar.services.calendar_sync import CalendarSyncError, build_event, payload_hash
 from taskradar.services.jobs import JobContext, retry_delay
 
@@ -539,6 +540,7 @@ class CalendarWorkspace:
                         "complex": not simple_event(event),
                     }
                 )
+            attach_buffers(session, items)
             drafts = [
                 self.draft_dict(d)
                 for d in session.scalars(select(CalendarDraft).where(CalendarDraft.status != "saved"))
@@ -586,6 +588,8 @@ class CalendarWorkspace:
                 form.timezone,
             )
             session.flush()
+            if form.buffer is not None:
+                store_buffer(session, work_key(block.id), form.buffer)
             return block_dict(block)
 
     def delete_block(self, block_id: str) -> None:
@@ -594,6 +598,7 @@ class CalendarWorkspace:
             if not block:
                 raise LookupError("Work block not found")
             # Deleting a local work plan only unlinks it. Any Google event remains independently manageable.
+            store_buffer(session, work_key(block_id), None)
             session.delete(block)
 
     def detach_block(self, block_id: str) -> dict[str, Any]:

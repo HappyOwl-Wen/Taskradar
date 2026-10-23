@@ -4,15 +4,17 @@ from __future__ import annotations
 
 import datetime as dt
 import json
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 from uuid import UUID
 
 from fastapi import APIRouter, Depends
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, StringConstraints, model_validator
 
 from taskradar.api.deps import get_container
 from taskradar.container import Container
 from taskradar.domain.calendar import EventForm
+from taskradar.domain.calendar_buffers import Buffer
+from taskradar.services.calendar_conflicts import CalendarConflicts
 from taskradar.services.calendar_editor import CalendarEditor
 
 router = APIRouter(prefix="/api/calendar", tags=["calendar workspace"])
@@ -74,6 +76,62 @@ def delete_block(block_id: UUID, c: Container = Depends(get_container)) -> dict[
 @router.get("/tasks/{task_id}/work-blocks")
 def task_blocks(task_id: str, c: Container = Depends(get_container)) -> list[dict[str, Any]]:
     return c.workspace.task_blocks(task_id)
+
+
+class ConflictBody(BaseModel):
+    start: str = Field(max_length=64)
+    end: str = Field(max_length=64)
+    timezone: str = Field(default="Europe/Berlin", max_length=100)
+    all_day: bool = False
+    start_fold: Literal[0, 1] | None = None
+    end_fold: Literal[0, 1] | None = None
+    buffer: Buffer | None = None
+    # The item being edited, so that it does not overlap itself.
+    exclude: list[Annotated[str, StringConstraints(max_length=1600)]] = Field(default_factory=list, max_length=10)
+
+
+@router.post("/conflicts")
+def conflicts(body: ConflictBody, c: Container = Depends(get_container)) -> dict[str, Any]:
+    """A warning for a planned time; reads only, so saving stays possible whatever it finds."""
+    if body.all_day:
+        return {"conflicts": [], "unchecked": [], "suggestion": None}
+    return CalendarConflicts(c.workspace).check(
+        start=body.start,
+        end=body.end,
+        timezone=body.timezone,
+        start_fold=body.start_fold,
+        end_fold=body.end_fold,
+        buffer=body.buffer,
+        exclude=body.exclude,
+    )
+
+
+class BufferBody(Buffer):
+    work_block_id: UUID | None = None
+    calendar_id: str | None = Field(default=None, max_length=512)
+    event_id: str | None = Field(default=None, max_length=1024)
+    # For an occurrence of a recurring Google event: reserve the time around every occurrence.
+    series: bool = False
+
+    @model_validator(mode="after")
+    def one_item(self) -> BufferBody:
+        if bool(self.work_block_id) == bool(self.calendar_id and self.event_id):
+            raise ValueError("Name one work block or one Google event")
+        return self
+
+
+@router.put("/buffers")
+def set_buffer(body: BufferBody, c: Container = Depends(get_container)) -> dict[str, Any]:
+    buffer = Buffer.model_validate(body.model_dump(include=set(Buffer.model_fields)))
+    return {
+        "buffer": CalendarConflicts(c.workspace).set_buffer(
+            buffer,
+            work_block_id=str(body.work_block_id) if body.work_block_id else None,
+            calendar_id=body.calendar_id,
+            event_id=body.event_id,
+            series=body.series,
+        )
+    }
 
 
 @router.post("/work-blocks/{block_id}/detach")

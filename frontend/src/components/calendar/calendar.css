@@ -27,6 +27,9 @@
 .calendar-workspace .fc-list-event .calendar-event-content { font-size: 13px; padding: 3px; }
 .calendar-workspace .fc-list-day-cushion { background: var(--subtle); }
 .calendar-workspace .fc-popover { background: var(--card); border: 1px solid var(--border); box-shadow: 0 8px 24px #0002; z-index: 20; }
+/* Prep, commute or rest time reserved next to an item: hatched in the item's colour, behind the events. */
+.calendar-workspace .fc-bg-event.calendar-buffer { --band: var(--muted-foreground); opacity: 1; background: repeating-linear-gradient(-45deg, color-mix(in srgb, var(--band) 24%, transparent) 0 4px, color-mix(in srgb, var(--band) 7%, transparent) 4px 9px); }
+.calendar-buffer-label { display: block; overflow: hidden; padding: 0 4px; font-size: 10px; font-style: italic; line-height: 1.35; white-space: nowrap; text-overflow: ellipsis; color: var(--muted-foreground); }
 @media (max-width: 700px) {
   .calendar-workspace .fc-daygrid-day-frame { min-height: 80px; }
   .calendar-workspace .fc-daygrid-event .calendar-event-content { font-size: 10px; }

@@ -13,12 +13,14 @@ import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
+import { ItemBuffers } from "@/components/calendar/BufferFields";
 import { CalendarEditor, loadRecovery, RECOVERY_KEY, type EditorSeed } from "@/components/calendar/CalendarEditor";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog, Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/form";
 import { ErrorState } from "@/components/ui/states";
 import { translateKey } from "@/i18n";
+import { bufferBands, bufferable, bufferSummary, hasBuffer, type Band } from "@/lib/buffers";
 import { calendarApi, displayRange, eventForm, visibleItems, type CalendarItem, type CalendarView } from "@/lib/calendar";
 import { formatDateTime } from "@/lib/format";
 import { useTimezone } from "@/lib/hooks";
@@ -48,6 +50,7 @@ function ItemDetail({ item, onClose, onEdit }: { item: CalendarItem; onClose: ()
       <dt className="text-muted-foreground">{t("workbench.status")}</dt><dd>{translateKey(`workbench.status_${item.sync_status}`, item.sync_status)}</dd>
       {item.kind !== "deadline" ? <><dt className="text-muted-foreground">{t("workbench.edit")}</dt><dd>{item.editable ? t("workbench.editable") : t("workbench.readOnly")}</dd></> : null}
     </dl>
+    {bufferable(item) ? <ItemBuffers item={item} /> : null}
     {item.remote?.location ? <p className="text-sm">{t("workbench.location")}: {item.remote.location}</p> : null}
     {item.remote?.description ? <p className="max-h-40 overflow-auto text-sm whitespace-pre-wrap break-words text-muted-foreground">{item.remote.description}</p> : null}
     {item.task_status === "completed" ? <p className="flex items-center gap-2 text-sm text-success"><CheckCheck className="size-4" />{t("workbench.complete")}</p> : null}
@@ -155,16 +158,20 @@ export default function CalendarPage() {
       start: DateTime.fromISO(a, { zone: timezone }).toFormat(allDay ? "yyyy-MM-dd" : "yyyy-MM-dd'T'HH:mm"),
       end: DateTime.fromISO(b, { zone: timezone }).toFormat(allDay ? "yyyy-MM-dd" : "yyyy-MM-dd'T'HH:mm") } });
   };
-  const events = data ? visibleItems(data, local).filter((item) => completed || item.task_status !== "completed").map((item) => ({
+  const shown = data ? visibleItems(data, local).filter((item) => completed || item.task_status !== "completed") : [];
+  const events = [...shown.map((item) => ({
     id: item.id, title: item.title, start: item.start, end: item.end, allDay: item.all_day,
     editable: item.editable && item.kind !== "deadline", backgroundColor: item.color, borderColor: item.color,
     classNames: [`calendar-${item.kind}`, item.task_status === "completed" ? "calendar-completed" : ""], extendedProps: { item },
-  })) : [];
+  })), ...(view === "timeGridWeek" ? bufferBands(shown) : [])];
+  const bandLabel = (band: Band) => t("workbench.bufferBand", { kind: t(`workbench.kind_${band.kind}`), minutes: band.minutes });
   const renderEvent = ({ event, timeText }: EventContentArg) => {
+    const band = event.extendedProps.band as Band | undefined;
+    if (band) return <span className="calendar-buffer-label">{bandLabel(band)}</span>;
     const item = event.extendedProps.item as CalendarItem;
     const Icon = ICONS[item.kind];
     const time = view === "dayGridMonth" ? timeText.split(" - ")[0] : timeText;
-    return <span className="calendar-event-content"><Icon size={12} aria-hidden /><span className="calendar-event-text"><span className="calendar-event-title">{time ? `${time} ` : ""}{event.title}{item.due_time ? ` · ${item.due_time}` : ""}</span><small>{t(`workbench.${item.kind}`)} · {item.source_name === "local" ? t(item.kind === "deadline" ? "workbench.localTask" : "workbench.localOnly") : item.source_name}{item.editable || item.kind === "deadline" ? "" : ` · ${t("workbench.readOnly")}`}</small></span>{!item.editable && item.kind !== "deadline" ? <LockKeyhole size={11} aria-hidden /> : null}</span>;
+    return <span className="calendar-event-content"><Icon size={12} aria-hidden /><span className="calendar-event-text"><span className="calendar-event-title">{time ? `${time} ` : ""}{event.title}{item.due_time ? ` · ${item.due_time}` : ""}</span><small>{t(`workbench.${item.kind}`)} · {item.source_name === "local" ? t(item.kind === "deadline" ? "workbench.localTask" : "workbench.localOnly") : item.source_name}{item.editable || item.kind === "deadline" ? "" : ` · ${t("workbench.readOnly")}`}{hasBuffer(item.buffer) ? ` · ${bufferSummary(t, item.buffer)}` : ""}</small></span>{!item.editable && item.kind !== "deadline" ? <LockKeyhole size={11} aria-hidden /> : null}</span>;
   };
   return <div className="calendar-workspace grid gap-4">
     <header className="flex flex-wrap items-start justify-between gap-3">
@@ -206,7 +213,11 @@ export default function CalendarPage() {
         allDayText={t("workbench.allDay")} noEventsText={t("workbench.empty")} events={events} eventContent={renderEvent}
         eventClick={(info) => { info.jsEvent.preventDefault(); setDetail(info.event.extendedProps.item as CalendarItem); }}
         datesSet={(info) => setRange({ start: info.startStr.slice(0, 10), end: info.endStr.slice(0, 10), title: info.view.title })}
-        eventDidMount={({ el, event }) => { el.setAttribute("tabindex", "0"); el.setAttribute("role", "button"); el.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); const current = calendar.current?.getApi().getEventById(event.id); if (current) setDetail(current.extendedProps.item as CalendarItem); } }); }}
+        eventDidMount={({ el, event }) => {
+          const band = event.extendedProps.band as Band | undefined;
+          // Reserved time is drawn behind its item; the item itself (and its detail) carries it for keyboards and readers.
+          if (band) { const owner = event.extendedProps.item as CalendarItem; el.style.setProperty("--band", owner.color); el.title = `${bandLabel(band)} · ${owner.title}`; el.setAttribute("aria-hidden", "true"); return; }
+          el.setAttribute("tabindex", "0"); el.setAttribute("role", "button"); el.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); const current = calendar.current?.getApi().getEventById(event.id); if (current) setDetail(current.extendedProps.item as CalendarItem); } }); }}
         selectable selectMirror select={(info) => { calendar.current?.getApi().unselect(); openEditor({ mode: "local", start: `${info.startStr.slice(0, 10)}T${info.allDay ? "09:00" : info.startStr.slice(11, 16)}`, form: !info.allDay ? { ...eventForm(undefined, timezone, info.startStr), end: DateTime.fromISO(info.endStr, { zone: timezone }).toFormat("yyyy-MM-dd'T'HH:mm") } : undefined }); }}
         editable eventDrop={(info) => changeTime(info.event, info.revert)} eventResize={(info) => changeTime(info.event, info.revert)}
         droppable drop={(info) => openEditor({ mode: "local", taskId: info.draggedEl.dataset.taskId, title: info.draggedEl.dataset.title, start: info.allDay ? `${info.dateStr}T09:00` : info.dateStr })}

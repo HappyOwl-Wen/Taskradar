@@ -8,10 +8,13 @@ import { Button } from "@/components/ui/button";
 import { ConfirmDialog, Dialog, DialogActions, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Field, Input, Textarea } from "@/components/ui/form";
 import { ApiError } from "@/lib/api";
+import { conflictExclude, formAt, useConflicts } from "@/lib/buffers";
 import { calendarApi, displayRange, eventDuration, eventForm, type CalendarDraft, type CalendarItem, type CalendarSources, type EventForm, type RemoteEvent } from "@/lib/calendar";
 import { useUnsavedChanges } from "@/lib/desktop";
 import { errorMessage } from "@/lib/errors";
 import { refreshAll } from "@/lib/queries";
+import { BufferFields } from "./BufferFields";
+import { ConflictNotice } from "./ConflictNotice";
 
 export const RECOVERY_KEY = "taskradar.calendar.editor";
 export interface EditorSeed {
@@ -91,6 +94,9 @@ export function CalendarEditor({ seed, sources, timezone, onClose }: {
   });
   const duration = eventDuration(form);
   const valid = !!form.title.trim() && !!form.start && !!form.end && duration > 0;
+  // The overlap warning needs valid times only, not a title yet.
+  const timed = !!form.start && !!form.end && duration > 0 && !form.all_day && !deleting;
+  const conflicts = useConflicts(form, conflictExclude(seed.item, remote ? draft : undefined), timed);
   const title = deleting ? t("workbench.deleteEvent") : remote ? t("workbench.newEvent") : t("workbench.newBlock");
   const range = displayRange(form.start, form.end, form.all_day, form.timezone, i18n.language);
   return <Dialog open onOpenChange={(open) => { if (!open && !save.isPending) keep.mutate(); }}>
@@ -128,6 +134,8 @@ export function CalendarEditor({ seed, sources, timezone, onClose }: {
               </select>
             </Field>)}
           </div></details> : null}
+          {!form.all_day ? <BufferFields value={form.buffer} onChange={(buffer) => set("buffer", buffer)} /> : null}
+          <ConflictNotice check={conflicts} enabled={timed} timezone={form.timezone} day={form.start.slice(0, 10)} onMove={(start, end) => setForm((f) => formAt(f, start, end))} />
           {remote ? <>
             <Field label={t("workbench.location")} htmlFor="event-location"><Input id="event-location" value={form.location} maxLength={1000} onChange={(e) => set("location", e.target.value)} /></Field>
             <Field label={t("workbench.description")} htmlFor="event-description"><Textarea id="event-description" value={form.description} maxLength={8000} rows={3} onChange={(e) => set("description", e.target.value)} /></Field>
@@ -153,7 +161,8 @@ export function CalendarEditor({ seed, sources, timezone, onClose }: {
         </Button>
       </DialogActions>
       <ConfirmDialog open={confirm} onOpenChange={setConfirm} title={deleting ? t("workbench.confirmDelete") : t("workbench.confirmSave")}
-        description={<div className="grid gap-2"><strong>{form.title}</strong><p>{t("workbench.target")}: {target?.summary}</p><p>{range}</p>{deleting ? <p>{t("workbench.remoteDeletion")}</p> : null}</div>}
+        description={<div className="grid gap-2"><strong>{form.title}</strong><p>{t("workbench.target")}: {target?.summary}</p><p>{range}</p>{deleting ? <p>{t("workbench.remoteDeletion")}</p> : null}
+          {timed && conflicts.data?.conflicts.length ? <p className="flex items-center gap-2 text-high"><TriangleAlert className="size-4 shrink-0" aria-hidden />{t("workbench.conflictConfirm", { count: conflicts.data.conflicts.length })}</p> : null}</div>}
         confirmLabel={t("workbench.submit")} cancelLabel={t("workbench.cancel")} destructive={deleting} pending={save.isPending} onConfirm={() => save.mutate()} />
     </DialogContent>
   </Dialog>;

@@ -18,6 +18,7 @@ from taskradar.db.session import transaction
 from taskradar.domain.calendar import EventForm, simple_event
 from taskradar.domain.schemas import DueInfo
 from taskradar.security.permissions import PermissionDenied, SideEffect
+from taskradar.services.calendar_conflicts import apply_draft_buffer
 from taskradar.services.calendar_sync import CalendarSyncError
 
 if TYPE_CHECKING:
@@ -203,6 +204,7 @@ class CalendarEditor:
                         block.calendar_id, block.event_id = draft.calendar_id, result["id"]
                 self.w._reconcile(session, draft.calendar_id, result)
                 self._cache_event(session, draft.calendar_id, result)
+                apply_draft_buffer(session, draft, result)
                 session.flush()
                 return self.w.draft_dict(saved)
 

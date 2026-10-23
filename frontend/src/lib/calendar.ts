@@ -1,5 +1,6 @@
 import { DateTime } from "luxon";
 import { request } from "./api";
+import { formBuffer, type Buffer, type ItemBuffer } from "./buffers";
 
 export interface RemoteEvent {
   id: string;
@@ -33,10 +34,13 @@ export interface CalendarItem {
   calendar_id?: string | null; event_id?: string | null; work_block_id?: string; revision?: number;
   source_name: string; editable: boolean; color: string; sync_status: string; needs_review?: boolean;
   remote?: RemoteEvent | null; html_link?: string | null; complex?: boolean; due_date?: string; due_time?: string | null;
+  buffer?: ItemBuffer | null;
 }
 export interface EventForm {
   title: string; description: string; location: string; all_day: boolean; start: string; end: string; timezone: string;
   start_fold?: 0 | 1 | null; end_fold?: 0 | 1 | null;
+  /** Kept on this computer when the item is saved; left out, the item's stored buffers stay as they are. */
+  buffer?: Buffer | null;
 }
 export interface CalendarDraft {
   id: string; operation: "create" | "update" | "delete"; calendar_id: string; event_id?: string | null;
@@ -74,7 +78,8 @@ export function eventForm(item: CalendarItem | undefined, timezone: string, star
     all_day, start: from.toFormat(all_day ? "yyyy-MM-dd" : "yyyy-MM-dd'T'HH:mm"),
     end: until.toFormat(all_day ? "yyyy-MM-dd" : "yyyy-MM-dd'T'HH:mm"), timezone,
     start_fold: from.getPossibleOffsets().length > 1 ? from.getPossibleOffsets().findIndex((d) => d.offset === from.offset) as 0 | 1 : null,
-    end_fold: until.getPossibleOffsets().length > 1 ? until.getPossibleOffsets().findIndex((d) => d.offset === until.offset) as 0 | 1 : null };
+    end_fold: until.getPossibleOffsets().length > 1 ? until.getPossibleOffsets().findIndex((d) => d.offset === until.offset) as 0 | 1 : null,
+    buffer: formBuffer(item) };
 }
 
 export function eventDuration(form: EventForm): number {

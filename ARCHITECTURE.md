@@ -140,6 +140,7 @@ history after a confirmation, and its calendar event if the setting says so.
 | `calendar_links` | Google event IDs, sync status and payload hash per task |
 | `calendar_sources`, `google_events`, `calendar_windows` | Selected calendars and actual ACL hints; unexpanded incremental collections; separately fetched bounded instance snapshots |
 | `work_blocks`, `calendar_drafts` | Independent local work plans with optional task/event links; durable explicit-submit outbox with base and conflicting remote versions |
+| `calendar_buffers` | Preparation, commute or rest minutes before/after an item, keyed by its view id (`work:…`, `google:…`) or by a recurring series (`series:…`); local only |
 | `timers` | Pomodoro phases and countdowns: kind, phase, mode, label, task, cycle, status, duration, time left, end time |
 | `notifications` | In-app notifications (reminders, timer ends) with de-duplication keys and whether Windows showed them |
 | `settings`, `sync_jobs`, `audit_log` | Typed settings sections, job runs (reminder checks), permission decisions |
@@ -240,6 +241,12 @@ Collection sync uses unexpanded events with a syncToken and no date bounds. Visi
 expanded query without a syncToken, so Google owns recurrence and exceptions. Each paginated snapshot is replaced only
 after all pages arrive; 410 rebuilds only that calendar's remote collection. Tasks, work plans and pending drafts survive.
 Writes use stable event IDs on creation and ETag If-Match on edits/deletions. The frontend never handles Google tokens.
+
+`services/calendar_conflicts.py` answers the editor's overlap check (`POST /api/calendar/conflicts`) from local data
+only: work blocks, open appointment to-dos and, per selected calendar, the freshest cached window that covers the
+checked time. A calendar without such a window is reported as unchecked rather than treated as free, and the check
+never starts a Google request. Buffers widen items on both sides of the check; they are stored locally (also for
+read-only and recurring meetings) and never written to Google. A warning never blocks a save.
 
 FullCalendar Standard 6.x (MIT), with Luxon named-time-zone support, is loaded on demand. Details of field mappings,
 deletion rules, grants, scope limitations and component selection are in [the calendar guide](docs/CALENDAR_WORKSPACE.zh-CN.md).
