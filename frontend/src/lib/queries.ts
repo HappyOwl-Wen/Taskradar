@@ -15,6 +15,7 @@ export const qk = {
   notifications: ["notifications"] as const,
   legacy: ["legacy"] as const,
   timers: ["timers"] as const,
+  timerAlarm: ["timer-alarm"] as const,
 };
 
 export const useDashboard = () => useQuery({ queryKey: qk.dashboard, queryFn: api.dashboard, refetchInterval: 30_000 });

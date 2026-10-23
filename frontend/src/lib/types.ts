@@ -270,6 +270,7 @@ export interface Settings {
     long_break_every: number;
     auto_start_breaks: boolean;
     auto_start_focus: boolean;
+    alarm_sound: boolean;
     notify: boolean;
   };
 }
@@ -380,4 +381,18 @@ export interface TimersOverview {
   };
   /** Running and paused ones first (the nearest end first), then the finished ones. */
   countdowns: TimerView[];
+}
+
+export interface TimerAlarmState {
+  alarm: {
+    id: number;
+    timer_id: number;
+    phase: TimerPhase;
+    title: string;
+    body: string;
+    finished_at: string;
+    /** False for a phase that already ended while the app was off/asleep. */
+    audible: boolean;
+  } | null;
+  sound_enabled: boolean;
 }

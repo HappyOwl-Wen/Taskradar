@@ -5,6 +5,7 @@ import { useMediaQuery } from "./hooks";
 export function useFocusView() {
   const [params, setParams] = useSearchParams();
   const smallWindow = useMediaQuery("(max-width: 560px), (max-height: 500px)");
+  const minimalWindow = useMediaQuery("(max-width: 280px), (max-height: 260px)");
   const view = params.get("view");
   const compact = view === "compact" || (view !== "full" && smallWindow);
 
@@ -16,5 +17,5 @@ export function useFocusView() {
     }, { replace: true });
   };
 
-  return { compact, toggleView };
+  return { compact, hideFrame: compact || minimalWindow, toggleView };
 }

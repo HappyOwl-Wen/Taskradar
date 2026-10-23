@@ -112,6 +112,10 @@
   max-width: 100%;
 }
 
+.focus-task-picker {
+  max-width: min(100%, 20rem);
+}
+
 .focus-secondary[role="status"] {
   text-align: center;
 }
@@ -216,5 +220,32 @@
 @container focus-face (max-height: 4rem) {
   .focus-status {
     display: none;
+  }
+}
+
+/* A minimum desktop window at 200% zoom still keeps its time and transport controls on screen. */
+@container focus-page (max-height: 12rem) {
+  .focus-view,
+  .focus-timer {
+    gap: 0.25rem;
+    padding: 0.25rem;
+  }
+
+  .focus-phases {
+    display: none;
+  }
+
+  .focus-header h1 {
+    font-size: 0.8125rem;
+    line-height: 1.25rem;
+    white-space: nowrap;
+  }
+
+  .focus-header [data-slot="button"],
+  .focus-controls > button {
+    width: 1.5rem;
+    height: 1.5rem;
+    min-width: 1.5rem;
+    padding: 0;
   }
 }

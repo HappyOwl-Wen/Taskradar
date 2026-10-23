@@ -119,6 +119,8 @@ class TimerService:
         self.on_unschedule: Callable[[int], None] | None = None
         self._listeners: list[Callable[[], None]] = []
         self._lock = threading.RLock()
+        # One Pomodoro runs at a time. A newer completed phase replaces an older, unacknowledged alarm.
+        self._alarm: dict[str, Any] | None = None
 
     def subscribe(self, listener: Callable[[], None]) -> None:
         """Call ``listener`` whenever a timer starts, stops or ends (the tray icon's tooltip follows them)."""
@@ -134,6 +136,24 @@ class TimerService:
     # ------------------------------------------------------------------------------------------
     # Reading
     # ------------------------------------------------------------------------------------------
+
+    def alarm_state(self) -> dict[str, Any]:
+        """A completion stays visible across page changes/reloads until explicitly acknowledged."""
+        with self._lock:
+            alarm = dict(self._alarm) if self._alarm is not None else None
+        return {"alarm": alarm, "sound_enabled": self.settings.get().timers.alarm_sound}
+
+    def dismiss_alarm(self, alarm_id: int) -> dict[str, Any]:
+        with self._lock:
+            # A delayed dismissal of the preceding phase must not silence a newer alarm.
+            if self._alarm is not None and self._alarm["id"] == alarm_id:
+                with transaction(self._factory) as session:
+                    note = session.get(Notification, alarm_id)
+                    if note is not None:
+                        note.read_at = self.clock()
+                self._alarm = None
+        self._changed()
+        return self.alarm_state()
 
     def overview(self) -> dict[str, Any]:
         """Everything the timer pages show; due timers are finished first."""
@@ -453,17 +473,30 @@ class TimerService:
         """Finish every running timer whose time is up: notify once, and start the next Pomodoro phase if wished."""
         now = self.clock()
         finished: list[int] = []
+        notices: list[tuple[int, str, str]] = []
         with self._lock:
             with transaction(self._factory) as session:
                 due = session.scalars(
                     select(Timer.id).where(Timer.status == "running", Timer.ends_at.is_not(None), Timer.ends_at <= now)
                 ).all()
             for timer_id in due:
-                if self._finish(timer_id, now):
+                notice = self._finish(timer_id, now)
+                if notice is not None:
                     finished.append(timer_id)
+                    notices.append(notice)
+        # Listeners may read alarm state and call into the GUI: never dispatch while holding the timer lock.
+        if finished:
+            self._changed()
+        # A blocked/unavailable toast service must not delay the independent alarm.
+        for note_id, title, body in notices:
+            if self._notify(title, body):
+                with transaction(self._factory) as session:
+                    sent = session.get(Notification, note_id)
+                    if sent is not None:
+                        sent.desktop_sent_at = self.clock()
         return finished
 
-    def _finish(self, timer_id: int, now: dt.datetime) -> bool:
+    def _finish(self, timer_id: int, now: dt.datetime) -> tuple[int, str, str] | None:
         cfg = self.settings.get()
         with transaction(self._factory) as session:
             # Only one caller (the scheduler or a page reading the timers) gets to finish it.
@@ -473,7 +506,7 @@ class TimerService:
                 .values(status="finished", finished_at=now, notified_at=now, remaining_seconds=None)
             )
             if not getattr(done, "rowcount", 0):
-                return False
+                return None
             timer = session.get(Timer, timer_id)
             assert timer is not None
             ended_at = timer.ends_at or now
@@ -505,6 +538,20 @@ class TimerService:
             session.add(note)
             session.flush()
             note_id = note.id
+            alarm = (
+                {
+                    "id": note_id,
+                    "timer_id": timer.id,
+                    "phase": timer.phase,
+                    "title": title,
+                    "body": body,
+                    "finished_at": ended_at.isoformat(),
+                    # Missed phases are shown on return without starting an old alarm sound.
+                    "audible": now - ended_at <= LATE,
+                }
+                if timer.kind == "pomodoro"
+                else None
+            )
             next_id: int | None = None
             next_end: dt.datetime | None = None
             if auto is not None:
@@ -519,15 +566,11 @@ class TimerService:
                 )
                 self._work_on(session, following, Actor.SYSTEM)
                 next_id, next_end = following.id, following.ends_at
+        if alarm is not None:
+            self._alarm = alarm
         if next_id is not None:
             self._schedule(next_id, next_end)
-        self._changed()
-        if self._notify(title, body):
-            with transaction(self._factory) as session:
-                sent = session.get(Notification, note_id)
-                if sent is not None:
-                    sent.desktop_sent_at = self.clock()
-        return True
+        return note_id, title, body
 
     def _pomodoro_message(self, timer: Timer, nxt: tuple[Phase, int], auto: bool, language: str) -> tuple[str, str]:
         texts = TEXTS["en" if language == "en" else "zh-CN"]

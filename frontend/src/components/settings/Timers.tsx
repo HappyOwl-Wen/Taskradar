@@ -35,6 +35,13 @@ export function TimersSection({ settings }: { settings: Settings }) {
       </div>
       <div className="grid gap-3 border-t pt-4">
         <SwitchRow
+          id="set-timer-alarm"
+          label={t("settings.timers.alarmSound")}
+          hint={t("settings.timers.alarmSoundHint")}
+          checked={v.alarm_sound ?? true}
+          onCheckedChange={(c) => timers.set("alarm_sound", c)}
+        />
+        <SwitchRow
           id="set-timer-notify"
           label={t("settings.timers.notify")}
           hint={supported ? t("settings.timers.notifyHint") : t("timers.notifyUnsupported")}

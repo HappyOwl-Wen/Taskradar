@@ -182,8 +182,8 @@ const zhCN = {
     toSettings: "去设置",
     pausedShort: "已暂停 {{time}}",
     notifyHint: "计时结束时会发出 Windows 通知；窗口关到托盘后也一样。",
-    notifyOff: "计时结束的 Windows 通知已在设置中关闭，结束时只会出现在右上角的通知里。",
-    notifyUnsupported: "当前系统不支持 Windows 通知，计时结束时只会出现在右上角的通知里。",
+    notifyOff: "计时结束的 Windows 通知已在设置中关闭。番茄钟仍会显示结束提醒，响铃可在设置中单独控制。",
+    notifyUnsupported: "当前系统不支持 Windows 通知。番茄钟仍会显示结束提醒，响铃可在设置中单独控制。",
   },
   focus: {
     title: "番茄钟",
@@ -225,6 +225,12 @@ const zhCN = {
     today: "今天",
     todaySessions: "{{count}} 个番茄",
     todayMinutes: "共专注 {{count}} 分钟",
+  },
+  timerAlarm: {
+    stop: "停止响铃",
+    dismiss: "关闭提醒",
+    ringing: "计时结束。响铃会持续，直到你停止提醒。",
+    silent: "计时结束。关闭提醒后即可继续。",
   },
   countdown: {
     title: "倒计时",
@@ -717,7 +723,7 @@ const zhCN = {
       removed: "已从开始菜单移除",
     },
     timers: {
-      intro: "番茄钟的时长和节奏，以及计时结束时的 Windows 通知。",
+      intro: "番茄钟的时长和节奏，以及结束时的持续响铃与 Windows 通知。",
       pomodoro: "番茄钟",
       focusMinutes: "专注（分钟）",
       shortBreakMinutes: "短休息（分钟）",
@@ -726,6 +732,8 @@ const zhCN = {
       autoStartBreaks: "专注结束后自动开始休息",
       autoStartBreaksHint: "关闭时，休息要你自己点“开始”。",
       autoStartFocus: "休息结束后自动开始下一个番茄",
+      alarmSound: "番茄钟结束时持续响铃",
+      alarmSoundHint: "专注或休息结束时响铃，并弹出结束提醒，直到点击“停止响铃”。桌面版收在托盘时也有效；Windows 横幅通知可单独设置。",
       notify: "计时结束时发出 Windows 通知",
       notifyHint: "番茄钟的每个阶段结束和倒计时结束时，在屏幕右下角提醒你。无论是否开启，都会记在右上角的通知里。",
     },

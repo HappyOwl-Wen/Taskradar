@@ -43,8 +43,8 @@ function NavDrawer({ open, onOpenChange }: { open: boolean; onOpenChange: (open:
 export function AppShell() {
   const matches = useMatches();
   const { pathname } = useLocation();
-  const { compact } = useFocusView();
-  const compactFocus = pathname === "/focus" && compact;
+  const { hideFrame } = useFocusView();
+  const compactFocus = pathname === "/focus" && hideFrame;
   const main = useRef<HTMLElement>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const fullHeight = matches.some((m) => (m.handle as RouteHandle | undefined)?.fullHeight);

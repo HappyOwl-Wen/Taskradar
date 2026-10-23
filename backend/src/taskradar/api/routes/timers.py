@@ -38,6 +38,17 @@ def start_pomodoro(body: PomodoroBody, c: Container = Depends(get_container)) ->
     return c.timers.start_pomodoro(body.phase, task_id=body.task_id)
 
 
+@router.get("/alarm")
+def alarm(c: Container = Depends(get_container)) -> dict[str, Any]:
+    c.timers.finish_due()
+    return c.timers.alarm_state()
+
+
+@router.post("/alarm/{alarm_id}/dismiss")
+def dismiss_alarm(alarm_id: int, c: Container = Depends(get_container)) -> dict[str, Any]:
+    return c.timers.dismiss_alarm(alarm_id)
+
+
 @router.post("/countdowns", status_code=201)
 def start_countdown(body: CountdownBody, c: Container = Depends(get_container)) -> dict[str, Any]:
     return c.timers.start_countdown(label=body.label, seconds=body.seconds, until=body.until)

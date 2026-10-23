@@ -74,6 +74,8 @@ class TimerSettings(_Section):
     long_break_every: int = Field(default=4, ge=2, le=12)
     auto_start_breaks: bool = False
     auto_start_focus: bool = False
+    # A separate, looping Pomodoro alarm; Windows banners can be switched off independently.
+    alarm_sound: bool = True
     # A Windows notification when a Pomodoro phase or a countdown ends: that is what a timer is for.
     notify: bool = True
 

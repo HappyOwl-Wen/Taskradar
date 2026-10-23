@@ -12,6 +12,7 @@ import type {
   TaskDetail,
   TaskSummary,
   TimerPhase,
+  TimerAlarmState,
   TimersOverview,
 } from "./types";
 
@@ -193,6 +194,8 @@ export const api = {
     put<{ ok: boolean }>("/api/desktop/state", state),
 
   timers: () => get<TimersOverview>("/api/timers"),
+  timerAlarm: () => get<TimerAlarmState>("/api/timers/alarm"),
+  dismissTimerAlarm: (id: number) => post<TimerAlarmState>(`/api/timers/alarm/${id}/dismiss`),
   startPomodoro: (body: { phase?: TimerPhase; task_id?: string } = {}) => post<TimersOverview>("/api/timers/pomodoro", body),
   /** A duration in seconds, or an end time "YYYY-MM-DDTHH:MM" in the user's time zone. */
   startCountdown: (body: { label?: string; seconds?: number; until?: string }) => post<TimersOverview>("/api/timers/countdowns", body),

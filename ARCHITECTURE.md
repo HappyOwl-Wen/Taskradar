@@ -86,6 +86,16 @@ in any other status keeps it). A countdown to a moment ends exactly at that
 moment in the user's time zone and cannot be paused. On start-up `resume_schedule()` ends what ran out while
 TaskRadar was not running (the notification says when it ended) and schedules the rest.
 
+Each completed Pomodoro phase also publishes a process-local pending alarm, independently of Windows toast
+settings. `GET /api/timers/alarm` exposes the pending completion on every page; a CSRF-protected dismissal
+acknowledges its notification and clears only the matching alarm ID, so a late click cannot clear a newer phase.
+Starting the next phase does not clear the alarm. Reloading or changing pages preserves it; quitting TaskRadar
+ends the alarm. Completions found more than two minutes late remain visible but are not audible.
+The desktop shell follows these changes, restores its window and uses `notify/alarm.py` to loop the Windows
+alarm sound asynchronously until acknowledgement, sound being disabled, or app exit. Sound passes through the
+`timer.alarm` permission check. The global `TimerAlarm` dialog polls for completion and provides Stop; browser
+sessions use a gesture-unlocked Web Audio chime instead of native sound, avoiding duplicate desktop audio.
+
 The page shows the timers but does not run them: `lib/timers.ts` counts down every second from the server's
 `remaining_seconds`, so it never drifts from the server's clock, and asks the server again when a timer should have
 ended. The tray icon's tooltip follows the timers through a listener of `TimerService` (a change wakes the shell's

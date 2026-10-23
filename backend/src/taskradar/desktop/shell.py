@@ -32,7 +32,9 @@ from taskradar.desktop.server import BackgroundServer, choose_port
 from taskradar.desktop.splash import FRAME, TEXT, error_page, start_page
 from taskradar.desktop.tray import Tray
 from taskradar.notify import windows as notifications
+from taskradar.notify.alarm import AlarmSound
 from taskradar.packaged import is_packaged
+from taskradar.security.permissions import SideEffect
 
 log = logging.getLogger(__name__)
 
@@ -260,6 +262,10 @@ class Shell:
         self._app_shown = False  # the web UI has been loaded (from then on the start screen stays behind)
         self._quitting = False  # "Quit" was chosen (and confirmed): the next close really ends TaskRadar
         self._timers_changed = threading.Event()  # wakes the tray tooltip up when a timer starts, stops or ends
+        self._alarm_lock = threading.Lock()
+        self._alarm_sound = AlarmSound()
+        self._shown_alarm: int | None = None
+        self._alarm_stopped = False
         self._lock = threading.Lock()
 
     def connect(self) -> None:
@@ -309,6 +315,9 @@ class Shell:
 
     def remove_tray(self) -> None:
         self._timers_changed.set()  # lets the tooltip thread see that TaskRadar ends
+        with self._alarm_lock:
+            self._alarm_stopped = True
+            self._alarm_sound.stop()
         if self.tray is not None:
             self.tray.remove()
             self.tray = None
@@ -319,6 +328,9 @@ class Shell:
         if container is None:
             return
         container.timers.subscribe(self._timers_changed.set)
+        container.timers.subscribe(self._sync_alarm)
+        container.settings.subscribe(lambda _settings, _sections: self._sync_alarm())
+        self._sync_alarm()
         shown: str | None = None
         while not self.closed.is_set():
             try:
@@ -333,6 +345,30 @@ class Shell:
             # The minutes left change while a timer runs; otherwise only a change wakes the thread up.
             self._timers_changed.wait(10 if status else 300)
             self._timers_changed.clear()
+
+    def _sync_alarm(self) -> None:
+        """Sound and restore the window even from the tray; acknowledgement stops the sound immediately."""
+        container = self.server.container
+        if container is None:
+            return
+        with self._alarm_lock:
+            if self.closed.is_set() or self._quitting or self._alarm_stopped:
+                self._alarm_sound.stop()
+                return
+            state = container.timers.alarm_state()
+            alarm = state["alarm"]
+            audible = bool(alarm and alarm["audible"] and state["sound_enabled"])
+            if audible and not self._alarm_sound.playing:
+                if container.guard.is_allowed(SideEffect.TIMER_ALARM):
+                    container.guard.check(SideEffect.TIMER_ALARM, target=f"timer:{alarm['timer_id']}")
+                    self._alarm_sound.start()
+            elif not audible:
+                self._alarm_sound.stop()
+            alarm_id = alarm["id"] if alarm else None
+            show = alarm_id is not None and alarm_id != self._shown_alarm
+            self._shown_alarm = alarm_id
+        if show:
+            self.show_window()
 
     def _on_loaded(self) -> None:
         if self._native_ready:

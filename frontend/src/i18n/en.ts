@@ -183,8 +183,8 @@ const en: Messages = {
     toSettings: "Settings",
     pausedShort: "Paused {{time}}",
     notifyHint: "When a timer ends you get a Windows notification, also with the window closed to the tray.",
-    notifyOff: "Windows notifications for timers are turned off in the settings; when a timer ends it only appears under the bell.",
-    notifyUnsupported: "This system cannot show Windows notifications; when a timer ends it only appears under the bell.",
+    notifyOff: "Windows notifications for timers are off. Pomodoro completion reminders still appear; alarm sound is configured separately.",
+    notifyUnsupported: "This system cannot show Windows notifications. Pomodoro completion reminders still appear; alarm sound is configured separately.",
   },
   focus: {
     title: "Pomodoro",
@@ -226,6 +226,12 @@ const en: Messages = {
     today: "Today",
     todaySessions: "Pomodoros: {{count}}",
     todayMinutes: "Focus time: {{count}} min",
+  },
+  timerAlarm: {
+    stop: "Stop alarm",
+    dismiss: "Dismiss",
+    ringing: "Time is up. The alarm keeps ringing until you stop it.",
+    silent: "Time is up. Dismiss this reminder to continue.",
   },
   countdown: {
     title: "Countdowns",
@@ -718,7 +724,7 @@ const en: Messages = {
       removed: "Removed from the Start menu",
     },
     timers: {
-      intro: "How long the Pomodoro phases last, what starts by itself, and the Windows notification when a timer ends.",
+      intro: "Pomodoro durations, automatic starts, and the alarm sound and Windows notification when a phase ends.",
       pomodoro: "Pomodoro",
       focusMinutes: "Focus (minutes)",
       shortBreakMinutes: "Short break (minutes)",
@@ -727,6 +733,8 @@ const en: Messages = {
       autoStartBreaks: "Start the break when a focus session ends",
       autoStartBreaksHint: "When off, you start each break yourself.",
       autoStartFocus: "Start the next Pomodoro when a break ends",
+      alarmSound: "Keep ringing when a Pomodoro phase ends",
+      alarmSoundHint: "When focus or a break ends, ring and show a reminder until you choose “Stop alarm”. The desktop app also rings from the tray. Windows banners are configured separately.",
       notify: "Windows notification when a timer ends",
       notifyHint: "At the end of each Pomodoro phase and of each countdown, at the bottom right of the screen. Either way it is listed under the bell.",
     },

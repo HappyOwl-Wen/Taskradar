@@ -19,12 +19,12 @@ const NO_TASK = "none";
 
 function phaseMinutes(settings: Settings | undefined, phase: TimerPhase): number {
   const timers = settings?.timers;
-  if(!timers) return phase === "focus" ? 25 : phase === "short_break" ? 5 : 15;
+  if (!timers) return phase === "focus" ? 25 : phase === "short_break" ? 5 : 15;
   return phase === "focus" ? timers.focus_minutes : phase === "short_break" ? timers.short_break_minutes : timers.long_break_minutes;
 }
 
 /** The time left inside a ring that fills as the phase runs: indigo while focusing, green on a break. */
-function Ring({ progress, phase, children }: { progress: number; phase: TimerPhase; children: React.ReactNode; }) {
+function Ring({ progress, phase, children }: { progress: number; phase: TimerPhase; children: React.ReactNode }) {
   const radius = 108;
   const length = 2 * Math.PI * radius;
   return (
@@ -52,7 +52,7 @@ function Ring({ progress, phase, children }: { progress: number; phase: TimerPha
 }
 
 /** One dot per focus session of the set: filled for the ones done. */
-function SetDots({ done, total }: { done: number; total: number; }) {
+function SetDots({ done, total }: { done: number; total: number }) {
   const { t } = useTranslation();
   return (
     <div className="focus-set-dots flex flex-wrap items-center justify-center gap-1.5" role="img" aria-label={t("focus.setProgress", { done, total })}>
@@ -74,10 +74,10 @@ export default function FocusPage() {
   const start = useTimerAction((phase: TimerPhase) => api.startPomodoro({ phase, task_id: taskId === NO_TASK ? undefined : taskId }), {
     onSuccess: () => setChosen(null),
   });
-  const act = useTimerAction(({ id, action }: { id: number; action: "pause" | "resume" | "skip" | "cancel"; }) => api.timerAction(id, action));
+  const act = useTimerAction(({ id, action }: { id: number; action: "pause" | "resume" | "skip" | "cancel" }) => api.timerAction(id, action));
 
-  if(isLoading) return <LoadingRows rows={4} />;
-  if(error || !data) return <ErrorState error={error} onRetry={() => void refetch()} />;
+  if (isLoading) return <LoadingRows rows={4} />;
+  if (error || !data) return <ErrorState error={error} onRetry={() => void refetch()} />;
 
   const pomodoro = data.pomodoro;
   const current = isActive(pomodoro.current) ? pomodoro.current : null;
@@ -85,6 +85,9 @@ export default function FocusPage() {
   const phase: TimerPhase = current?.phase ?? chosen ?? next.phase;
   const left = current ? remaining(current) : phaseMinutes(settings, phase) * 60;
   const clock = formatClock(left, i18n.language);
+  const viewLabel = t(compact ? "focus.fullView" : "focus.compactView");
+  const startLabel = t(`focus.start.${phase}`);
+  const skipLabel = t(phase === "focus" ? "focus.skipToBreak" : "focus.skipToFocus");
   const every = pomodoro.long_break_every;
   // Focus sessions of the set done so far (a break has the number of the session it follows).
   const basis = current ? { phase: current.phase ?? "focus", cycle: current.cycle } : next;
@@ -112,11 +115,13 @@ export default function FocusPage() {
             <>
               {compact ? (
                 <Button variant="ghost" size="icon-sm" asChild>
-                  <Link to="/" aria-label={t("focus.back")} title={t("focus.back")}><ArrowLeft /></Link>
+                  <Link to="/" aria-label={t("focus.back")} title={t("focus.back")}>
+                    <ArrowLeft />
+                  </Link>
                 </Button>
               ) : null}
-              <Button variant="ghost" size="sm" onClick={toggleView} aria-label={t(compact ? "focus.fullView" : "focus.compactView")} title={t(compact ? "focus.fullView" : "focus.compactView")}>
-                {compact ? <Maximize2 /> : <Minimize2 />} <span className="focus-view-label">{t(compact ? "focus.fullView" : "focus.compactView")}</span>
+              <Button variant="ghost" size="sm" onClick={toggleView} aria-label={viewLabel} title={viewLabel}>
+                {compact ? <Maximize2 /> : <Minimize2 />} <span className="focus-view-label">{viewLabel}</span>
               </Button>
               <Button variant="ghost" size="sm" asChild aria-label={t("focus.settings")} title={t("focus.settings")}>
                 <Link to="/settings?section=timers">
@@ -144,7 +149,12 @@ export default function FocusPage() {
                 <span className="focus-status font-medium text-muted-foreground">
                   {current?.status === "paused" ? t("focus.paused") : current ? t(`focus.running.${phase}`) : t("focus.ready")}
                 </span>
-                <span className="focus-clock font-display font-semibold tracking-tight tabular-nums" style={{ "--clock-characters": clock.length } as CSSProperties} role="timer" aria-live="off">
+                <span
+                  className="focus-clock font-display font-semibold tracking-tight tabular-nums"
+                  style={{ "--clock-characters": clock.length } as CSSProperties}
+                  role="timer"
+                  aria-live="off"
+                >
                   {clock}
                 </span>
                 <SetDots done={done} total={every} />
@@ -170,24 +180,40 @@ export default function FocusPage() {
 
             <div className="focus-controls flex flex-wrap items-center justify-center gap-2">
               {!current ? (
-                <Button size="lg" onClick={() => start.mutate(phase)} loading={start.isPending} disabled={busy} aria-label={t(`focus.start.${phase}`)} title={t(`focus.start.${phase}`)}>
-                  <Play /> <span className="focus-control-label">{t(`focus.start.${phase}`)}</span>
+                <Button size="lg" onClick={() => start.mutate(phase)} loading={start.isPending} disabled={busy} aria-label={startLabel} title={startLabel}>
+                  <Play /> <span className="focus-control-label">{startLabel}</span>
                 </Button>
               ) : (
                 <>
                   {current.status === "running" ? (
-                    <Button size="lg" variant="outline" onClick={() => act.mutate({ id: current.id, action: "pause" })} disabled={busy} aria-label={t("focus.pause")} title={t("focus.pause")}>
+                    <Button
+                      size="lg" variant="outline" disabled={busy}
+                      onClick={() => act.mutate({ id: current.id, action: "pause" })}
+                      aria-label={t("focus.pause")} title={t("focus.pause")}
+                    >
                       <Pause /> <span className="focus-control-label">{t("focus.pause")}</span>
                     </Button>
                   ) : (
-                    <Button size="lg" onClick={() => act.mutate({ id: current.id, action: "resume" })} disabled={busy} aria-label={t("focus.resume")} title={t("focus.resume")}>
+                    <Button
+                      size="lg" disabled={busy}
+                      onClick={() => act.mutate({ id: current.id, action: "resume" })}
+                      aria-label={t("focus.resume")} title={t("focus.resume")}
+                    >
                       <Play /> <span className="focus-control-label">{t("focus.resume")}</span>
                     </Button>
                   )}
-                  <Button size="lg" variant="ghost" onClick={() => act.mutate({ id: current.id, action: "skip" })} disabled={busy} aria-label={t(phase === "focus" ? "focus.skipToBreak" : "focus.skipToFocus")} title={t(phase === "focus" ? "focus.skipToBreak" : "focus.skipToFocus")}>
-                    <SkipForward /> <span className="focus-control-label">{t(phase === "focus" ? "focus.skipToBreak" : "focus.skipToFocus")}</span>
+                  <Button
+                    size="lg" variant="ghost" disabled={busy}
+                    onClick={() => act.mutate({ id: current.id, action: "skip" })}
+                    aria-label={skipLabel} title={skipLabel}
+                  >
+                    <SkipForward /> <span className="focus-control-label">{skipLabel}</span>
                   </Button>
-                  <Button size="lg" variant="ghost" onClick={() => act.mutate({ id: current.id, action: "cancel" })} disabled={busy} aria-label={t("focus.stop")} title={t("focus.stop")}>
+                  <Button
+                    size="lg" variant="ghost" disabled={busy}
+                    onClick={() => act.mutate({ id: current.id, action: "cancel" })}
+                    aria-label={t("focus.stop")} title={t("focus.stop")}
+                  >
                     <CircleStop /> <span className="focus-control-label">{t("focus.stop")}</span>
                   </Button>
                 </>
@@ -195,7 +221,7 @@ export default function FocusPage() {
             </div>
 
             {!current && phase === "focus" && openTasks.length ? (
-              <div className="focus-secondary grid w-full max-w-xs gap-1.5">
+              <div className="focus-secondary focus-task-picker grid w-full gap-1.5">
                 <label htmlFor="focus-task" className="text-[13px] font-medium text-muted-foreground">
                   {t("focus.taskLabel")}
                 </label>

@@ -155,7 +155,7 @@ describe("SettingsPage: Pomodoro and countdowns", () => {
   });
 
   it("saves the Pomodoro durations together", async () => {
-    const timers = { focus_minutes: 25, short_break_minutes: 5, long_break_minutes: 15, long_break_every: 4, auto_start_breaks: false, auto_start_focus: false, notify: true };
+    const timers = { focus_minutes: 25, short_break_minutes: 5, long_break_minutes: 15, long_break_every: 4, auto_start_breaks: false, auto_start_focus: false, alarm_sound: true, notify: true };
     vi.spyOn(api, "settings").mockResolvedValue({ ...SETTINGS, timers });
     vi.spyOn(api, "systemStatus").mockResolvedValue({ desktop_notifications_supported: true } as SystemStatus);
     const update = vi.spyOn(api, "updateSettings").mockResolvedValue({ ...SETTINGS, timers: { ...timers, focus_minutes: 50 } });
@@ -168,6 +168,18 @@ describe("SettingsPage: Pomodoro and countdowns", () => {
     expect(update).toHaveBeenCalledWith({ timers: { focus_minutes: 50, auto_start_breaks: true } });
     expect(screen.getByRole("switch", { name: "计时结束时发出 Windows 通知" })).toBeChecked();
   });
+
+  it("saves alarm sound independently of Windows banners", async () => {
+    const timers = { focus_minutes: 25, short_break_minutes: 5, long_break_minutes: 15, long_break_every: 4, auto_start_breaks: false, auto_start_focus: false, alarm_sound: true, notify: false };
+    vi.spyOn(api, "settings").mockResolvedValue({ ...SETTINGS, timers });
+    vi.spyOn(api, "systemStatus").mockResolvedValue({ desktop_notifications_supported: true } as SystemStatus);
+    const update = vi.spyOn(api, "updateSettings").mockResolvedValue({ ...SETTINGS, timers: { ...timers, alarm_sound: false } });
+    renderSettings(["/settings?section=timers"]);
+    await userEvent.click(await screen.findByRole("switch", { name: "番茄钟结束时持续响铃" }));
+    await userEvent.click(screen.getByRole("button", { name: "保存" }));
+    expect(update).toHaveBeenCalledWith({ timers: { alarm_sound: false } });
+    expect(screen.getByRole("switch", { name: "计时结束时发出 Windows 通知" })).not.toBeChecked();
+  });
 });
 
 describe("SettingsPage: notification banners", () => {
@@ -176,7 +188,7 @@ describe("SettingsPage: notification banners", () => {
     reminders: { urgent_hours: 24, high_days: 3, upcoming_days: 7, notify_candidates: false, notify_upcoming: true, overdue_repeat_hours: 24, scan_interval_minutes: 15 },
     notifications: { desktop_enabled: true, max_per_scan: 5 },
     calendar: { calendar_name: "TaskRadar", auto_sync_enabled: false, auto_sync_categories: [], reminder_minutes: 1440, remove_on_dismiss: true },
-    timers: { focus_minutes: 25, short_break_minutes: 5, long_break_minutes: 15, long_break_every: 4, auto_start_breaks: false, auto_start_focus: false, notify: true },
+    timers: { focus_minutes: 25, short_break_minutes: 5, long_break_minutes: 15, long_break_every: 4, auto_start_breaks: false, auto_start_focus: false, alarm_sound: true, notify: true },
   } as Settings;
   const status = (start_menu: SystemStatus["start_menu"]) =>
     ({ desktop_notifications_supported: true, start_menu, autostart: { supported: true, enabled: false } }) as SystemStatus;

@@ -6,6 +6,7 @@ import { RouterProvider } from "react-router/dom";
 import { useTranslation } from "react-i18next";
 import { Toaster } from "sonner";
 import { AppShell } from "@/components/layout/AppShell";
+import { TimerAlarm } from "@/components/timers/TimerAlarm";
 import { Button } from "@/components/ui/button";
 import { TooltipProvider } from "@/components/ui/menu";
 import { LoadingRows } from "@/components/ui/states";
@@ -127,6 +128,7 @@ function SessionGate() {
     <>
       {session.data?.desktop ? <DesktopSync /> : null}
       <RouterProvider router={router} />
+      <TimerAlarm desktop={Boolean(session.data?.desktop)} />
     </>
   );
 }

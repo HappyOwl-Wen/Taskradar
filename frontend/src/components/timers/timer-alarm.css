@@ -1,0 +1,64 @@
+.timer-alarm-dialog {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  z-index: 91;
+  display: flex;
+  flex-direction: column;
+  gap: 0.875rem;
+  width: min(26rem, calc(100% - 1rem));
+  max-height: calc(100dvh - 1rem);
+  padding: 1.5rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--card);
+  color: var(--foreground);
+  box-shadow: 0 24px 64px -12px rgb(0 0 0 / 0.3);
+  transform: translate(-50%, -50%);
+  text-align: center;
+  outline: none;
+}
+
+.timer-alarm-description {
+  min-height: 0;
+  overflow-y: auto;
+}
+
+@media (max-height: 300px), (max-width: 280px) {
+  .timer-alarm-dialog {
+    gap: 0.375rem;
+    padding: 0.5rem;
+  }
+
+  .timer-alarm-icon,
+  .timer-alarm-hint {
+    display: none;
+  }
+
+  .timer-alarm-title {
+    font-size: 0.875rem;
+    line-height: 1.25rem;
+  }
+
+  .timer-alarm-description {
+    font-size: 0.75rem;
+    line-height: 1rem;
+  }
+
+  .timer-alarm-stop {
+    height: 1.75rem;
+    padding-inline: 0.5rem;
+    font-size: 0.75rem;
+  }
+}
+
+@media (max-height: 160px) {
+  .timer-alarm-description {
+    display: none;
+  }
+
+  .timer-alarm-title {
+    font-size: 0.75rem;
+    line-height: 1rem;
+  }
+}

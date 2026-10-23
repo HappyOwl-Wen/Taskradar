@@ -31,6 +31,7 @@ class SideEffect(StrEnum):
     START_MENU_MODIFY = "start_menu.modify"
     DESKTOP_NOTIFY = "desktop.notify"
     TIMER_NOTIFY = "timer.notify"
+    TIMER_ALARM = "timer.alarm"
     OAUTH_CONNECT = "oauth.connect"
     OAUTH_REVOKE = "oauth.revoke"
     CREDENTIAL_DELETE = "credential.delete"
@@ -145,6 +146,10 @@ class PermissionGuard:
             if not settings.notifications.desktop_enabled:
                 return False, "desktop_notifications_disabled", "Desktop notifications are disabled"
             return True, "allowed", "enabled in settings"
+        if action == SideEffect.TIMER_ALARM:
+            if not settings.timers.alarm_sound:
+                return False, "timer_alarm_disabled", "Pomodoro alarm sound is switched off"
+            return True, "allowed", "Pomodoro alarm sound enabled"
         if action == SideEffect.TIMER_NOTIFY:
             if not settings.timers.notify:
                 return False, "timer_notifications_disabled", "Notifications at the end of timers are switched off"

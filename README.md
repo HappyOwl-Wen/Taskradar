@@ -78,6 +78,13 @@ TaskRadar from source or as the portable version, **Settings → 提醒与通知
 notifications and offers "添加到开始菜单": after your confirmation it creates a "TaskRadar" shortcut in your Start
 menu (for your account, no administrator rights), which you can remove there again.
 
+The Pomodoro timer also has its own completion alarm: when focus or a break ends, the desktop app comes out of
+the tray, shows a reminder and keeps ringing until you choose **停止响铃 / Stop alarm**. This alarm works without
+Windows banners or a Start menu entry. Its sound has a separate switch in **Settings → 番茄钟与倒计时**; switching
+off sound still leaves the completion reminder. Automatic starts keep their configured behavior, and stopping
+the alarm does not stop the next phase. In the browser version, sound needs a prior click or key press in the app.
+Missed phases found more than two minutes late are displayed without restarting an old alarm sound.
+
 ## Quick start from source (Windows 10/11)
 
 Requirements: **Python 3.12+** and **Node.js 20+** (only to build the web UI). No administrator rights are needed.
