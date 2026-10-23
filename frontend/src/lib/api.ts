@@ -143,6 +143,20 @@ export type TimerAction = "pause" | "resume" | "skip" | "restart" | "cancel";
 /** What a selection of tasks can be set to at once ("delete" moves them to the recycle bin). */
 export type BatchAction = "todo" | "in_progress" | "waiting_for_reply" | "complete" | "dismiss" | "delete";
 
+/**
+ * A selection moved to one day. Completed and dismissed tasks keep their date ("closed"); so does a task whose
+ * time of day does not exist, or exists twice, on the new day because the clocks change.
+ */
+export interface RescheduleResult {
+  changed: string[];
+  count: number;
+  due_date: string;
+  undo_event_ids: number[];
+  skipped: { id: string; title: string; reason: "closed" | "nonexistent_time" | "ambiguous_time" }[];
+  /** Moved tasks whose Google Calendar event still shows the old day. */
+  calendar_outdated: string[];
+}
+
 export interface TaskPatch {
   title?: string;
   description?: string;
@@ -168,6 +182,8 @@ export const api = {
       "/api/tasks/batch",
       { ids, action },
     ),
+  /** Move tasks to one day ("YYYY-MM-DD"); a time of day they have stays. */
+  rescheduleTasks: (ids: string[], dueDate: string) => post<RescheduleResult>("/api/tasks/batch/reschedule", { ids, due_date: dueDate }),
   deleteTask: (id: string) => del<{ deleted: string; undo_event_id?: number; calendar_warning?: string }>(`/api/tasks/${id}`),
   trash: (query: { q?: string; offset?: number } = {}) => get<TaskTrash>("/api/trash", { ...query, limit: 100 }),
   restoreTasks: (ids: string[]) => post<{ changed: string[]; count: number }>("/api/trash/batch", { ids, action: "restore" }),

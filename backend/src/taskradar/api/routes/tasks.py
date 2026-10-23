@@ -20,7 +20,7 @@ from taskradar.api.serializers import task_detail, task_summary
 from taskradar.container import Container
 from taskradar.db.models import CalendarLink, Document, Message, Task, TaskLink, TaskSource
 from taskradar.db.session import transaction
-from taskradar.deadlines.engine import local_today
+from taskradar.deadlines.engine import local_today, parse_hhmm
 from taskradar.domain.enums import (
     ActionType,
     Actor,
@@ -480,6 +480,64 @@ def batch(body: BatchBody, c: Container = Depends(get_container)) -> dict[str, A
         "count": len(changed),
         "calendar_not_removed": not_removed,
         "undo_event_ids": undo_event_ids,
+    }
+
+
+class RescheduleBody(BaseModel):
+    ids: list[str] = Field(min_length=1, max_length=500)
+    due_date: dt.date
+
+
+def _due_label(due_date: dt.date | None, due_time: str | None) -> str:
+    if due_date is None:
+        return "无截止日期"
+    return f"{due_date.isoformat()} {due_time}" if due_time else due_date.isoformat()
+
+
+@router.post("/tasks/batch/reschedule")
+def batch_reschedule(body: RescheduleBody, c: Container = Depends(get_container)) -> dict[str, Any]:
+    """Move open tasks to one day when plans change; a time of day stays as it was. Each move can be undone."""
+    target = body.due_date
+    changed: list[str] = []
+    undo_event_ids: list[int] = []
+    skipped: list[dict[str, str]] = []
+    calendar_outdated: list[str] = []
+    with transaction(c.factory) as session:
+        for task_id in dict.fromkeys(body.ids):
+            task = c.tasks.get(session, task_id)
+            if task.status not in _OPEN:
+                skipped.append({"id": task.id, "title": task.title, "reason": "closed"})
+                continue
+            clock = parse_hhmm(task.due_time)
+            if clock is not None:
+                # 02:30 in the night the clocks change does not exist (or exists twice): the user picks that time.
+                wall_time = wall_time_status(target, clock, task.timezone)
+                if wall_time != "valid":
+                    skipped.append({"id": task.id, "title": task.title, "reason": wall_time})
+                    continue
+            event = c.tasks.update_fields(
+                session,
+                task,
+                {"due_date": target},
+                actor=Actor.USER,
+                reason="batch:reschedule",
+                lock=True,
+                summary=f"批量改期：{_due_label(task.due_date, task.due_time)} → {_due_label(target, task.due_time)}",
+            )
+            if event is None:
+                continue  # already on that day
+            changed.append(task.id)
+            undo_event_ids.append(event.id)
+            c.calendar.mark_out_of_sync(session, task)
+            if any(link.status == "out_of_sync" for link in task.calendar_links):
+                calendar_outdated.append(task.id)  # Google Calendar still shows the old day
+    return {
+        "changed": changed,
+        "count": len(changed),
+        "due_date": target.isoformat(),
+        "undo_event_ids": undo_event_ids,
+        "skipped": skipped,
+        "calendar_outdated": calendar_outdated,
     }
 
 

@@ -3,6 +3,7 @@ import { useState } from "react";
 import { Link, useLocation, useSearchParams } from "react-router";
 import { useTranslation } from "react-i18next";
 import { DeleteTasksDialog } from "@/components/tasks/DeleteTaskDialog";
+import { RescheduleMenu } from "@/components/tasks/RescheduleMenu";
 import { CompleteToggle, StatusMenu } from "@/components/tasks/StatusMenu";
 import { TaskEditDialog } from "@/components/tasks/TaskEditDialog";
 import { TaskListItem } from "@/components/tasks/TaskRow";
@@ -297,6 +298,8 @@ export default function TasksPage() {
                         <CircleCheck /> {t("statusAction.complete")}
                       </Button>
                     ) : null}
+                    {/* Closed tasks keep their date, so the closed views leave it out. */}
+                    {view !== "completed" && view !== "dismissed" ? <RescheduleMenu ids={chosen} disabled={batch.isPending} onDone={endSelection} /> : null}
                     {view !== "in_progress" ? (
                       <Button variant="outline" size="sm" onClick={() => batch.mutate("in_progress")} disabled={batch.isPending}>
                         <CircleDot /> {t("statusAction.in_progress")}

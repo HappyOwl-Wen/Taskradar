@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { daysBetween, formatDue, formatMinutes, formatSpan, relativeDue, todayIn } from "./format";
+import { addDays, daysBetween, formatDue, formatMinutes, formatSpan, nextWeekStart, relativeDue, todayIn } from "./format";
 
 const base = { due_time: null, remaining_seconds: null, timezone: "Europe/Berlin" } as const;
 
@@ -21,6 +21,25 @@ describe("daysBetween", () => {
     expect(daysBetween("2026-10-14", "2026-11-20")).toBe(37);
     expect(daysBetween("2026-10-24", "2026-10-26")).toBe(2);
     expect(daysBetween("2026-10-14", "2026-10-10")).toBe(-4);
+  });
+});
+
+describe("addDays", () => {
+  it("moves by calendar days across months, years, leap days and a DST change", () => {
+    expect(addDays("2026-10-24", 2)).toBe("2026-10-26");
+    expect(addDays("2026-10-31", 1)).toBe("2026-11-01");
+    expect(addDays("2026-12-31", 1)).toBe("2027-01-01");
+    expect(addDays("2028-02-28", 1)).toBe("2028-02-29");
+    expect(addDays("2026-03-01", -1)).toBe("2026-02-28");
+  });
+});
+
+describe("nextWeekStart", () => {
+  it("is the Monday after the given day, whatever weekday that is", () => {
+    // 19 Oct 2026 is a Monday.
+    const week = ["2026-10-19", "2026-10-20", "2026-10-21", "2026-10-22", "2026-10-23", "2026-10-24", "2026-10-25"];
+    expect(week.map(nextWeekStart)).toEqual(Array(7).fill("2026-10-26"));
+    expect(nextWeekStart("2026-12-30")).toBe("2027-01-04");
   });
 });
 

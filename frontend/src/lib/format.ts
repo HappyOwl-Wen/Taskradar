@@ -40,6 +40,19 @@ export function daysBetween(from: string, to: string): number {
   return Math.round((Date.UTC(b.y, b.m - 1, b.d) - Date.UTC(a.y, a.m - 1, a.d)) / (DAY * 1000));
 }
 
+/** The calendar date ("YYYY-MM-DD") `days` days after `date` (before it when negative). */
+export function addDays(date: string, days: number): string {
+  const { y, m, d } = parseIsoDate(date);
+  return new Date(Date.UTC(y, m - 1, d + days)).toISOString().slice(0, 10);
+}
+
+/** The Monday of the week after `date` ("YYYY-MM-DD"); weeks start on Monday, as in the calendar. */
+export function nextWeekStart(date: string): string {
+  const { y, m, d } = parseIsoDate(date);
+  const weekday = (new Date(Date.UTC(y, m - 1, d)).getUTCDay() + 6) % 7; // Monday 0 … Sunday 6
+  return addDays(date, 7 - weekday);
+}
+
 /**
  * Format a calendar date ("YYYY-MM-DD") without any time-zone shifting.
  * The year is only shown when it differs from `referenceYear`.

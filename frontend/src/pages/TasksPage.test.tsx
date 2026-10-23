@@ -6,6 +6,7 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vite
 import { TooltipProvider } from "@/components/ui/menu";
 import i18n from "@/i18n";
 import { api, type TaskQuery } from "@/lib/api";
+import { addDays, todayIn } from "@/lib/format";
 import type { Settings, TaskStatus, TaskSummary } from "@/lib/types";
 import { makeDashboard, makeDetail, makeTask } from "@/test/fixtures";
 import TasksPage from "./TasksPage";
@@ -79,5 +80,34 @@ describe("TasksPage", () => {
     await userEvent.click(screen.getByRole("tab", { name: /未完成/ }));
     await screen.findByText("Miete zahlen");
     expect(row("Miete zahlen")).not.toHaveClass("opacity-40");
+  });
+
+  it("moves the selected tasks to another day at once and ends the selection", async () => {
+    const move = vi.spyOn(api, "rescheduleTasks").mockImplementation(async (ids, dueDate) => ({
+      changed: ids,
+      count: ids.length,
+      due_date: dueDate,
+      undo_event_ids: [3, 4],
+      skipped: [],
+      calendar_outdated: [],
+    }));
+    renderTasks(new QueryClient({ defaultOptions: { queries: { retry: false } } }));
+    await userEvent.click(await screen.findByRole("button", { name: "选择多项" }));
+    await userEvent.click(screen.getByRole("checkbox", { name: "选择「Miete zahlen」" }));
+    await userEvent.click(screen.getByRole("checkbox", { name: "选择「Steuer abgeben」" }));
+    await userEvent.click(screen.getByRole("button", { name: "改期" }));
+    await userEvent.click(await screen.findByRole("button", { name: /^明天/ }));
+
+    await waitFor(() => expect(move).toHaveBeenCalledWith(["rent", "tax"], addDays(todayIn("Europe/Berlin"), 1)));
+    expect(await screen.findByRole("button", { name: "选择多项" })).toBeInTheDocument(); // the selection has ended
+  });
+
+  it("offers no rescheduling for completed tasks, which keep their date", async () => {
+    tasks = [makeTask({ id: "done", title: "Erledigt", status: "completed" })];
+    renderTasks(new QueryClient({ defaultOptions: { queries: { retry: false } } }), "/tasks?status=completed");
+    await userEvent.click(await screen.findByRole("button", { name: "选择多项" }));
+    await userEvent.click(screen.getByRole("checkbox", { name: "选择「Erledigt」" }));
+    expect(screen.getByRole("button", { name: "恢复为待办" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "改期" })).not.toBeInTheDocument();
   });
 });
