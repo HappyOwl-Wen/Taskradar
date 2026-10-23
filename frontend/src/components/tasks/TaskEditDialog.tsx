@@ -14,6 +14,8 @@ import { markJustAdded } from "@/lib/justAdded";
 import { useAction } from "@/lib/queries";
 import { diffPatch, initialState, type FormState } from "@/lib/task-form";
 import { CATEGORIES, PRIORITIES, type Category, type Priority, type QuickParse, type TaskDetail, type TimeSemantics } from "@/lib/types";
+import { useQuickTaskParse } from "@/lib/useQuickTaskParse";
+import { TemporalHint } from "./TemporalHint";
 
 /** The field the dialog starts in. */
 export type EditFocus = "title" | "date" | "notes";
@@ -95,6 +97,7 @@ function DateFields({
   onTime,
   autoFocus = false,
   onClear,
+  allowTimeWithoutDate = false,
 }: {
   date: string;
   time: string;
@@ -102,6 +105,7 @@ function DateFields({
   onTime: (value: string) => void;
   autoFocus?: boolean;
   onClear?: () => void;
+  allowTimeWithoutDate?: boolean;
 }) {
   const { t } = useTranslation();
   return (
@@ -111,7 +115,7 @@ function DateFields({
           <Input id="task-date" type="date" value={date} autoFocus={autoFocus} onChange={(e) => onDate(e.target.value)} />
         </Field>
         <Field label={t("field.due_time")} htmlFor="task-time">
-          <Input id="task-time" type="time" value={time} disabled={!date} onChange={(e) => onTime(e.target.value)} />
+          <Input id="task-time" type="time" value={time} disabled={!date && !allowTimeWithoutDate} onChange={(e) => onTime(e.target.value)} />
         </Field>
       </div>
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
@@ -168,6 +172,11 @@ function CategoryPriority({
  * A new to-do in one sentence ("周五前交房租"): the server recognises title, date and time while typing,
  * the recognised date stays editable, and everything else is optional and collapsed.
  */
+function recognisedFields(result: QuickParse | null) {
+  if (result?.ambiguous || result?.temporal?.needs_confirmation) return { date: "", time: "" };
+  return { date: result?.due_date ?? "", time: result?.temporal?.normalized_time ?? result?.due_time ?? "" };
+}
+
 function AddForm({
   onCancel,
   onClose,
@@ -181,62 +190,41 @@ function AddForm({
 }) {
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
-  const [text, setText] = useState("");
-  const [parsed, setParsed] = useState<{ text: string; result: QuickParse } | null>(null);
+  const { text, result, unavailable, onText, flush, onCompositionStart, onCompositionEnd } = useQuickTaskParse();
   // Values the user set by hand win over what is recognised from the sentence.
   const [titleOverride, setTitleOverride] = useState<string | null>(null);
-  const [dateOverride, setDateOverride] = useState<{ date: string; time: string } | null>(null);
+  const [dateOverride, setDateOverride] = useState<string | null>(null);
+  const [timeOverride, setTimeOverride] = useState<string | null>(null);
+  const [overrideKind, setOverrideKind] = useState<"confirmed" | "overridden" | null>(null);
   const [kindOverride, setKindOverride] = useState<TimeSemantics | null>(null);
   const [categoryOverride, setCategoryOverride] = useState<Category | null>(null);
   const [priority, setPriority] = useState<Priority>("medium");
   const [description, setDescription] = useState("");
-  const timer = useRef<number | undefined>(undefined);
-  const latest = useRef(0);
+  const submitting = useRef(false);
 
-  const result = parsed && parsed.text === text.trim() ? parsed.result : null;
   const recognisedTitle = result?.title.trim() || text.trim();
   const title = (titleOverride ?? recognisedTitle).trim();
-  const date = dateOverride ? dateOverride.date : (result?.due_date ?? "");
-  const time = dateOverride ? dateOverride.time : (result?.due_time ?? "");
+  const automatic = recognisedFields(result);
+  const date = dateOverride ?? automatic.date;
+  const time = timeOverride ?? automatic.time;
   const kind = kindOverride ?? result?.time_semantics ?? "deadline";
   const category = categoryOverride ?? (result && result.category !== "other" ? result.category : "other");
 
-  const dirty = Boolean(text.trim() || (titleOverride ?? "").trim() || description.trim() || dateOverride?.date);
+  const dirty = Boolean(text.trim() || (titleOverride ?? "").trim() || description.trim() || dateOverride || timeOverride);
   useEffect(() => {
     onDirtyChange(dirty);
     return () => onDirtyChange(false);
   }, [dirty, onDirtyChange]);
-  useEffect(() => () => window.clearTimeout(timer.current), []);
-
-  const parseNow = async (value: string): Promise<QuickParse | null> => {
-    const request = ++latest.current;
-    try {
-      const r = await api.quickParse(value);
-      if (request === latest.current) setParsed({ text: value, result: r });
-      return r;
-    } catch {
-      return null; // only a convenience: the sentence itself is saved
-    }
-  };
-  const onText = (value: string) => {
-    setText(value);
-    window.clearTimeout(timer.current);
-    const trimmed = value.trim();
-    if (!trimmed) {
-      latest.current += 1;
-      return;
-    }
-    timer.current = window.setTimeout(() => void parseNow(trimmed), 250);
-  };
 
   const save = useAction(
     async (): Promise<TaskDetail> => {
       // Enter right after typing: wait for the recognition of the final sentence instead of saving it raw.
       const sentence = text.trim();
-      const r = result ?? (sentence ? await parseNow(sentence) : null);
+      const r = await flush();
       const finalTitle = (titleOverride ?? (r?.title.trim() || sentence)).trim();
-      const dueDate = dateOverride ? dateOverride.date : (r?.due_date ?? "");
-      const dueTime = dateOverride ? dateOverride.time : (r?.due_time ?? "");
+      const fresh = recognisedFields(r);
+      const dueDate = dateOverride ?? fresh.date;
+      const dueTime = timeOverride ?? fresh.time;
       return api.createTask({
         title: finalTitle,
         description,
@@ -248,7 +236,9 @@ function AddForm({
         time_semantics: kindOverride ?? r?.time_semantics ?? "deadline",
         action_type: r?.action_type ?? "other",
         // Keep the user's own wording of the date only while the date is still the recognised one.
-        due_text: r?.due_date && r.due_date === dueDate ? r.due_text : null,
+        due_text: overrideKind === null && r?.due_date === dueDate && (r?.due_time ?? "") === dueTime ? r?.due_text : null,
+        timezone: r?.timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone,
+        time_resolution: overrideKind ?? (dueDate ? "parsed" : "explicit"),
       });
     },
     {
@@ -265,52 +255,60 @@ function AddForm({
 
   const submit = (e: FormEvent) => {
     e.preventDefault();
-    if (save.isPending || !text.trim()) return;
-    save.mutate(undefined);
+    if (submitting.current || save.isPending || !text.trim() || !title) return;
+    submitting.current = true;
+    save.mutate(undefined, { onSettled: () => { submitting.current = false; } });
   };
   const when = date ? `${formatDate(date, i18n.language)}${time ? ` ${time}` : ""}` : null;
 
   return (
     <form onSubmit={submit} onKeyDown={submitOnCtrlEnter} className="grid gap-4">
-      <DialogHeader>
-        <DialogTitle>{t("newTask.title")}</DialogTitle>
-        <DialogDescription>{t("newTask.description")}</DialogDescription>
-      </DialogHeader>
-      <Field label={t("newTask.quickLabel")} htmlFor="task-quick">
-        <Input id="task-quick" value={text} maxLength={300} placeholder={t("newTask.quickPlaceholder")} autoFocus onChange={(e) => onText(e.target.value)} />
-      </Field>
-      <p className="-mt-2 text-xs leading-relaxed text-muted-foreground" aria-live="polite">
-        {text.trim() && title
-          ? when
-            ? t("newTask.previewWithDate", { title, when })
-            : t("newTask.preview", { title })
-          : t("newTask.quickHint")}
-      </p>
-      {result?.ambiguous ? (
-        <p className="-mt-2 text-xs text-urgent">{t("newTask.ambiguous", { alternatives: result.alternatives.map((d) => formatDate(d, i18n.language)).join(", ") })}</p>
-      ) : null}
-      <DateFields
-        date={date}
-        time={time}
-        onDate={(value) => setDateOverride({ date: value, time: value ? time : "" })}
-        onTime={(value) => setDateOverride({ date, time: value })}
-        onClear={() => setDateOverride({ date: "", time: "" })}
-      />
-      <MoreOptions>
-        <Field label={t("form.savedTitle")} htmlFor="task-title">
-          <Input id="task-title" value={titleOverride ?? recognisedTitle} maxLength={200} onChange={(e) => setTitleOverride(e.target.value)} />
+      <fieldset disabled={save.isPending} className="contents">
+        <DialogHeader>
+          <DialogTitle>{t("newTask.title")}</DialogTitle>
+          <DialogDescription>{t("newTask.description")}</DialogDescription>
+        </DialogHeader>
+        <Field label={t("newTask.quickLabel")} htmlFor="task-quick">
+          <Input id="task-quick" value={text} maxLength={300} placeholder={t("newTask.quickPlaceholder")} autoFocus onChange={(e) => onText(e.target.value)} onCompositionStart={onCompositionStart} onCompositionEnd={onCompositionEnd} />
         </Field>
-        {date && time ? <KindField value={kind} onChange={setKindOverride} /> : null}
-        <CategoryPriority category={category} priority={priority} onCategory={setCategoryOverride} onPriority={setPriority} />
-        <Field label={t("field.description")} htmlFor="task-description">
-          <Textarea id="task-description" rows={3} value={description} onChange={(e) => setDescription(e.target.value)} />
-        </Field>
-      </MoreOptions>
+        <p className="-mt-2 text-xs leading-relaxed text-muted-foreground" aria-live="polite">
+          {text.trim() && title
+            ? when
+              ? t("newTask.previewWithDate", { title, when })
+              : t("newTask.preview", { title })
+            : t("newTask.quickHint")}
+        </p>
+        <DateFields
+          date={date}
+          time={time}
+          allowTimeWithoutDate
+          onDate={(value) => { setDateOverride(value); setOverrideKind("overridden"); if (!value) setTimeOverride(""); }}
+          onTime={(value) => { setTimeOverride(value); setOverrideKind("overridden"); }}
+          onClear={() => { setDateOverride(""); setTimeOverride(""); setOverrideKind("overridden"); }}
+        />
+        <TemporalHint result={result} unavailable={unavailable} overridden={dateOverride !== null} onConfirm={(candidate) => {
+          setDateOverride(candidate.normalized_date);
+          const keepManualTime = timeOverride !== null && overrideKind === "overridden";
+          if (!keepManualTime) setTimeOverride(candidate.normalized_time ?? "");
+          setOverrideKind(keepManualTime ? "overridden" : "confirmed");
+        }} />
+        {!date && time ? <p className="text-xs text-muted-foreground">{t("newTask.reasonDateRequired")}</p> : null}
+        <MoreOptions>
+          <Field label={t("form.savedTitle")} htmlFor="task-title">
+            <Input id="task-title" value={titleOverride ?? recognisedTitle} maxLength={200} onChange={(e) => setTitleOverride(e.target.value)} />
+          </Field>
+          {date && time ? <KindField value={kind} onChange={setKindOverride} /> : null}
+          <CategoryPriority category={category} priority={priority} onCategory={setCategoryOverride} onPriority={setPriority} />
+          <Field label={t("field.description")} htmlFor="task-description">
+            <Textarea id="task-description" rows={3} value={description} onChange={(e) => setDescription(e.target.value)} />
+          </Field>
+        </MoreOptions>
+      </fieldset>
       <DialogActions>
         <Button type="button" variant="outline" onClick={onCancel} disabled={save.isPending}>
           {t("common.cancel")}
         </Button>
-        <Button type="submit" disabled={save.isPending || !text.trim()}>
+        <Button type="submit" disabled={save.isPending || !text.trim() || !title}>
           {save.isPending ? t("common.saving") : t("newTask.submit")}
         </Button>
       </DialogActions>

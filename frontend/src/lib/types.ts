@@ -143,6 +143,34 @@ export interface QuickParse {
   time_semantics: "deadline" | "appointment";
   ambiguous: boolean;
   alternatives: string[];
+  timezone?: string;
+  temporal?: TemporalParse;
+}
+
+export interface TemporalCandidate {
+  normalized_date: string | null;
+  normalized_time: string | null;
+  range_start: string | null;
+  range_end: string | null;
+  original_expression: string;
+  start: number;
+  end: number;
+  role: string;
+  confidence: number;
+  explanation: string[];
+  selectable: boolean;
+}
+
+export interface TemporalParse {
+  status: "absent" | "resolved" | "inferred" | "unresolved" | "urgency";
+  precision: "none" | "date" | "datetime" | "range" | "time" | "period";
+  normalized_date: string | null;
+  normalized_time: string | null;
+  original_expression: string | null;
+  confidence: number;
+  needs_confirmation: boolean;
+  explanation: string[];
+  candidates: TemporalCandidate[];
 }
 
 export interface TaskLinkEntry {

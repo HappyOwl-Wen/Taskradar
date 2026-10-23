@@ -168,6 +168,7 @@ class TaskService:
         action_required: str = "",
         priority: Priority = Priority.MEDIUM,
         sample: bool = False,
+        time_resolution: str = "explicit",
     ) -> Task:
         """A to-do the user wrote themselves: it counts and reminds at once (no confirmation step)."""
         now = self.clock()
@@ -192,7 +193,14 @@ class TaskService:
         self.apply_due(task, due)
         session.add(task)
         session.flush()
-        self.record(session, task, EventType.CREATED, Actor.USER, "手动创建任务", data={"origin": "manual"})
+        self.record(
+            session,
+            task,
+            EventType.CREATED,
+            Actor.USER,
+            "手动创建任务",
+            data={"origin": "manual", "time_resolution": time_resolution},
+        )
         return task
 
     # ------------------------------------------------------------------------------------------

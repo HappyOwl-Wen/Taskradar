@@ -6,9 +6,10 @@ import datetime as dt
 import logging
 from collections.abc import Iterable
 from typing import Any, Literal
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from fastapi import APIRouter, Depends, Query
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session, selectinload
 
@@ -30,6 +31,7 @@ from taskradar.domain.enums import (
 )
 from taskradar.domain.schemas import DueInfo
 from taskradar.extraction.quick_add import MAX_QUICK_TEXT, parse_quick_task
+from taskradar.extraction.temporal_calendar import wall_time_status
 from taskradar.services.calendar_sync import CalendarSyncError
 
 log = logging.getLogger(__name__)
@@ -235,7 +237,21 @@ def list_tasks(
     return {"items": items[offset : offset + limit], "total": len(items)}
 
 
-class TaskCreate(BaseModel):
+class LocalTimeBody(BaseModel):
+    timezone: str | None = Field(default=None, max_length=100)
+
+    @field_validator("timezone")
+    @classmethod
+    def valid_timezone(cls, value: str | None) -> str | None:
+        if value is not None:
+            try:
+                ZoneInfo(value)
+            except (ZoneInfoNotFoundError, ValueError) as exc:
+                raise ValueError("Unknown IANA timezone") from exc
+        return value
+
+
+class TaskCreate(LocalTimeBody):
     title: str = Field(min_length=1, max_length=200)
     description: str = ""
     action_required: str = ""
@@ -249,16 +265,19 @@ class TaskCreate(BaseModel):
     due_text: str | None = Field(default=None, max_length=200)
     # Test data: never counted, reminded or written to the calendar.
     sample: bool = False
+    # Recorded in the existing creation event; uncertain proposals never become saved due dates implicitly.
+    time_resolution: Literal["explicit", "parsed", "confirmed", "overridden"] = "explicit"
 
 
-class QuickParseBody(BaseModel):
+class QuickParseBody(LocalTimeBody):
     text: str = Field(min_length=1, max_length=MAX_QUICK_TEXT)
 
 
 @router.post("/tasks/quick-parse")
 def quick_parse(body: QuickParseBody, c: Container = Depends(get_container)) -> dict[str, Any]:
     """Propose title and deadline for a one-line to-do ("周五前交房租"); nothing is saved."""
-    quick = parse_quick_task(body.text, now=c.clock(), tz=c.settings.get().general.timezone)
+    timezone = body.timezone or c.settings.get().general.timezone
+    quick = parse_quick_task(body.text, now=c.clock(), tz=timezone)
     due = quick.due
     return {
         "title": quick.title,
@@ -268,13 +287,26 @@ def quick_parse(body: QuickParseBody, c: Container = Depends(get_container)) -> 
         "due_time": due.time.strftime("%H:%M") if due and due.time else None,
         "due_text": due.text if due else None,
         "time_semantics": due.semantics.value if due else TimeSemantics.DEADLINE.value,
-        "ambiguous": bool(due and due.ambiguous),
-        "alternatives": [d.isoformat() for d in due.alternatives] if due else [],
+        "ambiguous": quick.temporal.needs_confirmation,
+        "alternatives": list(
+            dict.fromkeys(
+                candidate.value.date.isoformat()
+                for candidate in quick.temporal.candidates
+                if candidate.value.date and not candidate.value.end and candidate.needs_confirmation
+            )
+        ),
+        "temporal": quick.temporal.payload(" ".join(body.text.split())),
+        "timezone": timezone,
     }
 
 
 @router.post("/tasks", status_code=201)
 def create_task(body: TaskCreate, c: Container = Depends(get_container)) -> dict[str, Any]:
+    timezone = body.timezone or c.settings.get().general.timezone
+    if body.due_time and body.due_date:
+        status = wall_time_status(body.due_date, body.due_time, timezone)
+        if status != "valid":
+            raise ApiError(status, "Choose an unambiguous local time or leave the time empty", 422)
     due_text = (body.due_text or "").strip() or None
     due = DueInfo(
         date=body.due_date,
@@ -287,13 +319,14 @@ def create_task(body: TaskCreate, c: Container = Depends(get_container)) -> dict
             session,
             title=body.title,
             due=due,
-            timezone=c.settings.get().general.timezone,
+            timezone=timezone,
             description=body.description,
             category=body.category,
             action_type=body.action_type,
             action_required=body.action_required,
             priority=body.priority,
             sample=body.sample,
+            time_resolution=body.time_resolution,
         )
         task_id = task.id
     _maybe_auto_calendar(c, task_id)  # only when the user switched on automatic calendar entries

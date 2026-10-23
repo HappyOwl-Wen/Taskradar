@@ -52,6 +52,12 @@ def test_quick_entry_without_a_date_keeps_the_text() -> None:
 
 def test_quick_parse_and_create_a_custom_todo(api: Any) -> None:
     parsed = api.post("/api/tasks/quick-parse", json={"text": "周五前交房租"}).json()
+    temporal = parsed.pop("temporal")
+    assert temporal["status"] == "resolved"
+    assert temporal["precision"] == "date"
+    assert temporal["normalized_date"] == "2026-10-16"
+    assert temporal["needs_confirmation"] is False
+    assert temporal["candidates"][0]["role"] == "deadline"
     assert parsed == {
         "title": "交房租",
         "category": "financial",
@@ -62,6 +68,7 @@ def test_quick_parse_and_create_a_custom_todo(api: Any) -> None:
         "time_semantics": "deadline",
         "ambiguous": False,
         "alternatives": [],
+        "timezone": "Europe/Berlin",
     }
     created = api.post("/api/tasks", json={k: v for k, v in parsed.items() if k not in ("ambiguous", "alternatives")})
     assert created.status_code == 201, created.text

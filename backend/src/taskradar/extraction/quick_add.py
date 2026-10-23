@@ -1,7 +1,7 @@
 """Quick entry for the user's own to-dos.
 
 One line such as "周五前交房租", "Freitag 10 Uhr Zahnarzt" or "submit the report by Oct 20 5pm" becomes a
-title plus a deadline, using the zh/de/en date engine (:mod:`taskradar.extraction.dates`). Relative dates are
+title plus a deadline, using the compositional engine (:mod:`taskradar.extraction.temporal`). Relative dates are
 resolved from the moment the user types them. Parsing is local and only proposes values; the user reviews them
 before anything is saved.
 """
@@ -11,13 +11,11 @@ from __future__ import annotations
 import datetime as dt
 import re
 from dataclasses import dataclass
-from zoneinfo import ZoneInfo
 
 from taskradar.domain.enums import ActionType, Category, DueAnchor, TimeSemantics
 from taskradar.domain.schemas import DueInfo
 from taskradar.extraction import lexicon as lx
-from taskradar.extraction.dates import bare_weekday_mention, choose_deadline, find_dates, mention_to_due
-from taskradar.parsing.language import detect_language
+from taskradar.extraction.temporal import TemporalResult, parse_temporal
 
 MAX_QUICK_TEXT = 300
 _EDGE_JUNK = re.compile(r"^[\s,，.。:：;；!！?？\-–—]+|[\s,，.。:：;；\-–—]+$")
@@ -28,7 +26,7 @@ _DATE_PHRASE = re.compile(
     r"(?:"
     r"bis\s+(?:spätestens\s+)?(?:zum\s+|zur\s+|am\s+|den\s+)?"
     r"|spätestens\s+(?:am\s+|bis\s+(?:zum\s+)?|zum\s+)?"
-    r"|(?:no later than|not later than|by|before|until|till|on|at the latest by)\s+(?:the\s+)?"
+    r"|(?:no later than|not later than|due(?: by)?|by|before|until|till|on|at|at the latest by|am|um)\s+(?:the\s+)?"
     r"|截止(?:日期|时间)?(?:为|是)?"
     r"|请于|请在|务必于|务必在|须于|需于|应于|[于在]"
     r")?\s*" + _DATE + r"+\s*(?:前|之前|以前|截止|为止)?",
@@ -49,24 +47,46 @@ class QuickTask:
     due: DueInfo | None
     category: Category
     action_type: ActionType
+    temporal: TemporalResult
 
 
 def parse_quick_task(text: str, *, now: dt.datetime, tz: str) -> QuickTask:
     line = " ".join(text.split())[:MAX_QUICK_TEXT]
-    today = now.astimezone(ZoneInfo(tz)).date()
-    mentions = find_dates(line, today, tz=tz, lang=detect_language(line))
-    chosen = choose_deadline(mentions) or bare_weekday_mention(line, today, tz=tz)
+    temporal = parse_temporal(line, now=now, timezone=tz)
+    chosen = temporal.selected
     due: DueInfo | None = None
     title = line
-    if chosen is not None and chosen.date is not None:
+    if chosen is not None and temporal.normalized_date is not None:
         semantics = TimeSemantics.DEADLINE
         # A clock time without a deadline word ("Freitag 10 Uhr Zahnarzt") is usually an appointment.
-        if not chosen.deadline_cue and (chosen.time is not None or lx.APPOINTMENT_CUES.search(line)):
+        if chosen.role != "deadline" and (temporal.normalized_time is not None or lx.APPOINTMENT_CUES.search(line)):
             semantics = TimeSemantics.APPOINTMENT
-        # "Today" is when the user typed it, so relative dates need no extra confirmation.
-        due = mention_to_due(chosen, anchor_kind=DueAnchor.SOURCE_DATE, semantics=semantics)
-        title = remove_date_phrase(line, chosen.start, chosen.end)
+        # Only the local engine's reliable resolution is eligible for autofill.
+        due = DueInfo(
+            date=temporal.normalized_date,
+            time=temporal.normalized_time,
+            text=temporal.original_expression,
+            is_relative=any(op.kind in ("offset", "period", "weekday") for op in chosen.expression.operations),
+            anchor=DueAnchor.SOURCE_DATE,
+            semantics=semantics,
+            notes=temporal.explanation,
+        )
+        # Only the selected, reliable expression is removed. Contextual dates and unknown wording stay intact.
+        spans = [chosen.expression, *temporal.discarded]
+        for span in sorted(spans, key=lambda e: e.start, reverse=True):
+            title = remove_date_phrase(title, span.start, span.end)
+        if temporal.discarded:
+            title = re.sub(
+                r"(?:不是|不对|改为|改成|更正|而是|\bnot\b|\binstead\b|\brather\b|\bnicht\b|\bsondern\b)[\s,，:：]*",
+                "",
+                title,
+                flags=re.I,
+            )
+            title = re.sub(r"^是\s*", "", _EDGE_JUNK.sub("", title))
+    title = re.sub(r"([，。；：])\s+", r"\1", title)
     title = _EDGE_JUNK.sub("", title) or line
     found = lx.detect_action(title)
     action = found[0] if found else ActionType.OTHER
-    return QuickTask(title=title[:200], due=due, category=lx.detect_category(line, action), action_type=action)
+    return QuickTask(
+        title=title[:200], due=due, category=lx.detect_category(line, action), action_type=action, temporal=temporal
+    )

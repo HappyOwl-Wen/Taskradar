@@ -158,7 +158,7 @@ export const api = {
   tasks: (query: TaskQuery = {}) => get<{ items: TaskSummary[]; total: number }>("/api/tasks", query),
   task: (id: string) => get<TaskDetail>(`/api/tasks/${id}`),
   createTask: (body: Record<string, unknown>) => post<TaskDetail>("/api/tasks", body),
-  quickParse: (text: string) => post<QuickParse>("/api/tasks/quick-parse", { text }),
+  quickParse: (text: string) => post<QuickParse>("/api/tasks/quick-parse", { text, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone }),
   updateTask: (id: string, body: TaskPatch) => patch<TaskDetail>(`/api/tasks/${id}`, body),
   setStatus: (id: string, status: string, note?: string) => post<TaskDetail>(`/api/tasks/${id}/status`, { status, note }),
   batch: (ids: string[], action: BatchAction) =>
