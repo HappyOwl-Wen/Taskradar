@@ -61,14 +61,17 @@
   --sidebar: var(--frame);
   --scrollbar: #c3b9d2;
 
-  --glass-surface: rgb(255 255 255 / 0.64);
-  --glass-raised: rgb(255 255 255 / 0.8);
-  --glass-popover: rgb(255 253 255 / 0.94);
-  --glass-stroke: rgb(255 255 255 / 0.84);
-  --glass-highlight: rgb(255 255 255 / 0.85);
+  --glass-surface: rgb(255 255 255 / 0.14);
+  --glass-raised: rgb(255 255 255 / 0.24);
+  --glass-popover: rgb(255 253 255 / 0.62);
+  --glass-stroke: rgb(255 255 255 / 0.68);
+  --glass-highlight: rgb(255 255 255 / 0.94);
+  --glass-rim-shadow: rgb(35 49 64 / 0.2);
+  --glass-reflection: rgb(255 255 255 / 0.28);
+  --page-tint: rgb(248 250 255 / 0.58);
   --glass-shadow: 0 8px 32px rgb(54 35 84 / 0.065), 0 1px 3px rgb(54 35 84 / 0.025);
   --glass-shadow-float: 0 24px 64px -24px rgb(54 35 84 / 0.24), 0 4px 16px rgb(54 35 84 / 0.04);
-  --ambient: radial-gradient(ellipse at 8% 8%, #d5c3f0 0, transparent 45%), radial-gradient(ellipse at 93% 4%, #d6e6f4 0, transparent 42%), radial-gradient(ellipse at 88% 98%, #edcee2 0, transparent 43%), radial-gradient(ellipse at 7% 94%, #cfe9e6 0, transparent 43%);
+  --ambient: linear-gradient(115deg, rgb(234 228 248 / 0.28), rgb(237 246 255 / 0.16)), url("/glass-landscape.svg");
 
   --overdue: #d92d20; /* 4.9:1 */
   --urgent: #b45309; /* amber, 5.0:1 */
@@ -119,14 +122,17 @@
   --ring: #c4a4f0;
   --scrollbar: #65566f;
 
-  --glass-surface: rgb(35 30 47 / 0.76);
-  --glass-raised: rgb(54 46 68 / 0.8);
-  --glass-popover: rgb(48 40 62 / 0.96);
-  --glass-stroke: rgb(222 203 255 / 0.14);
-  --glass-highlight: rgb(241 224 255 / 0.12);
+  --glass-surface: rgb(23 28 45 / 0.16);
+  --glass-raised: rgb(37 38 57 / 0.24);
+  --glass-popover: rgb(25 27 43 / 0.72);
+  --glass-stroke: rgb(225 234 255 / 0.34);
+  --glass-highlight: rgb(240 244 255 / 0.66);
+  --glass-rim-shadow: rgb(0 0 0 / 0.5);
+  --glass-reflection: rgb(235 241 255 / 0.11);
+  --page-tint: rgb(18 23 38 / 0.75);
   --glass-shadow: 0 8px 32px rgb(0 0 0 / 0.14), 0 1px 3px rgb(0 0 0 / 0.08);
   --glass-shadow-float: 0 24px 64px -24px rgb(0 0 0 / 0.48), 0 4px 16px rgb(0 0 0 / 0.16);
-  --ambient: radial-gradient(ellipse at 6% 7%, #43305e 0, transparent 48%), radial-gradient(ellipse at 98% 6%, #213448 0, transparent 44%), radial-gradient(ellipse at 90% 97%, #472e46 0, transparent 44%), radial-gradient(ellipse at 6% 97%, #1b3b40 0, transparent 40%);
+  --ambient: linear-gradient(120deg, rgb(13 17 34 / 0.55), rgb(20 17 35 / 0.58)), url("/glass-landscape.svg");
 
   --overdue: #ff7b72;
   --urgent: #f0b45e;

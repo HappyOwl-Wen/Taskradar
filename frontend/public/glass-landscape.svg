@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 1000" fill="none">
+  <defs>
+    <linearGradient id="sky" x1="100" y1="0" x2="1450" y2="1000" gradientUnits="userSpaceOnUse"><stop stop-color="#d4dee9"/><stop offset=".48" stop-color="#e9eaf2"/><stop offset="1" stop-color="#c4dce2"/></linearGradient>
+    <linearGradient id="ribbon" x1="100" y1="880" x2="1400" y2="100" gradientUnits="userSpaceOnUse"><stop stop-color="#78aab9"/><stop offset=".18" stop-color="#c2f1ec"/><stop offset=".32" stop-color="#f2f7fe"/><stop offset=".44" stop-color="#acc3e1"/><stop offset=".54" stop-color="#7b8dc8"/><stop offset=".66" stop-color="#b29ce0"/><stop offset=".8" stop-color="#ead7ed"/><stop offset="1" stop-color="#9caed2"/></linearGradient>
+    <linearGradient id="inner" x1="1200" y1="300" x2="420" y2="900" gradientUnits="userSpaceOnUse"><stop stop-color="#a8bee3"/><stop offset=".28" stop-color="#f5eaf6"/><stop offset=".58" stop-color="#b8c4e2"/><stop offset=".8" stop-color="#728ab9"/><stop offset="1" stop-color="#d4f3ee"/></linearGradient>
+    <linearGradient id="shine" x1="180" y1="850" x2="1500" y2="50" gradientUnits="userSpaceOnUse"><stop stop-color="#fff" stop-opacity="0"/><stop offset=".25" stop-color="#f4ffff" stop-opacity=".9"/><stop offset=".5" stop-color="#fff" stop-opacity=".1"/><stop offset=".8" stop-color="#fff" stop-opacity=".9"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient>
+    <radialGradient id="wash"><stop stop-color="#fff" stop-opacity=".75"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></radialGradient>
+  </defs>
+  <path fill="url(#sky)" d="M0 0h1600v1000H0z"/>
+  <ellipse cx="890" cy="220" rx="720" ry="430" fill="url(#wash)"/>
+  <path d="M-350 770C90 1040 425 930 700 630S1050 75 1770 120" stroke="#8a90b8" stroke-opacity=".14" stroke-width="200"/>
+  <path d="M-350 735C90 1005 425 895 700 595S1050 40 1770 85" stroke="url(#ribbon)" stroke-width="190"/>
+  <path d="M-350 654C90 924 425 814 700 514S1050-41 1770 4" stroke="url(#shine)" stroke-width="3"/>
+  <path d="M-350 809C90 1079 425 969 700 669S1050 114 1770 159" stroke="#617d9c" stroke-opacity=".23" stroke-width="3"/>
+  <path d="M1040 1120C760 900 940 650 1180 500S1530 280 1780 330" stroke="url(#inner)" stroke-width="155"/>
+  <path d="M995 1177C715 957 895 707 1135 557S1485 337 1735 387" stroke="url(#shine)" stroke-width="2"/>
+  <path d="M-120-190C300-65 60 205 290 347S480 485 510 600" stroke="#b3bfda" stroke-opacity=".38" stroke-width="125"/>
+  <path d="M-110-235C310-110 70 160 300 302S490 440 520 555" stroke="#f3f6ff" stroke-opacity=".7" stroke-width="2"/>
+</svg>

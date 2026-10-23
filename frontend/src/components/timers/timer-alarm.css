@@ -14,8 +14,8 @@
   background: var(--glass-popover);
   color: var(--foreground);
   box-shadow: var(--glass-shadow-float), inset 0 1px 0 var(--glass-highlight);
-  -webkit-backdrop-filter: blur(32px) saturate(140%);
-  backdrop-filter: blur(32px) saturate(140%);
+  -webkit-backdrop-filter: var(--liquid-filter, blur(2px) saturate(120%));
+  backdrop-filter: var(--liquid-filter, blur(2px) saturate(120%));
   transform: translate(-50%, -50%);
   text-align: center;
   outline: none;

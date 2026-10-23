@@ -9,6 +9,7 @@ import { AppShell } from "@/components/layout/AppShell";
 import { TimerAlarm } from "@/components/timers/TimerAlarm";
 import { Button } from "@/components/ui/button";
 import { TooltipProvider } from "@/components/ui/menu";
+import { LiquidGlassEffects } from "@/components/ui/LiquidGlassEffects";
 import { LoadingRows } from "@/components/ui/states";
 import { rememberLanguage } from "@/i18n";
 import { ApiError, loadSession } from "@/lib/api";
@@ -139,6 +140,7 @@ export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider delayDuration={300}>
+        <LiquidGlassEffects />
         <SessionGate />
         <Toaster
           closeButton

@@ -114,7 +114,7 @@ export function TopBar({ onOpenDrawer, agentOpen, onToggleAgent }: { onOpenDrawe
   };
 
   return (
-    <header className="app-topbar z-30 flex h-15 shrink-0 items-center gap-2 px-3 sm:px-4">
+    <header className="app-topbar z-30 flex shrink-0 items-center gap-2 px-3 sm:px-4">
       <Button variant="ghost" size="icon" className="touch-target relative md:hidden" onClick={onOpenDrawer} aria-label={t("topbar.openMenu")}>
         <Menu />
       </Button>

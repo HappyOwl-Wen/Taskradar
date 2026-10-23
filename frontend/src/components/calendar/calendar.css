@@ -9,10 +9,10 @@
   gap: 18px;
 }
 .calendar-topline { padding: 2px 2px 4px; }
-.calendar-toolbar { border: 1px solid var(--glass-stroke); border-radius: 22px; padding: 12px 16px; background: var(--glass-surface); box-shadow: inset 0 1px 0 var(--glass-highlight), var(--glass-shadow); }
+.calendar-toolbar { border: 1px solid var(--glass-stroke); border-radius: 22px; padding: 12px 16px; background: var(--glass-surface); box-shadow: inset 0 1px 0 var(--glass-highlight), var(--glass-shadow); backdrop-filter: var(--liquid-filter, blur(1px)); }
 .calendar-toolbar > h2 { order: -1; flex: 1 0 180px; font-family: var(--font-display); font-size: 23px; font-weight: 500; letter-spacing: -.04em; }
 .calendar-toolbar > input[type=date] { width: 142px; border-color: var(--border); }
-.calendar-view-switch { align-items: center; }
+.calendar-view-switch { align-items: center; backdrop-filter: var(--liquid-filter, blur(1px)); }
 .calendar-view-switch > button { height: 30px; padding-inline: 16px; }
 .calendar-view-switch > button[aria-pressed=true] { background: var(--glass-raised); color: var(--primary); box-shadow: 0 2px 7px rgb(40 23 63 / .09), inset 0 1px 0 var(--glass-highlight); }
 .calendar-filters { padding: 0 3px; font-size: 12px; color: var(--muted-foreground); }
@@ -28,7 +28,7 @@
 .calendar-workspace .fc-scrollgrid-section > td { border-right: 0; }
 .calendar-workspace .fc-daygrid-day-number { display: grid; place-items: center; margin: 6px 7px; width: 27px; height: 27px; text-align: center; border-radius: 50%; font-variant-numeric: tabular-nums; }
 .calendar-workspace .fc-day-today .fc-daygrid-day-number { background: var(--primary); color: var(--primary-foreground); box-shadow: 0 3px 10px color-mix(in srgb, var(--primary) 20%, transparent); }
-.calendar-workspace .fc-daygrid-day-frame { min-height: 82px; }
+.calendar-workspace .fc-daygrid .fc-daygrid-day-frame { min-height: 82px; }
 .calendar-workspace .fc .fc-daygrid-body .fc-daygrid-day-events { min-height: 1em; margin: 0 4px 7px; }
 .calendar-workspace .fc-event {
   --event-tint: var(--primary);
@@ -69,10 +69,11 @@
 .calendar-workspace .fc-timegrid-event .calendar-event-text small { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .calendar-workspace .fc-timegrid-event-short { padding-block: 2px; border-radius: 7px; }
 .calendar-workspace .fc-timegrid-event-short .calendar-event-content { font-size: 10px; line-height: 1.2; }
+.calendar-workspace .fc-timegrid .fc-daygrid-event .calendar-event-text small { display: none; }
 .calendar-workspace .fc-list-event .calendar-event-content { font-size: 13px; padding: 6px; }
 .calendar-workspace .fc-list-day-cushion { background: var(--glass-surface); padding: 13px 16px; }
 .calendar-workspace .fc-list-event > td { padding-block: 7px; }
-.calendar-workspace .fc-popover { background: var(--glass-popover); border: 1px solid var(--glass-stroke); border-radius: 17px; overflow: hidden; box-shadow: var(--glass-shadow-float); backdrop-filter: blur(24px); z-index: 20; }
+.calendar-workspace .fc-popover { background: var(--glass-popover); border: 1px solid var(--glass-stroke); border-radius: 17px; overflow: hidden; box-shadow: var(--glass-shadow-float); backdrop-filter: blur(2px); z-index: 20; }
 .calendar-workspace .fc .fc-highlight { background: color-mix(in srgb, var(--primary) 14%, transparent); }
 .calendar-unscheduled { border-color: var(--glass-stroke); border-radius: 20px; background: var(--glass-surface); padding: 16px; box-shadow: inset 0 1px 0 var(--glass-highlight); }
 /* Reserved time stays distinct from events, and retains its meaning in every theme. */
@@ -87,7 +88,7 @@
   .calendar-toolbar { padding: 12px; border-radius: 18px; }
   .calendar-toolbar > input[type=date] { order: 2; flex: 1 0 100%; width: 100%; }
   .calendar-toolbar .calendar-view-switch > button { padding-inline: 14px; }
-  .calendar-workspace .fc-daygrid-day-frame { min-height: 80px; }
+  .calendar-workspace .fc-daygrid .fc-daygrid-day-frame { min-height: 80px; }
   .calendar-workspace .fc-daygrid-event .calendar-event-content { font-size: 10px; }
   .calendar-workspace .fc-daygrid-event .calendar-event-text small { display: none; }
   .calendar-workspace .fc-timegrid { min-width: 680px; }
