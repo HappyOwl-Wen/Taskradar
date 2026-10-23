@@ -16,6 +16,7 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from taskradar import __version__
 from taskradar.config import AppConfig
+from taskradar.db.agent_models import AgentConversation, AgentTurn
 from taskradar.db.base import utcnow
 from taskradar.db.calendar_models import (
     CalendarBuffer,
@@ -93,6 +94,13 @@ class DataService:
                 "google_events": [_row(e) for e in session.scalars(select(GoogleEvent))],
                 "sync_jobs": [_row(j) for j in session.scalars(select(SyncJob))],
                 "timers": [_row(t) for t in session.scalars(select(Timer))],
+                "agent_conversations": [
+                    _row(c, set() if include_content else {"title"}) for c in session.scalars(select(AgentConversation))
+                ],
+                "agent_turns": [
+                    _row(t, set() if include_content else {"user_text", "assistant_text", "changes", "options"})
+                    for t in session.scalars(select(AgentTurn))
+                ],
             }
 
     def imported_counts(self) -> dict[str, int]:
@@ -134,6 +142,8 @@ class DataService:
         counts: dict[str, int] = {}
         with transaction(self._factory) as session:
             for model in (
+                AgentTurn,
+                AgentConversation,
                 CalendarDraft,
                 CalendarBuffer,
                 WorkBlock,

@@ -23,6 +23,7 @@ log = logging.getLogger(__name__)
 
 
 class SideEffect(StrEnum):
+    AGENT_REQUEST = "agent.request"
     GOOGLE_EVENT_WRITE = "calendar.event_write"
     GOOGLE_EVENT_DELETE = "calendar.event_delete"
     CALENDAR_WRITE = "calendar.write"
@@ -92,6 +93,10 @@ class PermissionGuard:
 
     def _evaluate(self, action: SideEffect, target: str | None, ctx: dict[str, Any]) -> tuple[bool, str, str]:
         settings = self._settings.get()
+        if action == SideEffect.AGENT_REQUEST:
+            if not ctx.get("user_initiated") or not ctx.get("key_configured"):
+                return False, "agent_not_configured", "An Agent request needs a user action and configured API key"
+            return True, "allowed", "user-initiated Agent request to the configured provider"
         if action in (SideEffect.CALENDAR_WRITE, SideEffect.CALENDAR_DELETE):
             raw = self._secret(sk.GOOGLE_TOKEN_CALENDAR)
             try:

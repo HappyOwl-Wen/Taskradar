@@ -5,7 +5,10 @@ from __future__ import annotations
 from alembic import context
 from sqlalchemy import engine_from_config, pool
 
-from taskradar.db import models  # noqa: F401  (register models on the metadata)
+from taskradar.db import (
+    agent_models,  # noqa: F401
+    models,  # noqa: F401  (register models on the metadata)
+)
 from taskradar.db.base import Base
 
 config = context.config

@@ -216,11 +216,13 @@ class TaskService:
         priority: Priority = Priority.MEDIUM,
         sample: bool = False,
         time_resolution: str = "explicit",
+        task_id: str | None = None,
     ) -> Task:
         """A to-do the user wrote themselves: it counts and reminds at once (no confirmation step)."""
         now = self.clock()
         title = title.strip()[:200]
         task = Task(
+            **({"id": task_id} if task_id else {}),
             sample=sample,
             manual=True,
             title=title,

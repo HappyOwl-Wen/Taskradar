@@ -1,0 +1,26 @@
+.agent-markdown > :first-child { margin-top: 0; }
+.agent-markdown > :last-child { margin-bottom: 0; }
+.agent-markdown p, .agent-markdown ul, .agent-markdown ol, .agent-markdown blockquote, .agent-markdown pre, .agent-markdown-table { margin: .7em 0; }
+.agent-markdown h1, .agent-markdown h2, .agent-markdown h3, .agent-markdown h4 { margin: 1.1em 0 .4em; font-weight: 650; line-height: 1.4; }
+.agent-markdown h1 { font-size: 1.35em; }
+.agent-markdown h2 { font-size: 1.2em; }
+.agent-markdown h3 { font-size: 1.1em; }
+.agent-markdown ul, .agent-markdown ol { padding-left: 1.45em; }
+.agent-markdown ul { list-style: disc; }
+.agent-markdown ol { list-style: decimal; }
+.agent-markdown li { margin: .3em 0; }
+.agent-markdown li > ul, .agent-markdown li > ol { margin: .2em 0; }
+.agent-markdown a { color: var(--primary); text-decoration: underline; text-underline-offset: 3px; overflow-wrap: anywhere; }
+.agent-markdown blockquote { border-left: 3px solid var(--border); padding-left: .8em; color: var(--muted-foreground); }
+.agent-markdown pre { max-width: 100%; overflow-x: auto; border: 1px solid var(--border); border-radius: 8px; padding: .8em; background: var(--subtle); font-size: .85em; line-height: 1.6; }
+.agent-markdown pre code { white-space: pre; overflow-wrap: normal; }
+.agent-markdown :not(pre) > code { border-radius: 4px; padding: .1em .35em; background: var(--subtle); font-size: .9em; }
+.agent-markdown-table { max-width: 100%; overflow-x: auto; border: 1px solid var(--border); border-radius: 6px; }
+.agent-markdown table { width: 100%; border-collapse: collapse; font-size: .9em; }
+.agent-markdown th, .agent-markdown td { border: 1px solid var(--border); padding: .45em .65em; text-align: left; }
+.agent-markdown th { background: var(--subtle); font-weight: 600; }
+.agent-markdown input[type=checkbox] { margin-right: .4em; accent-color: var(--primary); }
+.agent-markdown .contains-task-list { list-style: none; padding-left: .2em; }
+.agent-markdown hr { margin: 1em 0; border-top: 1px solid var(--border); }
+.agent-markdown .katex-display { max-width: 100%; overflow-x: auto; overflow-y: hidden; padding: .3em 0; }
+.agent-markdown .katex { font-size: 1.1em; }

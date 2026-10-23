@@ -9,6 +9,7 @@ from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
+from taskradar.connectors.agent import AgentError
 from taskradar.connectors.errors import ConnectorError
 from taskradar.connectors.google_oauth import OAuthError
 from taskradar.security.permissions import PermissionDenied
@@ -58,6 +59,10 @@ def error_response(
 
 
 def install_error_handlers(app: FastAPI) -> None:
+    @app.exception_handler(AgentError)
+    async def _agent(_: Request, exc: AgentError) -> JSONResponse:
+        return error_response(exc.code, exc.code, exc.status_code)
+
     @app.exception_handler(ApiError)
     async def _api_error(_: Request, exc: ApiError) -> JSONResponse:
         return error_response(exc.code, exc.message, exc.status_code, recoverable=exc.recoverable, details=exc.details)

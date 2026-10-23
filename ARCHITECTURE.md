@@ -230,6 +230,48 @@ is kept; the WinRT bindings for notifications are included; Pillow (a developmen
 
 ## Decisions and trade-offs
 
+### Conversational AI Agent
+
+`connectors/agent.py` adapts Claude Messages, OpenAI Responses and compatible Chat Completions without adding an SDK.
+`services/agent.py` owns bounded chat loops, local conversations, provider configuration and idempotent receipts;
+`services/agent_tools.py` exposes a validated allow-list of task/calendar reads and proposed changes. No terminal,
+arbitrary HTTP or code execution tool is available. Chat, optional title/suggestion generation, and model discovery
+use the permission guard; the scheduler does not run the Agent. Discovery starts when configured Agent UI opens,
+uses credential-scoped five-minute memory caches and bounded pagination. Provider metadata takes precedence over
+documented model rules in `domain/agent_models.py`; unknown models use provider defaults. Keys have separate
+per-protocol entries in the secret store and never appear in the model-discovery response.
+
+`agent_conversations` and `agent_turns` keep history and proposals locally. Model tool calls only stage changes.
+The default Restricted mode requires Apply; configured YOLO mode applies only the current successful turn's proposals
+through that same application service. Older pending proposals are not replayed. Turn options record the actual mode,
+thinking level and finishing phase, so restart recovery preserves applied receipts without retrying automation.
+Applying a local mutation and its receipt uses one SQLite transaction. Each change has a stable identity, retries skip
+applied items, and existing-item snapshots reject stale proposals. Google writes reuse CalendarEditor's durable draft
+IDs, permission checks and ETag handling; discarding failed proposals also removes their unsent drafts. Local task
+mirrors are marked out of sync and surfaced to the user for the existing explicit task-sync flow.
+
+`AgentSidebar` lives outside route content so page navigation and closing the panel preserve ongoing requests and
+input. It is a side pane in wide windows and a modal drawer in smaller ones. Pointer/keyboard width changes persist
+locally and clamp to the viewport. Model/thinking controls open from a single composer button, with mode and
+suggestions beside it. Capability details
+and model refresh live in the popup; privacy information opens from the footer's information button.
+Markdown uses react-markdown/GFM and local KaTeX assets with raw HTML disabled; image URLs in replies render as links.
+The frontend never receives saved keys;
+it requests configuration, history and concrete proposal application through the same CSRF-protected local API.
+Chat records are included in export/delete-all, and deleting a conversation retains already-applied tasks and events.
+Optional titles use a separately selectable model on the same provider; follow-up suggestions use the chat model.
+Auxiliary calls have no workspace tools, use bounded conversation text, and their failures retain the main reply and
+applied results. Manual titles are preserved by automatic generation. Content-free exports also exclude suggestions.
+
+Claude requests use explicit cache breakpoints on the stable system prefix, current user input and growing tool
+suffix (at most three); 5-minute caching defaults on, with off/1-hour options. `services/agent_prompt.py` keeps runtime
+time/settings out of system text and stores immutable request text / initial reply receipts in private turn options.
+Later receipt changes are appended to the newest context rather than rewriting cached messages. Replay counts actual
+context/receipt text against its bound and omits verbose raw tool/thinking transcripts between turns. Private options
+stay out of public chat responses and content-free exports. `services/agent_usage.py` aggregates provider-reported
+Claude counters per chat/title/suggestions group, retaining missing counters as unknown and counting failed attempts.
+Cache controls apply to the Claude Messages protocol; usage counters do not estimate provider bills.
+
 ### Calendar workspace
 
 `services/calendar_workspace.py` provides the local-first read model, per-calendar cache sync and safe task mappings;

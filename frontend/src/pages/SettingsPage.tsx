@@ -1,4 +1,4 @@
-import { Bell, BookOpen, Calendar, Database, Settings2, Timer, Wrench, type LucideIcon } from "lucide-react";
+import { Bell, BookOpen, Bot, Calendar, Database, Settings2, Timer, Wrench, type LucideIcon } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useBlocker, useLocation, useNavigate, useSearchParams } from "react-router";
 import { useTranslation } from "react-i18next";
@@ -8,6 +8,7 @@ import { CalendarSection } from "@/components/settings/Google";
 import { GuideSection } from "@/components/settings/Guide";
 import { DataSection, RemindersSection, SystemSection } from "@/components/settings/Other";
 import { TimersSection } from "@/components/settings/Timers";
+import { AgentSection } from "@/components/settings/Agent";
 import { ConfirmDialog } from "@/components/ui/dialog";
 import { SimpleSelect } from "@/components/ui/select";
 import { ErrorState, LoadingRows } from "@/components/ui/states";
@@ -19,7 +20,7 @@ import { useSettings } from "@/lib/queries";
 import type { Settings } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
-const SECTIONS = ["general", "guide", "reminders", "timers", "calendar", "data", "system"] as const;
+const SECTIONS = ["general", "guide", "reminders", "timers", "calendar", "agent", "data", "system"] as const;
 type SectionKey = (typeof SECTIONS)[number];
 
 const ICON: Record<SectionKey, LucideIcon> = {
@@ -30,6 +31,7 @@ const ICON: Record<SectionKey, LucideIcon> = {
   calendar: Calendar,
   data: Database,
   system: Wrench,
+  agent: Bot,
 };
 
 function isSection(value: string | null | undefined): value is SectionKey {
@@ -38,6 +40,8 @@ function isSection(value: string | null | undefined): value is SectionKey {
 
 function SectionBody({ section, settings }: { section: SectionKey; settings: Settings }) {
   switch (section) {
+    case "agent":
+      return <AgentSection />;
     case "general":
       return <GeneralSection settings={settings} />;
     case "guide":

@@ -104,6 +104,21 @@ export default function CalendarPage() {
   const task = useTask(params.get("task") ?? undefined);
   const { data: google } = useGoogle();
   const calendar = useRef<FullCalendar>(null);
+  const canvas = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!canvas.current || typeof ResizeObserver === "undefined") return;
+    let width = 0;
+    let frame = 0;
+    // FullCalendar watches the window, but opening the Agent/navigation changes only its container.
+    const observer = new ResizeObserver(([entry]) => {
+      if (entry.contentRect.width === width) return;
+      width = entry.contentRect.width;
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => calendar.current?.getApi().updateSize());
+    });
+    observer.observe(canvas.current);
+    return () => { observer.disconnect(); cancelAnimationFrame(frame); };
+  }, []);
   const [view, setView] = useState(() => window.innerWidth < 700 ? "listMonth" : "dayGridMonth");
   const [range, setRange] = useState({ start: "", end: "", title: "" });
   const [local, setLocal] = useState(true);
@@ -205,7 +220,7 @@ export default function CalendarPage() {
     {data?.sources.some((s) => s.selected) ? <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">{data.sources.filter((s) => s.selected).map((s) => <span key={s.id}>{s.summary} · {data.window_updated[s.id] ? t("workbench.updated", { time: formatDateTime(data.window_updated[s.id], i18n.language, timezone) }) : t("workbench.never")}{s.last_error ? ` · ${translateKey(`errors.${s.last_error}`, s.last_error)}` : ""}</span>)}</div> : null}
     {syncMessage ? <p role="status" className="rounded-md border border-high/30 bg-high/5 p-3 text-sm">{syncMessage}</p> : null}
     {error ? <ErrorState error={error} onRetry={() => void refetch()} /> : null}
-    <div className="calendar-canvas overflow-hidden rounded-lg border">
+    <div ref={canvas} className="calendar-canvas min-w-0 overflow-hidden rounded-lg border">
       <FullCalendar ref={calendar} plugins={plugins} initialView={view} initialDate={params.get("date") ?? undefined} locale={i18n.language === "zh-CN" ? zhLocale : "en"}
         timeZone={timezone} headerToolbar={false} height={view === "timeGridWeek" ? 500 : "auto"} firstDay={1} fixedWeekCount={false} nowIndicator allDaySlot
         dayMaxEvents={3} eventMaxStack={3} eventDisplay="block" slotMinTime="00:00:00" slotMaxTime="24:00:00" scrollTime="08:00:00"

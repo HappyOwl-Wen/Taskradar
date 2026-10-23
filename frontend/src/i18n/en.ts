@@ -1,7 +1,9 @@
 import type { Messages } from "./types";
 import calendarEn from "./calendar.en";
+import agentEn from "./agent.en";
 
 const en: Messages = {
+  agent: agentEn,
   workbench: calendarEn,
   app: {
     tagline: "Personal to-do radar",
@@ -667,6 +669,7 @@ const en: Messages = {
     discard: "Discard changes",
     keepEditing: "Keep editing",
     sections: {
+      agent: "AI Agent",
       general: "General",
       calendar: "Google Calendar",
       reminders: "Reminders & notifications",

@@ -1,0 +1,47 @@
+const extras = {
+  cache: {
+    setting: "Claude 提示词缓存", off: "关闭", "5m": "5 分钟（默认）", "1h": "1 小时",
+    settingHint: "缓存复用固定提示词和历史前缀。首次写入仍计费；1 小时缓存的写入单价更高。第三方服务需支持 Anthropic cache_control，不支持时可关闭。",
+    usage: "用量与缓存", calls: "{{count}} 次调用尝试", readSummary: "缓存读取 {{count}} Token",
+    unavailable: "缓存统计未返回", unknown: "未返回", input_tokens: "普通输入", cache_creation_input_tokens: "缓存写入",
+    cache_read_input_tokens: "缓存读取", output_tokens: "输出", total_input_tokens: "总输入",
+    chat: "聊天与工具循环", title: "标题生成", suggestions: "提示词建议",
+    reported: "{{reported}} / {{count}} 次返回用量", reportedHint: "统计来自服务接口，缺失值不按 0 处理。首次调用、缓存过期、短于模型最小缓存长度或网关不支持时可能不命中。实际账单以服务商为准。",
+  },
+  resize: "调整 Agent 侧栏宽度",
+  resizeHint: "拖动调整宽度；方向键微调；双击恢复默认",
+  controls: {
+    modelSettings: "模型与思考等级", composerTools: "聊天输入工具栏", privacyInfo: "数据与隐私说明",
+    autoShort: "自动", restrictedShort: "受限", yoloShort: "YOLO", chatShort: "仅聊天",
+    model: "聊天模型", reasoning: "思考等级", mode: "执行模式", refresh: "重新检测可用模型",
+    scanning: "正在检查当前服务的模型…", modelCount: "检测到 {{count}} 个模型",
+    api: "能力来自服务接口", documented: "能力依据已知模型文档", unknown: "服务未报告思考能力，使用模型默认参数",
+    restricted: "受限 · 预览后应用", yolo: "YOLO · 自动应用",
+    yoloHint: "新消息中的任务和日程更改将自动应用；日历权限、数据校验和冲突检查仍然生效。",
+    nextMessage: "模型、思考等级和模式的调整从下一条消息生效。",
+    auto: "自动 / 服务默认", none: "关闭思考", minimal: "极低", low: "低", medium: "中", high: "高", xhigh: "很高", max: "最高",
+    unsupported: "当前模型不支持此等级", thinkingBudget: "此模型使用思考 Token 预算适配等级",
+    phaseApplying: "正在自动应用更改…", phaseFinishing: "正在生成标题和建议…",
+  },
+  preferences: {
+    reasoningHint: "只显示当前协议与模型已知支持的等级。更高等级通常需要更多时间和 Token；自动不发送额外的思考参数。",
+    modeHint: "受限模式先预览再手动应用。YOLO 会自动执行新消息生成的方案，不会自动执行以前待确认的方案。",
+    modelListHint: "自动检测已保存服务的模型，支持手动刷新和填写未列出的模型 ID。模型列表不代表每个模型都支持工具调用。",
+    saveBeforeScan: "保存当前服务地址与 Key 后，才会检测该配置的模型。",
+    titleMode: "自动标题方式", titleMessage: "从首条消息提取", titleModelMode: "使用模型生成",
+    titleModel: "标题生成模型", titleModelHint: "留空使用当前聊天模型；可以从已检测的模型中选择或输入其他 ID。",
+    titleCost: "模型标题在首次成功回复后生成；模型建议在每次成功回复后生成。二者会额外调用当前服务的 API，并使用聊天上下文。",
+    suggestions: "提示词建议", suggestionsOff: "关闭", suggestionsPresets: "预设建议", suggestionsModel: "模型生成后续建议",
+  },
+  titles: {
+    menu: "聊天标题与操作", rename: "重命名聊天", generate: "使用模型生成标题", title: "聊天标题", save: "保存标题",
+    generated: "标题已生成", renamed: "标题已更新", failed: "标题生成失败，保留原有标题；可以稍后重试。",
+    using: "生成模型：{{model}}",
+  },
+  prompts: {
+    options: "提示词建议选项", label: "继续聊什么", generate: "重新生成建议", applySuggestion: "使用建议：{{text}}",
+    plan: "查看接下来几天的安排，找出需要优先处理的任务", summary: "总结一下目前的计划和仍未应用的更改", chat: "用一个具体例子解释刚才的内容",
+    failed: "后续建议生成失败，当前回复和已应用的更改会保留。",
+  },
+};
+export default extras;

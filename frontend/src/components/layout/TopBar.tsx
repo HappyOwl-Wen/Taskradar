@@ -1,4 +1,4 @@
-import { Check, Ellipsis, Menu, Monitor, Moon, Plus, Search, Sun } from "lucide-react";
+import { Bot, Check, Ellipsis, Menu, Monitor, Moon, Plus, Search, Sun } from "lucide-react";
 import { useState, type FormEvent } from "react";
 import { Link, useLocation, useNavigate } from "react-router";
 import { useTranslation } from "react-i18next";
@@ -98,7 +98,7 @@ function MoreMenu() {
  * The bar above the page, part of the window frame: search on the left; on the right adding a to-do, the system
  * status, notifications and the "more" menu. On phones its menu button opens the navigation.
  */
-export function TopBar({ onOpenDrawer }: { onOpenDrawer?: () => void }) {
+export function TopBar({ onOpenDrawer, agentOpen, onToggleAgent }: { onOpenDrawer?: () => void; agentOpen?: boolean; onToggleAgent?: () => void }) {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { pathname } = useLocation();
@@ -145,6 +145,9 @@ export function TopBar({ onOpenDrawer }: { onOpenDrawer?: () => void }) {
 
       <div className="ml-auto flex items-center gap-1.5">
         <NewTodoButton />
+        <Tip content={agentOpen ? t("agent.close") : t("agent.open")}>
+          <Button variant={agentOpen ? "secondary" : "ghost"} size="icon" className="touch-target relative" aria-label={agentOpen ? t("agent.close") : t("agent.open")} aria-expanded={agentOpen} aria-controls="agent-panel" onClick={onToggleAgent}><Bot /></Button>
+        </Tip>
         <SystemStatusButton />
         <NotificationsMenu />
         <MoreMenu />

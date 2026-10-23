@@ -19,6 +19,7 @@ from taskradar.db.session import create_sqlite_engine, make_session_factory
 from taskradar.notify import windows as windows_notifications
 from taskradar.security.permissions import PermissionGuard
 from taskradar.security.secrets import KeyringSecretStore, SecretStore
+from taskradar.services.agent import AgentService
 from taskradar.services.calendar_sync import CalendarSyncService
 from taskradar.services.calendar_workspace import CalendarWorkspace
 from taskradar.services.data import DataService
@@ -48,6 +49,7 @@ class Container:
     status: StatusSummaryService
     timers: TimerService
     workspace: CalendarWorkspace = field(init=False)
+    agent: AgentService = field(init=False)
     extras: dict[str, Any] = field(default_factory=dict)
 
     def dispose(self) -> None:
@@ -109,6 +111,7 @@ def build_container(
         timers=TimerService(factory, settings=settings, guard=guard, tasks=tasks, toast=toast, clock=clock),
     )
     container.workspace = CalendarWorkspace(container)
+    container.agent = AgentService(container)
     calendar.lock = container.workspace.lock
     oauth.validate_account = container.workspace.validate_account
     return container

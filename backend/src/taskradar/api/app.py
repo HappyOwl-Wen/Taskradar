@@ -16,7 +16,7 @@ from fastapi.staticfiles import StaticFiles
 from taskradar import __version__
 from taskradar.api.errors import install_error_handlers
 from taskradar.api.middleware import SecurityMiddleware
-from taskradar.api.routes import calendar_workspace, integrations, system, tasks, timers
+from taskradar.api.routes import agent, calendar_workspace, integrations, system, tasks, timers
 from taskradar.api.routes import desktop as desktop_routes
 from taskradar.container import Container
 from taskradar.desktop.bridge import DesktopBridge
@@ -98,6 +98,7 @@ def create_app(
         integrations.router,
         desktop_routes.router,
         calendar_workspace.router,
+        agent.router,
     ):
         app.include_router(router)
 

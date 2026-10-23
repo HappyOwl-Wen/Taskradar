@@ -6,6 +6,7 @@ import { useFocusView } from "@/lib/focusView";
 import { cn } from "@/lib/utils";
 import { Brand, SettingsNav, Sidebar, SidebarNav } from "./Sidebar";
 import { TopBar } from "./TopBar";
+import { AgentSidebar } from "@/components/agent/AgentSidebar";
 
 /** Route `handle` flag for pages that manage their own scrolling. */
 export interface RouteHandle {
@@ -47,6 +48,7 @@ export function AppShell() {
   const compactFocus = pathname === "/focus" && hideFrame;
   const main = useRef<HTMLElement>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [agentOpen, setAgentOpen] = useState(false);
   const fullHeight = matches.some((m) => (m.handle as RouteHandle | undefined)?.fullHeight);
 
   useEffect(() => {
@@ -60,7 +62,7 @@ export function AppShell() {
       </div>
       <div className="flex min-w-0 flex-1 flex-col">
         <div className={compactFocus ? "hidden" : "contents"}>
-          <TopBar onOpenDrawer={() => setDrawerOpen(true)} />
+          <TopBar onOpenDrawer={() => setDrawerOpen(true)} agentOpen={agentOpen} onToggleAgent={() => setAgentOpen((value) => !value)} />
         </div>
         <main
           ref={main}
@@ -84,6 +86,7 @@ export function AppShell() {
         </main>
       </div>
       <NavDrawer open={drawerOpen} onOpenChange={setDrawerOpen} />
+      <AgentSidebar open={agentOpen && !compactFocus} onOpenChange={setAgentOpen} />
     </div>
   );
 }

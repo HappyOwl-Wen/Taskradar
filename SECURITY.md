@@ -13,6 +13,8 @@ on the repository owner's profile) with a description and, if possible, steps to
 | Asset | Where it lives |
 | --- | --- |
 | Tasks, their history, timers, notifications, settings | SQLite database `%LOCALAPPDATA%\TaskRadar\taskradar.db` |
+| Agent chats, proposals and application receipts | The same local database; included in export and delete-all |
+| Agent API keys, separately for each protocol | Windows Credential Manager; never returned by the API or stored in settings |
 | Mails and files imported by earlier versions (if any), with what was read from them | The same database and `%LOCALAPPDATA%\TaskRadar\files\`, until you delete them |
 | Google OAuth client configuration and Calendar token | Windows Credential Manager (service "TaskRadar"), never files or the database |
 | Logs | `%LOCALAPPDATA%\TaskRadar\logs\taskradar.log` (rotated, secrets masked) |
@@ -104,6 +106,27 @@ phrase `DELETE`; notifications only when switched on) and records every decision
 `audit_log` without secret values.
 
 ### Content
+
+* The optional Agent sends messages, bounded conversation context and relevant workspace data queried on demand to
+  the user-configured API endpoint. With a key configured, opening Agent UI automatically queries that service's
+  model list (no chat/workspace content). Chat starts on Send; optional model titles and suggestions make additional
+  calls with bounded conversation context after successful replies, or on the corresponding user action.
+  Requests are audited through `PermissionGuard`; a workspace-access switch removes data/mutation tools for chat-only
+  use (existing messages in that conversation remain context). API endpoints require HTTPS except on loopback;
+  redirects are not followed. Provider error bodies and request exceptions are never logged or shown to the frontend.
+* Agent tools are an allow-list with validated arguments and bounded reads/loops. They propose changes only; the
+  default Restricted mode requires Apply, while optional YOLO mode automatically applies the current successful
+  turn's proposals. Both paths use server-stored proposals, never executable client-supplied payloads. Local edits
+  check snapshots, local mutations and receipts commit together, and Google edits reuse the existing permission and
+  ETag checks. No model tool can access credentials, run code, issue shell commands or change provider settings.
+  YOLO does not expand the tool allow-list or bypass calendar permissions, snapshots or ETags, and does not execute
+  older pending proposals. Model-generated titles/suggestions have no tools. Markdown disallows raw HTML and unsafe
+  link protocols; images become links rather than automatically requesting model-provided tracking URLs.
+  Claude prompt caching uses provider-side ephemeral cache controls (5 minutes by default, optional 1 hour or off).
+  Cached prompts are still sent to the configured service and subject to that service's data handling. Stable replay
+  contexts and receipt snapshots remain local chat content, are hidden from public chat responses, and are omitted
+  from content-free exports. The app stores only reported numeric usage counters, never provider response bodies in
+  its usage ledger, and makes no extra model requests merely to warm or test a production cache.
 
 * Task titles, notes and timer names are data. Nothing in TaskRadar executes commands derived from them; there is no
   shell or code execution path from content at all.

@@ -11,6 +11,14 @@ A Pomodoro timer and countdowns run in the sidebar; reminders and timers announc
 notifications, also while the window is closed to the tray. Tasks with a date can go into TaskRadar's own Google
 calendar if you connect one.
 
+The optional AI Agent adds a dedicated chat side panel for questions and task/calendar planning. When you configure
+your API and send a message, the conversation and relevant data queried by the Agent are sent to that provider;
+changes are previewed in Restricted mode, or applied automatically in optional YOLO mode.
+The resizable panel renders Markdown, detects provider models and offers model-aware thinking levels,
+automatic titles and prompt suggestions. See [the Agent guide](docs/AI_AGENT.zh-CN.md).
+Claude requests use stable prompt prefixes with configurable ephemeral caching and show reported cache/token usage
+for chat, title and suggestion calls; actual cache support and billing depend on the configured provider.
+
 > 中文简介见下方 [中文快速上手](#中文快速上手)。The UI is Chinese by default and switchable to English.
 
 ![TaskRadar on Windows 11: today's tasks by how soon they are due, the Pomodoro timer and a countdown running in the sidebar](docs/screenshots/today-light-zh.png)
@@ -55,6 +63,7 @@ task. This version is a plain to-do app instead:
 | Calendar workspace | Month, week and agenda views for local deadlines, work blocks and selected Google calendars; cached multi-calendar reads, staged OAuth permissions, ordinary event editing, drafts, ETag conflicts and linked-task de-duplication | implemented with Fake Calendar tests; see [calendar guide](docs/CALENDAR_WORKSPACE.zh-CN.md) and [verification](docs/CALENDAR_VERIFICATION.zh-CN.md); real account authorization needs user validation |
 | Overlap warnings and buffers | While a work block or Google event is planned, the form lists what it overlaps (work blocks, timed Google events of the selected calendars, to-dos with an appointment time) and offers the next free slot that day; saving stays possible. Preparation, commute or rest time can be reserved before and after any timed item, including read-only and recurring meetings (for every occurrence); it counts for the warnings and is drawn in the week view, and it stays on this computer | implemented, tested with Fake Calendar; see [calendar guide](docs/CALENDAR_WORKSPACE.zh-CN.md#冲突检测与缓冲) |
 | Data control | Export everything as JSON; delete single tasks; delete what earlier versions imported; delete all data (typed confirmation) | implemented, tested |
+| AI Agent | Dedicated chat side panel with Claude Messages, OpenAI Responses and third-party OpenAI-compatible APIs; ordinary Q&A, on-demand workspace queries, and reviewable task, work-block and Google-event proposals. API keys stay in the system credential store | implemented with simulated-provider tests and local HTTP/UI verification; configure Settings → AI Agent with your own API key for live use; see [Agent guide](docs/AI_AGENT.zh-CN.md) |
 | Desktop app | Its own window (Microsoft Edge WebView2 through pywebview), its local service on `127.0.0.1` only; size and position remembered; light and dark; Chinese and English; optional start with Windows (into the tray). `TaskRadar-Setup-<version>.exe` installs for your account without administrator rights and adds TaskRadar to the Start menu; uninstalling keeps your data. Also a portable zip | the program built from this version answered on its local address 3.5 s after starting with a new data folder and 2.1 s after starting again (one measurement each, on this computer); the folder build is 55.7 MB. Not code-signed; not tested on Windows 10 or on another computer |
 
 ## Install the desktop app

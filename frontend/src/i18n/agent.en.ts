@@ -1,0 +1,45 @@
+import type agentZh from "./agent.zh";
+import extras from "./agent-extras.en";
+type Strings<T> = { [K in keyof T]: T[K] extends string ? string : Strings<T[K]> };
+const agentEn: Strings<typeof agentZh> = {
+  ...extras,
+  title: "AI Agent", open: "Open AI Agent", close: "Close AI Agent", subtitle: "A conversation that makes room for your plans",
+  newChat: "New chat", history: "Chat history", untitled: "New chat", deleteChat: "Delete this chat",
+  deleteTitle: "Delete this conversation?", deleteHint: "This removes its messages and unapplied proposals. Tasks and events already applied will remain.",
+  welcome: "What would you like to plan?", welcomeHint: "Plan your tasks and calendar together, or ask me a question.",
+  examplePlan: "Check tomorrow's tasks and calendar and plan my work sessions", exampleTask: "Add a task: finish the project report by next Friday", exampleChat: "Explain the Pomodoro technique",
+  placeholder: "Send a message, plan a task, or ask a question…", inputLabel: "Message AI Agent", send: "Send",
+  thinking: "Thinking and checking your plans…", enterHint: "Enter to send · Shift + Enter for a new line",
+  setup: "Connect your AI service", setupHint: "Choose Claude, OpenAI or a compatible API in Settings and add your API key to start chatting.", configure: "Configure API", settings: "Agent settings",
+  privacy: "Messages, conversation context and relevant task/calendar data queried on demand are sent to your configured API service. Chat history stays on this device.",
+  chatOnly: "Chat only · No access to tasks or calendar", workspace: "Tasks & calendar assistant · Preview changes first",
+  proposal: "Proposed changes · {{count}}", previewHint: "Check the times and details below before applying.", apply: "Apply changes", retryApply: "Retry unapplied changes", discard: "Discard unapplied changes",
+  applied: "Applied", pending: "Pending", skipped: "Discarded", failed: "Not applied", appliedToast: "Changes applied",
+  partial: "Some changes could not be applied; see their details. Completed changes remain and will not be created again on retry.",
+  conflicts: "Overlaps {{count}} other items", unchecked: "Some Google calendars have no cached data for this period. Refresh the calendar page and check first.",
+  calendarOutdated: "This task's Google Calendar copy may need an update. Check its task details to sync or remove it.", viewTask: "View task", viewCalendar: "View calendar", clear: "Clear", retryMessage: "Resend this message", historyLimit: "Showing the most recent 100 chat turns.", changedFrom: "Previously: {{value}}",
+  kind: { create_task: "Add task", update_task: "Update task", delete_task: "Move to recycle bin", save_work_block: "Plan work session", delete_work_block: "Remove work session", save_calendar_event: "Change Google event" },
+  fields: { title: "Title", description: "Notes", due_date: "Date", due_time: "Time", status: "Status", priority: "Priority", category: "Category", time_semantics: "Time meaning", start: "Start", end: "End", timezone: "Time zone", location: "Location", all_day: "All day", operation: "Operation", buffer: "Time buffers", task_id: "Linked task", calendar_id: "Target calendar" },
+  operations: { create: "Create", update: "Update", delete: "Delete" },
+  config: {
+    intro: "Connect your API to chat and plan tasks and events in a dedicated side panel.", provider: "Provider / API protocol",
+    anthropic: "Claude · Anthropic Messages", openai: "OpenAI · Responses", openai_compatible: "Third party · OpenAI-compatible Chat Completions",
+    model: "Model ID", modelHint: "Enter any model ID from your provider that supports tool calling.",
+    baseUrl: "API base URL", baseUrlHint: "Include the version path such as /v1. Do not append /messages, /responses or /chat/completions. HTTPS is supported; local servers can use HTTP.",
+    apiKey: "API key", keyPlaceholder: "Enter API key", keepKey: "Saved; leave blank to keep this provider's key", keyHint: "Keys are stored only in the system credential store, never returned to the frontend or added to chat history. Keys are separate for each protocol.",
+    ready: "Configured and ready to chat", missing: "No API key configured for this provider", noStore: "The system credential store is unavailable; API keys cannot be saved securely.", forget: "Remove this provider's key", keyRemoved: "API key removed",
+    workspaceAccess: "Allow access to tasks and calendar", workspaceHint: "When enabled, the AI can query relevant data and propose changes for you to apply. When disabled, it answers using conversation content only.",
+    dataHint: "API requests leave this device and use your chosen provider's account and quota. Chat history is stored locally; delete it in the side panel. It is also included in data export and Delete all data.",
+    claudeHint: "Claude connects with an Anthropic API key. A Claude Code / Claude chat subscription login cannot be used directly as an API key.",
+  },
+  errors: {
+    agent_models_unavailable: "This service does not expose a readable model list. You can still enter a model ID in settings.",
+    agent_reasoning_unsupported: "This model or protocol does not support the selected thinking level. Choose Auto or another supported level.",
+    agent_model_protocol_unsupported: "This model cannot use tools with this protocol. Use a compatible protocol such as Responses, or disable task/calendar access.",
+    agent_title_failed: "Could not generate a title. The previous title is retained.",
+    agent_suggestions_failed: "Could not generate prompt suggestions. Your conversation is retained.",
+    agent_empty_conversation: "Send a message before generating a title or suggestions.",
+    agent_not_configured: "Add an API key in Agent settings first.", agent_auth_failed: "API authentication failed. Check the key and model access.", agent_timeout: "The AI service timed out. No changes were applied; you can resend.", agent_unreachable: "Could not reach the AI service. Check the API URL and network.", agent_rate_limited: "The AI service has reached a rate or quota limit. Try again later.", agent_provider_error: "The AI service returned an error. Check the protocol, API URL and model ID.", agent_invalid_response: "The AI service returned no valid result. Please resend.", agent_incomplete: "The AI response was incomplete. No applicable changes were generated; try a smaller request.", agent_step_limit: "This request needs too many operations. Split it into smaller messages.", agent_busy: "The Agent is processing another operation. Please try shortly.", agent_interrupted: "The previous request was interrupted when the app closed. No changes were applied.", agent_workspace_disabled: "Task and calendar access is disabled. Enable it in Agent settings first.", agent_change_conflict: "This item changed after the proposal was generated. Discard unapplied changes and request a new proposal.", agent_apply_failed: "Could not apply this change. Completed changes remain; check and retry.", agent_invalid_change: "The item or proposed time is no longer valid. Request a new proposal.", agent_proposal_not_found: "The proposal is unavailable. Request a new one.", agent_request_conflict: "This message ID was already used for another message. Please resend.",
+  },
+};
+export default agentEn;

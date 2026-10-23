@@ -1,6 +1,8 @@
 import calendarZh from "./calendar.zh";
+import agentZh from "./agent.zh";
 
 const zhCN = {
+  agent: agentZh,
   workbench: calendarZh,
   app: {
     tagline: "个人待办雷达",
@@ -666,6 +668,7 @@ const zhCN = {
     discard: "放弃更改",
     keepEditing: "继续编辑",
     sections: {
+      agent: "AI Agent",
       general: "常规",
       calendar: "Google 日历",
       reminders: "提醒与通知",
