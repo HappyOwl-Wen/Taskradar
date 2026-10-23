@@ -1,6 +1,6 @@
 import { DropdownMenu as MenuPrimitive, Popover as PopoverPrimitive, Tooltip as TooltipPrimitive } from "radix-ui";
 import { Check } from "lucide-react";
-import type { ComponentProps, ReactNode } from "react";
+import type { ComponentProps, CSSProperties, ReactNode } from "react";
 import { cn } from "@/lib/utils";
 
 export const DropdownMenu = MenuPrimitive.Root;
@@ -10,10 +10,10 @@ export const DropdownMenuGroup = MenuPrimitive.Group;
 const panel =
   "glass-popover motion-popover z-50 min-w-[10rem] overflow-hidden border p-1.5 text-popover-foreground";
 
-export function DropdownMenuContent({ className, sideOffset = 6, ...props }: ComponentProps<typeof MenuPrimitive.Content>) {
+export function DropdownMenuContent({ className, sideOffset = 6, style, ...props }: ComponentProps<typeof MenuPrimitive.Content>) {
   return (
     <MenuPrimitive.Portal>
-      <MenuPrimitive.Content sideOffset={sideOffset} className={cn(panel, className)} {...props} />
+      <MenuPrimitive.Content sideOffset={sideOffset} style={{ "--popup-gap": `${sideOffset}px`, ...style } as CSSProperties} className={cn(panel, className)} {...props} />
     </MenuPrimitive.Portal>
   );
 }
@@ -75,12 +75,13 @@ export function DropdownMenuSeparator({ className, ...props }: ComponentProps<ty
 export const Popover = PopoverPrimitive.Root;
 export const PopoverTrigger = PopoverPrimitive.Trigger;
 
-export function PopoverContent({ className, align = "end", sideOffset = 6, ...props }: ComponentProps<typeof PopoverPrimitive.Content>) {
+export function PopoverContent({ className, align = "end", sideOffset = 6, style, ...props }: ComponentProps<typeof PopoverPrimitive.Content>) {
   return (
     <PopoverPrimitive.Portal>
       <PopoverPrimitive.Content
         align={align}
         sideOffset={sideOffset}
+        style={{ "--popup-gap": `${sideOffset}px`, ...style } as CSSProperties}
         className={cn(
           "glass-popover motion-popover z-50 border text-popover-foreground outline-none",
           className,

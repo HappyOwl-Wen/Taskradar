@@ -1,6 +1,6 @@
 import { Select as SelectPrimitive } from "radix-ui";
 import { Check, ChevronDown } from "lucide-react";
-import type { ComponentProps } from "react";
+import type { ComponentProps, CSSProperties } from "react";
 import { cn } from "@/lib/utils";
 
 export const Select = SelectPrimitive.Root;
@@ -24,15 +24,17 @@ export function SelectTrigger({ className, children, ...props }: ComponentProps<
   );
 }
 
-export function SelectContent({ className, children, position = "popper", ...props }: ComponentProps<typeof SelectPrimitive.Content>) {
+export function SelectContent({ className, children, position = "popper", sideOffset = 4, style, ...props }: ComponentProps<typeof SelectPrimitive.Content>) {
   return (
     <SelectPrimitive.Portal>
       <SelectPrimitive.Content
         data-slot="select-content"
         position={position}
+        sideOffset={sideOffset}
+        style={{ "--popup-gap": `${sideOffset}px`, ...style } as CSSProperties}
         className={cn(
           "glass-popover motion-popover relative z-50 max-h-(--radix-select-content-available-height) min-w-[8rem] overflow-x-hidden overflow-y-auto border text-popover-foreground",
-          position === "popper" && "w-full min-w-(--radix-select-trigger-width) data-[side=bottom]:translate-y-1 data-[side=top]:-translate-y-1",
+          position === "popper" && "w-full min-w-(--radix-select-trigger-width)",
           className,
         )}
         {...props}

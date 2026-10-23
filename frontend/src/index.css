@@ -281,29 +281,15 @@
     transform: translateY(6px);
   }
 }
-@keyframes tr-drop-down {
-  from {
-    opacity: 0;
-    transform: translateY(-4px);
-  }
+@keyframes tr-popup-spring {
+  0% { opacity: 0; transform: scale(.18, .12); }
+  38% { opacity: 1; transform: scale(1.035, 1.045); }
+  64% { transform: scale(.985, .98); }
+  82% { transform: scale(1.008, 1.01); }
+  100% { opacity: 1; transform: scale(1); }
 }
-@keyframes tr-drop-up {
-  from {
-    opacity: 0;
-    transform: translateY(4px);
-  }
-}
-@keyframes tr-drop-left {
-  from {
-    opacity: 0;
-    transform: translateX(4px);
-  }
-}
-@keyframes tr-drop-right {
-  from {
-    opacity: 0;
-    transform: translateX(-4px);
-  }
+@keyframes tr-popup-return {
+  to { opacity: 0; transform: scale(.3, .2); }
 }
 @keyframes tr-drawer-in {
   from {
@@ -353,23 +339,29 @@
     animation: tr-drawer-out var(--duration-fast) var(--ease-in) forwards;
     pointer-events: none;
   }
-  /* Menus, pop-ups, selects and hints come from the side they open to. */
+  /* Popper keeps positioning on its wrapper. Only the glass content scales, from the trigger's centre. */
+  .motion-popover {
+    --popup-trigger-width: var(--radix-dropdown-menu-trigger-width, var(--radix-popover-trigger-width, var(--radix-select-trigger-width, var(--radix-tooltip-trigger-width, 0px))));
+    --popup-trigger-height: var(--radix-dropdown-menu-trigger-height, var(--radix-popover-trigger-height, var(--radix-select-trigger-height, var(--radix-tooltip-trigger-height, 0px))));
+    --popup-origin-x: 50%;
+    --popup-origin-y: 50%;
+    transform-origin: var(--popup-origin-x) var(--popup-origin-y);
+  }
+  .motion-popover:is([data-side="top"], [data-side="bottom"])[data-align="start"] { --popup-origin-x: calc(var(--popup-trigger-width) / 2); }
+  .motion-popover:is([data-side="top"], [data-side="bottom"])[data-align="end"] { --popup-origin-x: calc(100% - var(--popup-trigger-width) / 2); }
+  .motion-popover:is([data-side="left"], [data-side="right"])[data-align="start"] { --popup-origin-y: calc(var(--popup-trigger-height) / 2); }
+  .motion-popover:is([data-side="left"], [data-side="right"])[data-align="end"] { --popup-origin-y: calc(100% - var(--popup-trigger-height) / 2); }
+  .motion-popover[data-side="bottom"] { --popup-origin-y: calc(0px - var(--popup-gap, 6px) - var(--popup-trigger-height) / 2); }
+  .motion-popover[data-side="top"] { --popup-origin-y: calc(100% + var(--popup-gap, 6px) + var(--popup-trigger-height) / 2); }
+  .motion-popover[data-side="right"] { --popup-origin-x: calc(0px - var(--popup-gap, 6px) - var(--popup-trigger-width) / 2); }
+  .motion-popover[data-side="left"] { --popup-origin-x: calc(100% + var(--popup-gap, 6px) + var(--popup-trigger-width) / 2); }
   .motion-popover[data-state="open"],
   .motion-popover[data-state="delayed-open"],
   .motion-popover[data-state="instant-open"] {
-    animation: tr-drop-down var(--duration-normal) var(--ease-out);
-  }
-  .motion-popover[data-side="top"]:is([data-state="open"], [data-state="delayed-open"], [data-state="instant-open"]) {
-    animation-name: tr-drop-up;
-  }
-  .motion-popover[data-side="left"]:is([data-state="open"], [data-state="delayed-open"], [data-state="instant-open"]) {
-    animation-name: tr-drop-left;
-  }
-  .motion-popover[data-side="right"]:is([data-state="open"], [data-state="delayed-open"], [data-state="instant-open"]) {
-    animation-name: tr-drop-right;
+    animation: tr-popup-spring 460ms cubic-bezier(.2, .7, .25, 1) both;
   }
   .motion-popover[data-state="closed"] {
-    animation: tr-fade-out var(--duration-fast) var(--ease-in) forwards;
+    animation: tr-popup-return 140ms var(--ease-in) forwards;
     pointer-events: none;
   }
   /* A page that is opened fades in from slightly below. */

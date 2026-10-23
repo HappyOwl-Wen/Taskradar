@@ -87,7 +87,11 @@ export function LiquidGlassEffects() {
     const schedule = () => { if (scheduled) window.clearTimeout(scheduled); scheduled = window.setTimeout(update, 75); };
     const resize = new ResizeObserver(schedule);
     const mutation = new MutationObserver((records) => {
-      if (records.some((record) => !defs.contains(record.target))) schedule();
+      const popupAdded = records.some((record) => record.type === "childList" && Array.from(record.addedNodes).some((node) =>
+        node instanceof Element && (node.matches(".glass-popover") || node.querySelector(".glass-popover"))));
+      // A newly opened menu needs its optical map before the first visible spring frame, not after resize debounce.
+      if (popupAdded) update();
+      else if (records.some((record) => !defs.contains(record.target))) schedule();
     });
     mutation.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ["class"] });
     const move = (event: PointerEvent) => {
