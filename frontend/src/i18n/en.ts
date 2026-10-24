@@ -14,6 +14,9 @@ const en: Messages = {
     notFoundHint: "The link may be outdated or the task was deleted.",
     goHome: "Back to Today",
     crashed: "Something went wrong on this page",
+    pageLoadFailed: "This page could not be loaded",
+    pageLoadFailedHint: "The interface may have been updated, or the connection was interrupted. Reload to get the latest interface. Saved tasks are unaffected.",
+    reloadPage: "Reload this page",
   },
   nav: {
     dashboard: "Today",

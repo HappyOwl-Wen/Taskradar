@@ -4,11 +4,12 @@ import { fileURLToPath, URL } from "node:url";
 import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
+import { publishIndexLast } from "./tooling/publishIndexLast.ts";
 
 // The production build is written into the backend package and served by FastAPI on
 // http://127.0.0.1:8000, so the app needs no external web server or CDN.
 export default defineConfig({
-  plugins: [react(), tailwindcss()],
+  plugins: [react(), tailwindcss(), publishIndexLast()],
   resolve: {
     alias: { "@": fileURLToPath(new URL("./src", import.meta.url)) },
   },
@@ -22,7 +23,8 @@ export default defineConfig({
   },
   build: {
     outDir: "../backend/src/taskradar/static",
-    emptyOutDir: true,
+    // Open tabs still lazy-load chunks from their original build. Never delete those hashed assets on update.
+    emptyOutDir: false,
     chunkSizeWarningLimit: 1000,
   },
   test: {

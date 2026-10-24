@@ -3,6 +3,7 @@ import { isRouteErrorResponse, Link, useRouteError } from "react-router";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/states";
+import { isPageLoadError, reloadCurrentPage } from "@/lib/pageLoad";
 
 export default function NotFoundPage() {
   const { t } = useTranslation();
@@ -24,16 +25,17 @@ export default function NotFoundPage() {
 export function RouteError() {
   const { t } = useTranslation();
   const error = useRouteError();
+  const loadingFailed = isPageLoadError(error);
   const message = isRouteErrorResponse(error) ? `${error.status} ${error.statusText}` : error instanceof Error ? error.message : String(error);
   return (
     <div className="mx-auto grid max-w-xl gap-4 p-8">
       <EmptyState
         icon={CircleAlert}
-        title={t("app.crashed")}
-        description={message}
+        title={t(loadingFailed ? "app.pageLoadFailed" : "app.crashed")}
+        description={loadingFailed ? t("app.pageLoadFailedHint") : message}
         action={
-          <Button variant="outline" size="sm" onClick={() => window.location.assign("/")}>
-            {t("app.goHome")}
+          <Button variant="outline" size="sm" onClick={loadingFailed ? reloadCurrentPage : () => window.location.assign("/")}>
+            {t(loadingFailed ? "app.reloadPage" : "app.goHome")}
           </Button>
         }
       />

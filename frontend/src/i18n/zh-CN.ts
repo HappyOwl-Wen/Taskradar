@@ -13,6 +13,9 @@ const zhCN = {
     notFoundHint: "链接可能已失效，或任务已被删除。",
     goHome: "返回今天",
     crashed: "页面出现错误",
+    pageLoadFailed: "页面暂时无法加载",
+    pageLoadFailedHint: "界面可能已更新，或连接暂时中断。重新加载可获取最新界面，已保存的任务不会受影响。",
+    reloadPage: "重新加载当前页面",
   },
   nav: {
     dashboard: "今天",
