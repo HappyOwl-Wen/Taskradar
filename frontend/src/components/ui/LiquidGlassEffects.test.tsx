@@ -10,7 +10,7 @@ vi.mock("@/lib/liquidGlass", async (original) => ({
 
 afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); vi.useRealTimers(); });
 
-it("prepares refraction for a portalled menu before the resize debounce can leave its first spring frames without glass", async () => {
+it("prepares cached or fallback refraction for a portalled menu without waiting for resize debounce", async () => {
   vi.useFakeTimers();
   vi.spyOn(navigator, "userAgent", "get").mockReturnValue("Chrome/140");
   vi.stubGlobal("CSS", { supports: () => true });
@@ -33,4 +33,23 @@ it("prepares refraction for a portalled menu before the resize debounce can leav
   mounted.unmount();
   expect(menu.style.getPropertyValue("--liquid-filter")).toBe("");
   portal.remove();
+});
+
+it("cleans up a surface that loses its glass class without being removed from the page", async () => {
+  vi.useFakeTimers();
+  vi.spyOn(navigator, "userAgent", "get").mockReturnValue("Chrome/140");
+  vi.stubGlobal("CSS", { supports: () => true });
+  vi.stubGlobal("matchMedia", () => ({ matches: false, addEventListener: vi.fn(), removeEventListener: vi.fn() }));
+  vi.stubGlobal("ResizeObserver", class { observe() {} unobserve() {} disconnect() {} });
+  const panel = document.createElement("div"); panel.className = "glass-card";
+  Object.defineProperties(panel, { offsetWidth: { value: 600 }, offsetHeight: { value: 400 } });
+  document.body.append(panel);
+  const mounted = render(<LiquidGlassEffects />);
+  expect(panel).toHaveClass("liquid-refractive");
+  await act(async () => { panel.classList.remove("glass-card"); });
+  await act(async () => { vi.advanceTimersByTime(75); });
+  expect(panel).not.toHaveClass("liquid-refractive");
+  expect(panel.style.getPropertyValue("--liquid-filter")).toBe("");
+  expect(document.querySelectorAll(".liquid-filter-definitions filter")).toHaveLength(0);
+  mounted.unmount(); panel.remove();
 });

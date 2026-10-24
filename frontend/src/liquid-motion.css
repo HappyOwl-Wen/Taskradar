@@ -4,37 +4,37 @@
   [data-popup-trigger].glass-control:active:not(:disabled) { transform: none; }
   [data-popup-trigger] > svg { transform-origin: center; }
   [data-popup-trigger] > .popup-trigger-glass {
-    position: absolute; inset: 0; z-index: -1; pointer-events: none;
-    border: 1px solid var(--glass-stroke); border-radius: inherit; opacity: 0;
-    background-color: color-mix(in srgb, var(--primary) 12%, var(--glass-raised));
+    position: absolute; inset: var(--trigger-inset, 0); z-index: -1; pointer-events: none;
+    border: 1px solid var(--trigger-border, var(--glass-stroke)); border-radius: inherit; opacity: var(--trigger-rest-opacity, 0);
+    background-color: var(--trigger-fill, transparent);
     -webkit-backdrop-filter: var(--liquid-filter, blur(1px));
     backdrop-filter: var(--liquid-filter, blur(1px));
-    box-shadow: inset 1px 1px 1px var(--glass-highlight), inset -1px -1px 1px var(--glass-rim-shadow), 0 3px 10px rgb(35 25 60 / .08);
+    box-shadow: var(--trigger-shadow, none);
     transform-origin: center;
   }
   @keyframes tr-trigger-launch {
-    0% { opacity: .15; transform: scale(1); }
-    18% { opacity: .95; transform: scale(var(--trigger-compress-x), var(--trigger-compress-y)); }
-    34% { opacity: 1; transform: translate(var(--trigger-x), var(--trigger-y)) scale(var(--trigger-stretch-x), var(--trigger-stretch-y)); }
-    58% { opacity: .9; transform: translate(calc(var(--trigger-x) * -.15), calc(var(--trigger-y) * -.15)) scale(1.04, .96); }
-    80% { opacity: .8; transform: scale(.98, 1.02); }
-    100% { opacity: .75; transform: scale(1); }
+    0% { opacity: var(--trigger-rest-opacity, 1); transform: scale(1); }
+    22% { opacity: 1; transform: scale(var(--trigger-compress-x), var(--trigger-compress-y)); }
+    48% { opacity: 1; transform: translate(calc(var(--trigger-x) * .5), calc(var(--trigger-y) * .5)) scale(var(--trigger-stretch-x), var(--trigger-stretch-y)); }
+    100% { opacity: 1; transform: scale(1); }
   }
   @keyframes tr-trigger-symbol {
     0%, 100% { transform: translate(0) scale(1); }
-    18% { transform: scale(.87); }
-    34% { transform: translate(calc(var(--trigger-x) * .55), calc(var(--trigger-y) * .55)) scale(1.08); }
-    60% { transform: translate(calc(var(--trigger-x) * -.1), calc(var(--trigger-y) * -.1)) scale(.98); }
+    22% { transform: scale(.96); }
+    48% { transform: translate(calc(var(--trigger-x) * .25), calc(var(--trigger-y) * .25)); }
   }
   @keyframes tr-trigger-return {
-    0% { opacity: .75; transform: scale(1); }
-    45% { opacity: .5; transform: scale(.92); }
-    100% { opacity: 0; transform: scale(1); }
+    from { opacity: 1; }
+    to { opacity: var(--trigger-rest-opacity, 0); }
   }
-  [data-trigger-motion="launch"] > .popup-trigger-glass { opacity: .75; animation: tr-trigger-launch 480ms cubic-bezier(.2, .7, .25, 1) both; }
-  [data-trigger-motion="launch"] > svg { animation: tr-trigger-symbol 480ms cubic-bezier(.2, .7, .25, 1) both; }
+  [data-trigger-motion="launch"] > .popup-trigger-glass { opacity: 1; animation: tr-trigger-launch 320ms cubic-bezier(.2, .7, .25, 1) both; }
+  [data-trigger-motion="launch"] > svg { animation: tr-trigger-symbol 320ms cubic-bezier(.2, .7, .25, 1) both; }
   [data-trigger-motion="return"] > .popup-trigger-glass { animation: tr-trigger-return 180ms var(--ease-out) both; }
-  .glass-popover.motion-popover { --popup-handoff-delay: 96ms; }
+  [data-popup-trigger]:hover > .popup-trigger-glass { border-color: color-mix(in srgb, var(--foreground) 45%, transparent); }
+  [data-popup-trigger]:focus-visible > .popup-trigger-glass { opacity: 1; border-color: var(--ring); box-shadow: 0 0 0 3px color-mix(in srgb, var(--ring) 40%, transparent); }
+  [data-trigger-motion="return"]:focus-visible > .popup-trigger-glass { animation: none; opacity: 1; }
+  [data-popup-trigger][aria-expanded="true"] > .popup-trigger-glass { border-color: var(--ring); }
+  .glass-popover.motion-popover { --popup-handoff-delay: 60ms; }
 
   [data-selection-scope] { position: relative; isolation: isolate; }
   .liquid-selection {
@@ -58,16 +58,17 @@
   .sidebar-week-days a[data-today="true"]:not([aria-current="date"]) { position: relative; }
   .sidebar-week-days a[data-today="true"]:not([aria-current="date"])::after { content: ""; position: absolute; bottom: 1px; width: 3px; height: 3px; border-radius: 50%; background: var(--primary); }
   @keyframes tr-section-in {
-    from { opacity: 0; transform: translateY(10px) scale(.992); }
-    65% { opacity: 1; transform: translateY(-2px) scale(1.002); }
-    to { opacity: 1; transform: translateY(0) scale(1); }
+    from { opacity: 0; }
+    to { opacity: 1; }
   }
-  .motion-page, .motion-section { animation: tr-section-in 360ms var(--ease-out); }
+  /* Keep filtered descendants out of a full-page animated opacity/transform group. */
+  .motion-page, .motion-section { animation: none; }
+  .motion-page h1, .motion-section h2 { animation: tr-section-in 140ms var(--ease-out); }
   @media (prefers-reduced-motion: reduce) {
-    .motion-page, .motion-section { animation: none; }
+    .motion-page h1, .motion-section h2 { animation: none; }
     [data-popup-trigger] > .popup-trigger-glass, [data-popup-trigger] > svg { animation: none; transform: none; }
     .glass-popover.motion-popover { --popup-handoff-delay: 0ms; }
-    [data-trigger-motion="return"] > .popup-trigger-glass { opacity: 0; }
+    [data-trigger-motion="return"] > .popup-trigger-glass { opacity: var(--trigger-rest-opacity, 0); }
   }
   @media (prefers-reduced-transparency: reduce) {
     .liquid-selection { background: var(--selected); -webkit-backdrop-filter: none; backdrop-filter: none; }
@@ -79,3 +80,11 @@
     [data-popup-trigger] > .popup-trigger-glass { background: Canvas; border-color: Highlight; -webkit-backdrop-filter: none; backdrop-filter: none; }
   }
 }
+
+/* The original border/fill is painted on the moving lens, with exactly the same layout/hit area. */
+[data-popup-trigger][data-trigger-ready="true"] {
+  background: transparent; border-color: transparent; box-shadow: none;
+  -webkit-backdrop-filter: none; backdrop-filter: none;
+}
+html[data-layout-transition="active"] .app-workspace, html[data-layout-transition="active"] .app-sidebar a { pointer-events: none; }
+html[data-layout-transition="active"] .app-sidebar { overflow: visible; }

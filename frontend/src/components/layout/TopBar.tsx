@@ -123,14 +123,14 @@ export function TopBar({ onOpenDrawer, agentOpen, onToggleAgent }: { onOpenDrawe
         <div className="flex-1" />
       ) : (
         <>
-          <form onSubmit={search} className="relative hidden max-w-md flex-1 sm:block" role="search">
+          <form onSubmit={search} className="topbar-search-area relative hidden max-w-md flex-1 sm:block" role="search">
             <Search className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
             <Input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder={t("topbar.search")}
               aria-label={t("topbar.search")}
-              className="topbar-search h-9 border-transparent pl-8 hover:border-border focus-visible:border-ring"
+              className="topbar-search h-9 border-0 bg-transparent pl-8 shadow-none hover:bg-transparent focus-visible:ring-0"
             />
           </form>
           {/* Phones: the search lives on the task list; this opens it. */}

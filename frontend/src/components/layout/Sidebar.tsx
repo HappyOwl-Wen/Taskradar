@@ -7,6 +7,7 @@ import { taskScope, useNavMode } from "@/lib/navigation";
 import { useDashboard } from "@/lib/queries";
 import { formatClock, isActive, isRunning, useLiveTimers } from "@/lib/timers";
 import { cn } from "@/lib/utils";
+import { changeGlassLayout } from "@/lib/layoutTransition";
 import { SidebarWeek } from "./SidebarWeek";
 
 interface NavItem {
@@ -209,17 +210,18 @@ export function Sidebar({ onOpenDrawer }: { onOpenDrawer: () => void }) {
   const [mode, setMode] = useNavMode();
   const wide = useMediaQuery("(min-width: 1100px)");
   const rail = !wide || mode === "rail";
-  const toggle = () => (wide ? setMode(rail ? "expanded" : "rail") : onOpenDrawer());
+  const toggle = () => (wide ? changeGlassLayout(() => setMode(rail ? "expanded" : "rail")) : onOpenDrawer());
   const label = rail ? t("nav.expand") : t("nav.collapse");
   return (
     <aside
       data-mode={rail ? "rail" : "expanded"}
       data-selection-scope="navigation"
       className={cn(
-        "app-sidebar hidden h-full shrink-0 flex-col overflow-x-hidden overflow-y-auto pb-3 transition-[width] duration-(--duration-slow) ease-(--ease-move) md:flex",
+        "app-sidebar hidden h-full shrink-0 flex-col overflow-x-hidden overflow-y-auto pb-3 md:flex",
         rail ? "w-[76px] px-2" : "w-[244px] px-3",
       )}
     >
+      <span className="sidebar-material" aria-hidden="true" />
       <div className={cn("sidebar-brand-row flex h-16 shrink-0 items-center", rail ? "justify-center" : "gap-1")}>
         <Tip content={label} side="right">
           <button
@@ -233,13 +235,12 @@ export function Sidebar({ onOpenDrawer }: { onOpenDrawer: () => void }) {
           </button>
         </Tip>
         {rail ? null : (
-          <div key="brand" className="min-w-0 animate-[tr-fade-in_var(--duration-normal)_var(--ease-out)] pl-1">
+          <div className="min-w-0 pl-1">
             <Brand />
           </div>
         )}
       </div>
-      {/* Remounted when the pane changes shape, so the entries fade into their new layout instead of jumping. */}
-      <div key={rail ? "rail" : "expanded"} className="mt-2 grid animate-[tr-fade-in_var(--duration-normal)_var(--ease-out)]">
+      <div className="mt-2 grid">
         <SidebarNav rail={rail} />
       </div>
       <div className="mt-auto grid pt-3">

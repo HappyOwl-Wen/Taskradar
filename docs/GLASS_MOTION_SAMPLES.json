@@ -1,0 +1,64 @@
+{
+  "date": "2026-10-24",
+  "refreshRateHz": 180,
+  "viewport": {
+    "height": 720,
+    "width": 1280
+  },
+  "sampleMs": 2600,
+  "source": "requestAnimationFrame + PerformanceObserver(longtask), isolated synthetic calendar-check database, IAB Chromium",
+  "baseline": {
+    "sidebar": {
+      "refreshHz": 178.57,
+      "frames": 196,
+      "medianMs": 5.6,
+      "p95Ms": 89,
+      "maxMs": 133.5,
+      "overBudget": 51,
+      "longTasks": 11,
+      "maxTaskMs": 132
+    },
+    "pages": {
+      "refreshHz": 178.57,
+      "frames": 333,
+      "medianMs": 5.6,
+      "p95Ms": 11.2,
+      "maxMs": 50.2,
+      "overBudget": 109,
+      "longTasks": 0,
+      "maxTaskMs": 0
+    }
+  },
+  "after": {
+    "idle": {
+      "refreshHz": 178.57,
+      "frames": 437,
+      "medianMs": 5.6,
+      "p95Ms": 10.7,
+      "maxMs": 11.5,
+      "overBudget": 31,
+      "longTasks": 0,
+      "maxTaskMs": 0
+    },
+    "sidebar": {
+      "refreshHz": 178.57,
+      "frames": 405,
+      "medianMs": 5.6,
+      "p95Ms": 11.1,
+      "maxMs": 39,
+      "overBudget": 35,
+      "longTasks": 0,
+      "maxTaskMs": 0
+    },
+    "pages": {
+      "refreshHz": 178.57,
+      "frames": 402,
+      "medianMs": 5.6,
+      "p95Ms": 11.1,
+      "maxMs": 27.8,
+      "overBudget": 46,
+      "longTasks": 0,
+      "maxTaskMs": 0
+    }
+  }
+}

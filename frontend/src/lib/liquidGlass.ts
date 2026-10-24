@@ -23,28 +23,37 @@ export function lensOffset(x: number, y: number, { width, height, radius }: Lens
   return [-Math.sign(px) * nx * bend, -Math.sign(py) * ny * bend];
 }
 
-/** Geometry-only normal map; bounded resolution keeps resizing inexpensive. */
+/** The centre is flat; only edge bands need the curved-glass calculation. Also used off the UI thread. */
+export function lensPixels(geometry: LensGeometry, maxEdge = 512) {
+  const ratio = Math.min(1, maxEdge / Math.max(geometry.width, geometry.height));
+  const width = Math.max(2, Math.ceil(geometry.width * ratio)), height = Math.max(2, Math.ceil(geometry.height * ratio));
+  const data = new Uint8ClampedArray(width * height * 4);
+  const rim = Math.min(geometry.radius, geometry.width / 2, geometry.height / 2) + 26;
+  for (let y = 0; y < height; y++) {
+    const py = (y + .5) / ratio;
+    for (let x = 0; x < width; x++) {
+      const px = (x + .5) / ratio, index = (y * width + x) * 4;
+      const flat = px >= rim && px <= geometry.width - rim && py >= rim && py <= geometry.height - rim;
+      const [dx, dy] = flat ? [0, 0] : lensOffset(px, py, geometry);
+      data[index] = Math.round(255 * (.5 + dx / DISPLACEMENT_SCALE));
+      data[index + 1] = Math.round(255 * (.5 + dy / DISPLACEMENT_SCALE));
+      data[index + 2] = 128; data[index + 3] = 255;
+    }
+  }
+  return { width, height, data };
+}
+
+/** Small synchronous fallback for engines without workers/OffscreenCanvas. */
 export function lensMap(geometry: LensGeometry): string | null {
   try {
-    const ratio = Math.min(1, 768 / Math.max(geometry.width, geometry.height));
-    const width = Math.max(2, Math.ceil(geometry.width * ratio));
-    const height = Math.max(2, Math.ceil(geometry.height * ratio));
+    const { width, height, data } = lensPixels(geometry, 128);
     const canvas = document.createElement("canvas");
     canvas.width = width;
     canvas.height = height;
     const context = canvas.getContext("2d");
     if (!context) return null;
     const pixels = context.createImageData(width, height);
-    for (let y = 0; y < height; y++) {
-      for (let x = 0; x < width; x++) {
-        const [dx, dy] = lensOffset((x + .5) / ratio, (y + .5) / ratio, geometry);
-        const index = (y * width + x) * 4;
-        pixels.data[index] = Math.round(255 * (.5 + dx / DISPLACEMENT_SCALE));
-        pixels.data[index + 1] = Math.round(255 * (.5 + dy / DISPLACEMENT_SCALE));
-        pixels.data[index + 2] = 128;
-        pixels.data[index + 3] = 255;
-      }
-    }
+    pixels.data.set(data);
     context.putImageData(pixels, 0, 0);
     return canvas.toDataURL("image/png");
   } catch {

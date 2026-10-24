@@ -1,9 +1,10 @@
 import { useEffect, useId, useRef } from "react";
-import { DISPLACEMENT_SCALE, LIQUID_LAYOUT_EVENT, lensMap } from "@/lib/liquidGlass";
+import { DISPLACEMENT_SCALE, LIQUID_LAYOUT_EVENT } from "@/lib/liquidGlass";
+import { createLensRenderer } from "@/lib/lensRenderer";
 
-const SURFACES = ".app-topbar, .app-sidebar, .glass-dialog, .nav-drawer, .glass-popover, .glass-card, .calendar-toolbar, .calendar-view-switch, .glass-outline, .glass-action, .liquid-selection, .popup-trigger-glass, .agent-glass-body, .dashboard-date, .timer-alarm-dialog";
+const SURFACES = ".app-topbar, .sidebar-material, .glass-dialog, .nav-drawer, .glass-popover, .glass-card, .calendar-toolbar, .calendar-view-switch, .glass-outline:not([data-popup-trigger]), .glass-action, .liquid-selection, .popup-trigger-glass, .agent-glass-body, .dashboard-date, .timer-alarm-dialog";
 const SVG = "http://www.w3.org/2000/svg";
-interface Surface { filter: SVGFilterElement; image: SVGFEImageElement; key: string }
+interface Surface { filter: SVGFilterElement; image: SVGFEImageElement; key: string; area: number }
 
 /** Refract the real backdrop, while leaving text and controls outside the optical filter. */
 export function LiquidGlassEffects() {
@@ -17,13 +18,20 @@ export function LiquidGlassEffects() {
     if (!/Chrome|Chromium|Edg\//.test(navigator.userAgent) || !CSS.supports("backdrop-filter", 'url("#lens")')) return;
     const defs = definitions.current;
     const surfaces = new Map<HTMLElement, Surface>();
-    const maps = new Map<string, string>();
+    const renderer = createLensRenderer();
     let serial = 0, scheduled = 0, pointerFrame = 0;
     let pointer: { element: HTMLElement; x: number; y: number } | null = null;
     const node = <T extends keyof SVGElementTagNameMap>(tag: T, attrs: Record<string, string>) => {
       const element = document.createElementNS(SVG, tag);
       for (const [name, value] of Object.entries(attrs)) element.setAttribute(name, value);
       return element;
+    };
+    const makeFilter = (filterId: string) => {
+      const filter = node("filter", { id: filterId, "color-interpolation-filters": "sRGB", filterUnits: "userSpaceOnUse", x: "0", y: "0" });
+      const image = node("feImage", { x: "0", y: "0", preserveAspectRatio: "none", result: "normal-map" });
+      filter.append(image, node("feDisplacementMap", { in: "SourceGraphic", in2: "normal-map", scale: String(DISPLACEMENT_SCALE), xChannelSelector: "R", yChannelSelector: "G" }));
+      defs.append(filter);
+      return { filter, image };
     };
     const remove = (element: HTMLElement, surface: Surface) => {
       resize.unobserve(element);
@@ -39,65 +47,71 @@ export function LiquidGlassEffects() {
       scheduled = 0;
       for (const [element, surface] of surfaces) if (!element.isConnected || !element.matches(SURFACES) || reduced.matches) remove(element, surface);
       if (reduced.matches) return;
-      for (const element of document.querySelectorAll<HTMLElement>(SURFACES)) {
+      // Batch reads before touching SVG/classes: never alternate layout reads and style writes per panel.
+      const measured = Array.from(document.querySelectorAll<HTMLElement>(SURFACES), element => {
+        const style = getComputedStyle(element);
+        return { element, width: element.offsetWidth, height: element.offsetHeight,
+          radius: parseFloat(style.borderTopLeftRadius) || 20 };
+      });
+      for (const { element, width, height, radius: measuredRadius } of measured) {
         // Layout dimensions exclude dialog/hover transforms, so the lens stays aligned during motion.
-        const width = element.offsetWidth, height = element.offsetHeight;
         if (width < 12 || height < 12 || width * height > 1_500_000) {
           const previous = surfaces.get(element);
           if (previous) remove(element, previous);
           continue;
         }
-        const radius = Math.min(parseFloat(getComputedStyle(element).borderTopLeftRadius) || 20, width / 2, height / 2);
+        const radius = Math.min(measuredRadius, width / 2, height / 2);
         const geometry = { width: Math.round(width), height: Math.round(height), radius };
         const key = `${geometry.width}/${geometry.height}/${Math.round(radius)}`;
         let surface = surfaces.get(element);
         if (surface && !element.classList.contains("liquid-refractive")) element.classList.add("liquid-refractive");
         if (surface?.key === key) continue;
-        let map = maps.get(key);
-        if (!map) {
-          const generated = lensMap(geometry);
-          if (!generated) continue;
-          map = generated;
-          if (maps.size >= 32) maps.delete(maps.keys().next().value!);
-          maps.set(key, map);
-        }
         if (!surface) {
           const filterId = `liquid-${id}-${++serial}`;
-          const filter = node("filter", { id: filterId, "color-interpolation-filters": "sRGB", filterUnits: "userSpaceOnUse", x: "0", y: "0" });
-          const image = node("feImage", { x: "0", y: "0", preserveAspectRatio: "none", result: "normal-map" });
-          filter.append(image,
-            node("feGaussianBlur", { in: "SourceGraphic", stdDeviation: ".35", result: "clear-backdrop" }),
-            node("feDisplacementMap", { in: "clear-backdrop", in2: "normal-map", scale: String(DISPLACEMENT_SCALE), xChannelSelector: "R", yChannelSelector: "G", result: "refracted" }),
-            node("feColorMatrix", { in: "refracted", type: "saturate", values: "1.12" }));
-          defs.append(filter);
-          surface = { filter, image, key };
+          const { filter, image } = makeFilter(filterId);
+          surface = { filter, image, key, area: width * height };
           surfaces.set(element, surface);
           resize.observe(element);
-          element.style.setProperty("--liquid-filter", `url("#${filterId}")`);
-          element.classList.add("liquid-refractive");
         }
         surface.key = key;
+        surface.area = width * height;
         surface.filter.setAttribute("width", String(geometry.width));
         surface.filter.setAttribute("height", String(geometry.height));
         surface.image.setAttribute("width", String(geometry.width));
         surface.image.setAttribute("height", String(geometry.height));
-        surface.image.setAttribute("href", map);
+        const current = surface;
+        renderer.request(key, geometry, map => {
+          if (!map || reduced.matches || surfaces.get(element) !== current || current.key !== key) return;
+          current.image.setAttribute("href", map);
+          element.style.setProperty("--liquid-filter", `url("#${current.filter.id}")`);
+          element.classList.add("liquid-refractive");
+        });
       }
     };
     const schedule = () => { if (scheduled) window.clearTimeout(scheduled); scheduled = window.setTimeout(update, 75); };
     const resize = new ResizeObserver(schedule);
     const mutation = new MutationObserver((records) => {
-      const popupAdded = records.some((record) => record.type === "childList" && Array.from(record.addedNodes).some((node) =>
+      const relevant = records.filter(record => {
+        if (defs.contains(record.target)) return false;
+        if (record.type !== "attributes") return true;
+        if (!(record.target instanceof HTMLElement) || !(record.target.matches(SURFACES) || surfaces.has(record.target))) return false;
+        const withoutLens = (classes: string | null) => (classes ?? "").split(/\s+/).filter(name => name !== "liquid-refractive").join(" ");
+        return withoutLens(record.oldValue) !== withoutLens(record.target.getAttribute("class"));
+      });
+      if (!relevant.length) return;
+      const popupAdded = relevant.some((record) => record.type === "childList" && Array.from(record.addedNodes).some((node) =>
         node instanceof Element && (node.matches(".glass-popover") || node.querySelector(".glass-popover"))));
-      // A newly opened menu needs its optical map before the first visible spring frame, not after resize debounce.
+      // Start a new menu's map immediately; cached geometry is ready without waiting for the resize debounce.
       if (popupAdded) update();
-      else if (records.some((record) => !defs.contains(record.target))) schedule();
+      else schedule();
     });
-    mutation.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ["class"] });
+    mutation.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ["class"], attributeOldValue: true });
     const move = (event: PointerEvent) => {
       if (reduced.matches || reducedMotion.matches) return;
-      const element = event.target instanceof Element ? event.target.closest<HTMLElement>(".liquid-refractive") : null;
-      if (!element) return;
+      const target = event.target instanceof Element ? event.target.closest<HTMLElement>("[data-popup-trigger], .liquid-refractive") : null;
+      const element = target?.matches("[data-popup-trigger]") ? target.querySelector<HTMLElement>(".popup-trigger-glass") : target;
+      // Moving highlights on a large backdrop repaint the entire panel at pointer frequency.
+      if (!element || !surfaces.has(element) || surfaces.get(element)!.area > 16_384) return;
       pointer = { element, x: event.clientX, y: event.clientY };
       if (pointerFrame) return;
       pointerFrame = requestAnimationFrame(() => {
@@ -121,7 +135,7 @@ export function LiquidGlassEffects() {
       window.removeEventListener("resize", schedule);
       document.removeEventListener(LIQUID_LAYOUT_EVENT, update);
       for (const [element, surface] of surfaces) remove(element, surface);
-      maps.clear();
+      renderer.dispose();
     };
   }, [id]);
   return <svg className="liquid-filter-definitions" aria-hidden="true" focusable="false"><defs ref={definitions} /></svg>;

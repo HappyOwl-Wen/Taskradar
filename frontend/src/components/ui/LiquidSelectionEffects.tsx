@@ -68,14 +68,14 @@ export function LiquidSelectionEffects() {
         Object.assign(selection.lens.style, { width: `${next.width}px`, height: `${next.height}px`, borderRadius: getComputedStyle(target).borderTopLeftRadius || "14px", transform: `translate3d(${next.x}px, ${next.y}px, 0)` });
         group.setAttribute("data-selection-ready", "true");
         geometryChanged = true;
-        if (changed && previous && !reduced.matches && typeof selection.lens.animate === "function") {
-          const animation = selection.lens.animate(selectionFrames(from, next), { duration: SELECTION_DURATION, easing: "linear" });
+        if (previous && !reduced.matches && typeof selection.lens.animate === "function") {
+          const animation = selection.lens.animate(selectionFrames(from, next), { duration: SELECTION_DURATION, easing: "cubic-bezier(.16, 1, .3, 1)" });
           selection.animation = animation;
           selection.lens.dataset.motion = "moving";
           selection.lens.style.willChange = "transform";
           animation.finished.then(() => {
             if (selection?.animation === animation) { selection.animation = null; selection.lens.dataset.motion = "idle"; selection.lens.style.removeProperty("will-change"); }
-          }).catch(() => { /* An interrupted spring restarts from its current on-screen position. */ });
+          }).catch(() => { /* An interrupted glide restarts from its current on-screen position. */ });
         } else {
           selection.animation = null;
           selection.lens.dataset.motion = "idle";

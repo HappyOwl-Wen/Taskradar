@@ -68,6 +68,7 @@ it("follows a flipped popover, survives a text-only label update, and removes on
   rerender(<Example label="Inspect updated" effects={false} />);
   expect(button.querySelector(".popup-trigger-glass")).toBeNull();
   expect(button).not.toHaveAttribute("data-trigger-motion");
+  expect(button).not.toHaveAttribute("data-trigger-ready");
   expect(button.style.getPropertyValue("--trigger-y")).toBe("");
   expect(screen.getByRole("dialog", { name: "Details" })).toHaveTextContent("Popover body");
 });
@@ -76,6 +77,9 @@ it("hands off a keyboard-opened select and preserves normal value selection", as
   const user = userEvent.setup(), onChange = vi.fn();
   render(<><PopupTriggerEffects /><SimpleSelect value="a" onValueChange={onChange} ariaLabel="Task" options={[{ value: "a", label: "Alpha" }, { value: "b", label: "Beta" }]} /></>);
   const button = screen.getByRole("combobox", { name: "Task" });
+  expect(button).toHaveAttribute("data-trigger-ready", "true");
+  expect(button.style.getPropertyValue("--trigger-border")).toBe("var(--input)");
+  expect(button.style.getPropertyValue("--trigger-rest-opacity")).toBe("1");
   button.focus();
   await user.keyboard("{ArrowDown}");
   await screen.findByRole("listbox");

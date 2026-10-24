@@ -21,7 +21,10 @@
   }
   .app-page { margin-top: -72px; padding-top: 72px; border-radius: 28px; background: var(--page-tint); }
   .app-topbar { position: relative; height: 60px; margin: 12px 12px 0; border-radius: 999px; -webkit-backdrop-filter: var(--liquid-filter, blur(2px) saturate(120%)); backdrop-filter: var(--liquid-filter, blur(2px) saturate(120%)); }
-  .topbar-search { background: rgb(255 255 255 / .15); border-radius: 999px; box-shadow: inset 0 1px 2px rgb(48 26 73 / 0.08), 0 1px 0 var(--glass-highlight); }
+  .topbar-search { background: transparent; border-radius: 999px; box-shadow: none; }
+  .topbar-search-area { border-radius: 999px; }
+  .topbar-search-area:focus-within { background: rgb(255 255 255 / .06); box-shadow: 0 0 0 2px color-mix(in srgb, var(--ring) 28%, transparent); }
+  .topbar-search-area:focus-within > svg { color: var(--primary); }
   .topbar-add { height: 36px; padding-inline: 14px; border-radius: 14px; }
   .topbar-add > svg { color: var(--primary); }
   .app-topbar [data-slot="button"][data-size^="icon"] { border-radius: 50%; }
@@ -48,7 +51,17 @@
     -webkit-backdrop-filter: var(--liquid-filter, blur(2px) saturate(120%));
     backdrop-filter: var(--liquid-filter, blur(2px) saturate(120%));
   }
-  .app-sidebar { border-radius: 26px; }
+  .app-sidebar { border-radius: 26px; isolation: isolate; background: transparent; box-shadow: none; border-color: transparent; -webkit-backdrop-filter: none; backdrop-filter: none; }
+  .app-sidebar > .sidebar-material {
+    position: absolute; inset: -1px; z-index: -2; pointer-events: none; border-radius: inherit;
+    border: 1px solid rgb(244 228 255 / .19);
+    background-color: rgb(24 27 43 / .72);
+    background-image: linear-gradient(155deg, rgb(74 55 107 / .16), transparent 55%, rgb(71 50 95 / .12));
+    box-shadow: 0 16px 44px -18px rgb(29 16 49 / .4), inset 0 1px 0 rgb(255 255 255 / .11);
+    -webkit-backdrop-filter: var(--liquid-filter, blur(2px)); backdrop-filter: var(--liquid-filter, blur(2px));
+    transform-origin: top left;
+  }
+  .app-workspace { transform-origin: top left; }
   /* A modal navigation pane replaces the rail visually, and has a solid reading area inside its clear rim. */
   .app-shell[data-navigation-overlay="open"] .app-sidebar { visibility: hidden; }
   .nav-drawer { border-radius: 26px; background-color: rgb(24 27 43 / .18); }
@@ -231,7 +244,7 @@
   @media (prefers-reduced-transparency: reduce) {
     .app-page, .app-topbar, .agent-glass-body, .glass-card, [data-slot="card"] { background: var(--background); -webkit-backdrop-filter: none; backdrop-filter: none; }
     .glass-dialog, .glass-popover { background: var(--popover); -webkit-backdrop-filter: none; backdrop-filter: none; }
-    .app-sidebar, .nav-drawer { background: #292336; -webkit-backdrop-filter: none; backdrop-filter: none; }
+    .app-sidebar, .app-sidebar > .sidebar-material, .nav-drawer { background: #292336; -webkit-backdrop-filter: none; backdrop-filter: none; }
     .glass-overlay { -webkit-backdrop-filter: none; backdrop-filter: none; }
     .liquid-refractive::after { display: none; }
   }
@@ -240,7 +253,7 @@
   }
   @media (forced-colors: active) {
     .app-shell { background: Canvas; }
-    .app-sidebar, .nav-drawer, .sidebar-entry[aria-current="page"], .sidebar-week-days a[aria-current="date"] { color: CanvasText; background: Canvas; border-color: CanvasText; }
+    .app-sidebar, .app-sidebar > .sidebar-material, .nav-drawer, .sidebar-entry[aria-current="page"], .sidebar-week-days a[aria-current="date"] { color: CanvasText; background: Canvas; border-color: CanvasText; -webkit-backdrop-filter: none; backdrop-filter: none; }
     .sidebar-entry[aria-current="page"], .sidebar-week-days a[aria-current="date"] { outline: 2px solid Highlight; outline-offset: -2px; }
     .sidebar-icon, .sidebar-week-title, .sidebar-week-days a > span { color: inherit; }
     .nav-drawer::before { background: Canvas; }
