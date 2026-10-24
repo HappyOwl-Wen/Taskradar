@@ -1,37 +1,37 @@
-import { lensMap, type LensGeometry } from "./liquidGlass";
+import { lensMaterial, type LensGeometry, type LensMaterial } from "./liquidGlass";
 
 /** One bounded geometry cache per glass engine; canvas work stays off the UI thread when available. */
 export function createLensRenderer() {
-  const maps = new Map<string, string | null>();
-  const pending = new Map<string, { geometry: LensGeometry; callbacks: ((map: string | null) => void)[] }>();
+  const maps = new Map<string, LensMaterial | null>();
+  const pending = new Map<string, { geometry: LensGeometry; callbacks: ((material: LensMaterial | null) => void)[] }>();
   let worker: Worker | null = null, disposed = false;
-  const deliver = (key: string, map: string | null) => {
+  const deliver = (key: string, material: LensMaterial | null) => {
     if (disposed) return;
     const job = pending.get(key); pending.delete(key);
     if (maps.size >= 96) maps.delete(maps.keys().next().value!);
-    maps.set(key, map);
-    job?.callbacks.forEach(callback => callback(map));
+    maps.set(key, material);
+    job?.callbacks.forEach(callback => callback(material));
   };
   const fallback = () => {
     worker?.terminate(); worker = null;
-    for (const [key, job] of pending) deliver(key, lensMap(job.geometry));
+    for (const [key, job] of pending) deliver(key, lensMaterial(job.geometry));
   };
   if (typeof Worker !== "undefined" && typeof OffscreenCanvas !== "undefined") {
     try {
       worker = new Worker(new URL("../workers/liquidGlass.worker.ts", import.meta.url), { type: "module" });
-      worker.onmessage = ({ data }: MessageEvent<{ id: string; map: string | null }>) => deliver(data.id, data.map);
+      worker.onmessage = ({ data }: MessageEvent<{ id: string; material: LensMaterial | null }>) => deliver(data.id, data.material);
       worker.onerror = fallback;
     } catch { worker = null; }
   }
   return {
-    request(key: string, geometry: LensGeometry, callback: (map: string | null) => void) {
+    request(key: string, geometry: LensGeometry, callback: (material: LensMaterial | null) => void) {
       if (disposed) return;
       if (maps.has(key)) { callback(maps.get(key)!); return; }
       const existing = pending.get(key);
       if (existing) { existing.callbacks.push(callback); return; }
       pending.set(key, { geometry, callbacks: [callback] });
       if (worker) worker.postMessage({ id: key, geometry });
-      else deliver(key, lensMap(geometry));
+      else deliver(key, lensMaterial(geometry));
     },
     dispose() { disposed = true; worker?.terminate(); pending.clear(); maps.clear(); },
   };

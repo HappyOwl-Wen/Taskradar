@@ -9,7 +9,7 @@
     background-color: var(--trigger-fill, transparent);
     -webkit-backdrop-filter: var(--liquid-filter, blur(1px));
     backdrop-filter: var(--liquid-filter, blur(1px));
-    box-shadow: var(--trigger-shadow, none);
+    box-shadow: var(--glass-control-depth), var(--trigger-shadow, none);
     transform-origin: center;
   }
   @keyframes tr-trigger-launch {
@@ -31,7 +31,7 @@
   [data-trigger-motion="launch"] > svg { animation: tr-trigger-symbol 320ms cubic-bezier(.2, .7, .25, 1) both; }
   [data-trigger-motion="return"] > .popup-trigger-glass { animation: tr-trigger-return 180ms var(--ease-out) both; }
   [data-popup-trigger]:hover > .popup-trigger-glass { border-color: color-mix(in srgb, var(--foreground) 45%, transparent); }
-  [data-popup-trigger]:focus-visible > .popup-trigger-glass { opacity: 1; border-color: var(--ring); box-shadow: 0 0 0 3px color-mix(in srgb, var(--ring) 40%, transparent); }
+  [data-popup-trigger]:focus-visible > .popup-trigger-glass { opacity: 1; border-color: var(--ring); box-shadow: var(--glass-control-depth), 0 0 0 3px color-mix(in srgb, var(--ring) 40%, transparent); }
   [data-trigger-motion="return"]:focus-visible > .popup-trigger-glass { animation: none; opacity: 1; }
   [data-popup-trigger][aria-expanded="true"] > .popup-trigger-glass { border-color: var(--ring); }
   .glass-popover.motion-popover { --popup-handoff-delay: 60ms; }
@@ -43,9 +43,9 @@
     background-color: color-mix(in srgb, var(--selected) 76%, var(--glass-raised));
     -webkit-backdrop-filter: var(--liquid-filter, blur(1px) saturate(130%));
     backdrop-filter: var(--liquid-filter, blur(1px) saturate(130%));
-    box-shadow: inset 1px 1px 1px var(--glass-highlight), inset -1px -1px 1px var(--glass-rim-shadow), 0 3px 9px rgb(35 25 60 / .1);
+    box-shadow: var(--glass-control-depth), 0 4px 10px -5px rgb(35 25 60 / .24);
   }
-  .sidebar-scroll > .liquid-selection, .nav-drawer-body > .liquid-selection { background-color: rgb(210 183 249 / .86); }
+  .sidebar-scroll > .liquid-selection, .nav-drawer-body > .liquid-selection { background-color: rgb(210 183 249 / .74); }
   [data-selection-scope="navigation"][data-selection-ready="true"] .sidebar-entry[aria-current="page"] { background: transparent; box-shadow: none; }
   [data-selection-scope="navigation"][data-selection-ready="true"] .settings-option[aria-current="page"] { background: transparent; }
   .settings-option[aria-current="page"] { background: var(--selected); color: var(--selected-foreground); }

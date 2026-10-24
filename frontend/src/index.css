@@ -66,13 +66,15 @@
   --glass-raised: rgb(255 255 255 / 0.24);
   --glass-popover: rgb(255 253 255 / 0.62);
   --glass-menu: rgb(252 250 255 / 0.94);
-  --glass-stroke: rgb(255 255 255 / 0.68);
+  --glass-stroke: rgb(255 255 255 / 0.4);
   --glass-highlight: rgb(255 255 255 / 0.94);
   --glass-rim-shadow: rgb(35 49 64 / 0.2);
   --glass-reflection: rgb(255 255 255 / 0.28);
-  --page-tint: rgb(248 250 255 / 0.58);
-  --glass-shadow: 0 8px 32px rgb(54 35 84 / 0.065), 0 1px 3px rgb(54 35 84 / 0.025);
-  --glass-shadow-float: 0 24px 64px -24px rgb(54 35 84 / 0.24), 0 4px 16px rgb(54 35 84 / 0.04);
+  --page-tint: rgb(248 250 255 / 0.46);
+  --glass-shadow: 0 2px 3px -1px rgb(28 40 67 / .16), 0 14px 30px -16px rgb(28 40 67 / .3);
+  --glass-shadow-float: 0 3px 5px -2px rgb(28 40 67 / .22), 0 24px 48px -18px rgb(28 40 67 / .3);
+  --glass-control-depth: inset 0 1px 0 rgb(255 255 255 / .75), inset 0 -1px 1px rgb(25 38 62 / .16), 0 3px 5px -2px rgb(25 38 62 / .24);
+  --glass-relief-opacity: 1;
   --ambient: linear-gradient(115deg, rgb(234 228 248 / 0.28), rgb(237 246 255 / 0.16)), url("/glass-landscape.svg");
 
   --overdue: #d92d20; /* 4.9:1 */
@@ -128,13 +130,15 @@
   --glass-raised: rgb(37 38 57 / 0.24);
   --glass-popover: rgb(25 27 43 / 0.72);
   --glass-menu: rgb(32 30 46 / 0.95);
-  --glass-stroke: rgb(225 234 255 / 0.34);
+  --glass-stroke: rgb(225 234 255 / 0.2);
   --glass-highlight: rgb(240 244 255 / 0.66);
   --glass-rim-shadow: rgb(0 0 0 / 0.5);
   --glass-reflection: rgb(235 241 255 / 0.11);
   --page-tint: rgb(18 23 38 / 0.75);
-  --glass-shadow: 0 8px 32px rgb(0 0 0 / 0.14), 0 1px 3px rgb(0 0 0 / 0.08);
-  --glass-shadow-float: 0 24px 64px -24px rgb(0 0 0 / 0.48), 0 4px 16px rgb(0 0 0 / 0.16);
+  --glass-shadow: 0 2px 4px -1px rgb(0 0 0 / .38), 0 16px 32px -16px rgb(0 0 0 / .5);
+  --glass-shadow-float: 0 3px 6px -1px rgb(0 0 0 / .45), 0 24px 48px -16px rgb(0 0 0 / .6);
+  --glass-control-depth: inset 0 1px 0 rgb(255 255 255 / .32), inset 0 -1px 1px rgb(0 0 0 / .6), 0 3px 6px -2px rgb(0 0 0 / .5);
+  --glass-relief-opacity: .86;
   --ambient: linear-gradient(120deg, rgb(13 17 34 / 0.55), rgb(20 17 35 / 0.58)), url("/glass-landscape.svg");
 
   --overdue: #ff7b72;

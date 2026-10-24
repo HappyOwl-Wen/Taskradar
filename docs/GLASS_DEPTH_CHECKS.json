@@ -1,0 +1,49 @@
+{
+  "date": "2026-10-24",
+  "sampleMs": 2600,
+  "viewport": {
+    "width": 1280,
+    "height": 720
+  },
+  "source": "Isolated synthetic calendar-check preview in Chromium; rAF intervals are not physical presentation FPS",
+  "dialog": {
+    "background": "rgb(48, 43, 62)",
+    "height": 369,
+    "lighting": true,
+    "lightingInset": "0px",
+    "scrollHeight": 369,
+    "scrollWidth": 566,
+    "width": 566
+  },
+  "alignment": {
+    "aligned": true,
+    "clientHeight": 696,
+    "clientWidth": 76,
+    "materialWidth": 76,
+    "scrollHeight": 696,
+    "scrollWidth": 76,
+    "width": 76
+  },
+  "performance": {
+    "idle": {
+      "refreshHz": 178.57,
+      "frames": 446,
+      "medianMs": 5.6,
+      "p95Ms": 10.5,
+      "maxMs": 11.3,
+      "overBudget": 23,
+      "longTasks": 0,
+      "maxTaskMs": 0
+    },
+    "fourSidebarToggles": {
+      "refreshHz": 178.57,
+      "frames": 392,
+      "medianMs": 5.6,
+      "p95Ms": 11.1,
+      "maxMs": 49.9,
+      "overBudget": 47,
+      "longTasks": 0,
+      "maxTaskMs": 0
+    }
+  }
+}

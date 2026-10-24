@@ -2,7 +2,7 @@ import { useEffect, useId, useRef } from "react";
 import { DISPLACEMENT_SCALE, LIQUID_LAYOUT_EVENT } from "@/lib/liquidGlass";
 import { createLensRenderer } from "@/lib/lensRenderer";
 
-const SURFACES = ".app-topbar, .sidebar-material, .glass-dialog, .nav-drawer, .glass-popover, .glass-card, .calendar-toolbar, .calendar-view-switch, .glass-outline:not([data-popup-trigger]), .glass-action, .liquid-selection, .popup-trigger-glass, .agent-glass-body, .dashboard-date, .timer-alarm-dialog";
+const SURFACES = ".app-topbar, .sidebar-material, .glass-dialog, .nav-drawer, .glass-popover, .glass-card, .calendar-toolbar, .calendar-view-switch, .glass-outline:not([data-popup-trigger]), .glass-primary:not([data-popup-trigger]), .glass-action, .liquid-selection, .popup-trigger-glass, .agent-glass-body, .dashboard-date, .timer-alarm-dialog";
 const SVG = "http://www.w3.org/2000/svg";
 interface Surface { filter: SVGFilterElement; image: SVGFEImageElement; key: string; area: number }
 
@@ -37,6 +37,8 @@ export function LiquidGlassEffects() {
       resize.unobserve(element);
       element.classList.remove("liquid-refractive");
       element.style.removeProperty("--liquid-filter");
+      element.style.removeProperty("--liquid-lighting");
+      element.style.removeProperty("--liquid-inner-radius");
       element.style.removeProperty("--glass-pointer-x");
       element.style.removeProperty("--glass-pointer-y");
       surface.filter.remove();
@@ -51,9 +53,9 @@ export function LiquidGlassEffects() {
       const measured = Array.from(document.querySelectorAll<HTMLElement>(SURFACES), element => {
         const style = getComputedStyle(element);
         return { element, width: element.offsetWidth, height: element.offsetHeight,
-          radius: parseFloat(style.borderTopLeftRadius) || 20 };
+          radius: parseFloat(style.borderTopLeftRadius) || 20, border: parseFloat(style.borderLeftWidth) || 0 };
       });
-      for (const { element, width, height, radius: measuredRadius } of measured) {
+      for (const { element, width, height, radius: measuredRadius, border } of measured) {
         // Layout dimensions exclude dialog/hover transforms, so the lens stays aligned during motion.
         if (width < 12 || height < 12 || width * height > 1_500_000) {
           const previous = surfaces.get(element);
@@ -61,10 +63,11 @@ export function LiquidGlassEffects() {
           continue;
         }
         const radius = Math.min(measuredRadius, width / 2, height / 2);
-        const geometry = { width: Math.round(width), height: Math.round(height), radius };
-        const key = `${geometry.width}/${geometry.height}/${Math.round(radius)}`;
+        const geometry = { width: Math.round(width), height: Math.round(height), radius, border };
+        const key = `${geometry.width}/${geometry.height}/${Math.round(radius)}/${border}`;
         let surface = surfaces.get(element);
-        if (surface && !element.classList.contains("liquid-refractive")) element.classList.add("liquid-refractive");
+        if (surface?.image.hasAttribute("href") && !element.classList.contains("liquid-refractive")) element.classList.add("liquid-refractive");
+        element.style.setProperty("--liquid-inner-radius", `${Math.max(0, radius - border)}px`);
         if (surface?.key === key) continue;
         if (!surface) {
           const filterId = `liquid-${id}-${++serial}`;
@@ -80,10 +83,11 @@ export function LiquidGlassEffects() {
         surface.image.setAttribute("width", String(geometry.width));
         surface.image.setAttribute("height", String(geometry.height));
         const current = surface;
-        renderer.request(key, geometry, map => {
-          if (!map || reduced.matches || surfaces.get(element) !== current || current.key !== key) return;
-          current.image.setAttribute("href", map);
+        renderer.request(key, geometry, material => {
+          if (!material || reduced.matches || surfaces.get(element) !== current || current.key !== key) return;
+          current.image.setAttribute("href", material.displacement);
           element.style.setProperty("--liquid-filter", `url("#${current.filter.id}")`);
+          element.style.setProperty("--liquid-lighting", `url("${material.lighting}")`);
           element.classList.add("liquid-refractive");
         });
       }
