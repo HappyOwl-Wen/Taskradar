@@ -12,7 +12,7 @@ export function SelectTrigger({ className, children, ...props }: ComponentProps<
       data-slot="select-trigger"
       data-popup-trigger=""
       className={cn(
-        "glass-field flex h-8 w-full items-center justify-between gap-2 border border-input px-3 text-sm whitespace-nowrap outline-none transition-[background-color,border-color,box-shadow] duration-(--duration-fast) hover:bg-card-hover focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/40 disabled:cursor-not-allowed disabled:opacity-45 data-[placeholder]:text-muted-foreground data-[state=open]:border-ring [&>span]:truncate",
+        "glass-field flex h-8 w-full items-center justify-between gap-2 rounded-full border border-input px-3 text-sm whitespace-nowrap outline-none transition-[background-color,border-color,box-shadow] duration-(--duration-fast) hover:bg-card-hover focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/40 disabled:cursor-not-allowed disabled:opacity-45 data-[placeholder]:text-muted-foreground data-[state=open]:border-ring [&>span]:truncate",
         className,
       )}
       {...props}

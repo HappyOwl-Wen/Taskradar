@@ -62,7 +62,7 @@ export function PopupTriggerEffects() {
           button.style.setProperty("--trigger-stretch-x", String(vertical ? 1 - Math.min(.04, 2 / width) : 1 + Math.min(.08, 3 / width)));
           button.style.setProperty("--trigger-stretch-y", String(vertical ? 1 + Math.min(.08, 3 / height) : 1 - Math.min(.04, 2 / height)));
           const fill = kind === "field" ? "color-mix(in srgb, var(--card) 26%, transparent)" : kind === "outline" || kind === "glass" ? "var(--glass-raised)" : kind === "secondary" ? "var(--secondary)" : kind === "default" ? "var(--primary)" : kind === "ghost" ? "var(--glass-raised)" : trigger.appearance.fill;
-          const border = kind === "field" ? "var(--input)" : kind === "outline" ? "var(--border)" : kind === "ghost" ? "var(--glass-stroke)" : trigger.appearance.border;
+          const border = kind === "field" ? "var(--glass-control-stroke)" : kind === "outline" ? "var(--border)" : kind === "ghost" ? "var(--glass-stroke)" : trigger.appearance.border;
           button.style.setProperty("--trigger-fill", fill);
           button.style.setProperty("--trigger-border", border);
           button.style.setProperty("--trigger-shadow", kind === "field" ? "none" : kind === "outline" ? "inset 0 1px 0 var(--glass-highlight)" : trigger.appearance.shadow);

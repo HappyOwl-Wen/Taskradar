@@ -31,9 +31,10 @@ describe("liquid glass optical geometry", () => {
   it("bends opposite rims inward by equal distances, without shifting the other axis", () => {
     const top = lensOffset(160, 2, lens), bottom = lensOffset(160, 78, lens);
     expect(top[0]).toBeCloseTo(0);
-    expect(top[1]).toBeGreaterThan(8);
+    expect(top[1]).toBeGreaterThan(2);
+    expect(top[1]).toBeLessThan(6);
     expect(bottom[1]).toBeCloseTo(-top[1]);
-    expect(lensOffset(2, 40, lens)[0]).toBeGreaterThan(8);
+    expect(lensOffset(2, 40, lens)[0]).toBeGreaterThan(2);
   });
   it("curves both axes at round corners, and leaves outside pixels neutral", () => {
     const [x, y] = lensOffset(14, 14, lens);

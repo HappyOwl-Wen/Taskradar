@@ -85,5 +85,6 @@
 [data-popup-trigger][data-trigger-ready="true"] {
   background: transparent; border-color: transparent; box-shadow: none;
   -webkit-backdrop-filter: none; backdrop-filter: none;
+  transition-property: color, opacity, transform;
 }
 html[data-layout-transition="active"] .app-workspace, html[data-layout-transition="active"] .app-sidebar a { pointer-events: none; }

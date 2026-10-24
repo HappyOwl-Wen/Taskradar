@@ -78,7 +78,7 @@ it("hands off a keyboard-opened select and preserves normal value selection", as
   render(<><PopupTriggerEffects /><SimpleSelect value="a" onValueChange={onChange} ariaLabel="Task" options={[{ value: "a", label: "Alpha" }, { value: "b", label: "Beta" }]} /></>);
   const button = screen.getByRole("combobox", { name: "Task" });
   expect(button).toHaveAttribute("data-trigger-ready", "true");
-  expect(button.style.getPropertyValue("--trigger-border")).toBe("var(--input)");
+  expect(button.style.getPropertyValue("--trigger-border")).toBe("var(--glass-control-stroke)");
   expect(button.style.getPropertyValue("--trigger-rest-opacity")).toBe("1");
   button.focus();
   await user.keyboard("{ArrowDown}");

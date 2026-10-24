@@ -11,7 +11,7 @@ export function lensOffset(x: number, y: number, { width, height, radius }: Lens
   const ox = Math.max(qx, 0), oy = Math.max(qy, 0);
   const corner = Math.hypot(ox, oy);
   const depth = -(corner + Math.min(Math.max(qx, qy), 0) - r);
-  const bevel = Math.min(r * .85, 26);
+  const bevel = Math.min(r * .65, 14);
   if (depth < 0 || depth >= bevel) return [0, 0];
   const nx = corner > .001 ? ox / corner : qx > qy ? 1 : 0;
   const ny = corner > .001 ? oy / corner : qy >= qx ? 1 : 0;
@@ -19,7 +19,7 @@ export function lensOffset(x: number, y: number, { width, height, radius }: Lens
   // Snell's law for glass (n = 1.5). The circular bevel tilts the normal at the rim.
   const incidence = Math.asin(Math.min(.98, edge));
   const refraction = Math.asin(Math.sin(incidence) / 1.5);
-  const bend = Math.tan(incidence - refraction) * bevel * .82;
+  const bend = Math.tan(incidence - refraction) * bevel * .5;
   return [-Math.sign(px) * nx * bend, -Math.sign(py) * ny * bend];
 }
 
