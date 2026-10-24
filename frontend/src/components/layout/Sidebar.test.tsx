@@ -1,12 +1,13 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { TooltipProvider } from "@/components/ui/menu";
 import i18n from "@/i18n";
 import { api } from "@/lib/api";
 import { makeDashboard, makeTimer, makeTimers } from "@/test/fixtures";
-import { SidebarNav } from "./Sidebar";
+import { Sidebar, SidebarNav } from "./Sidebar";
 
 function renderNav(path = "/", rail = false) {
   return render(
@@ -27,6 +28,29 @@ describe("SidebarNav", () => {
 
   afterEach(() => {
     vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+  });
+
+  it("keeps glass decoration outside the scroll viewport across collapse and expansion", async () => {
+    vi.stubGlobal("matchMedia", (query: string) => ({ matches: query === "(min-width: 1100px)", addEventListener: vi.fn(), removeEventListener: vi.fn() }));
+    const user = userEvent.setup(), openDrawer = vi.fn();
+    const { container } = render(
+      <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { enabled: false, retry: false } } })}>
+        <TooltipProvider><MemoryRouter><Sidebar onOpenDrawer={openDrawer} /></MemoryRouter></TooltipProvider>
+      </QueryClientProvider>,
+    );
+    const sidebar = container.querySelector<HTMLElement>("aside")!, material = sidebar.querySelector<HTMLElement>(".sidebar-material")!;
+    const scroll = sidebar.querySelector<HTMLElement>('[data-selection-scope="navigation"]')!;
+    expect(scroll).toContainElement(screen.getByRole("link", { name: "Google 日历" }));
+    expect(scroll).not.toContainElement(material);
+    expect(material.parentElement).toBe(sidebar);
+    await user.click(screen.getByRole("button", { name: "收起导航" }));
+    expect(sidebar).toHaveAttribute("data-mode", "rail");
+    expect(sidebar.querySelector('[data-selection-scope="navigation"]')).toBe(scroll);
+    expect(sidebar.querySelector(".sidebar-material")).toBe(material);
+    expect(openDrawer).not.toHaveBeenCalled();
+    await user.click(screen.getByRole("button", { name: "展开导航" }));
+    expect(sidebar).toHaveAttribute("data-mode", "expanded");
   });
 
   it("has the timers in a group of their own, each with its page", async () => {

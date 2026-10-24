@@ -51,9 +51,11 @@
     -webkit-backdrop-filter: var(--liquid-filter, blur(2px) saturate(120%));
     backdrop-filter: var(--liquid-filter, blur(2px) saturate(120%));
   }
-  .app-sidebar { border-radius: 26px; isolation: isolate; background: transparent; box-shadow: none; border-color: transparent; -webkit-backdrop-filter: none; backdrop-filter: none; }
+  .app-sidebar { border-radius: 26px; isolation: isolate; background: transparent; box-shadow: none; border: 0; -webkit-backdrop-filter: none; backdrop-filter: none; }
+  .sidebar-scroll { border-radius: inherit; }
+  .app-sidebar[data-mode="rail"] > .sidebar-scroll { scrollbar-width: none; }
   .app-sidebar > .sidebar-material {
-    position: absolute; inset: -1px; z-index: -2; pointer-events: none; border-radius: inherit;
+    position: absolute; inset: 0; z-index: -2; pointer-events: none; border-radius: inherit;
     border: 1px solid rgb(244 228 255 / .19);
     background-color: rgb(24 27 43 / .72);
     background-image: linear-gradient(155deg, rgb(74 55 107 / .16), transparent 55%, rgb(71 50 95 / .12));

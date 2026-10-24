@@ -1,0 +1,456 @@
+{
+  "date": "2026-10-24",
+  "source": "Same-origin iframe layout measurements in Chromium with isolated synthetic data",
+  "before": {
+    "frameWidth": 76,
+    "materialWidth": 66,
+    "scrollViewportWidth": 64,
+    "navigationWrapperWidth": 48,
+    "navigationEntryWidth": 67.84,
+    "scrollHeight": 695,
+    "clientHeight": 694
+  },
+  "after": {
+    "viewports": [
+      {
+        "viewport": "1202×956",
+        "pass": true,
+        "checks": {
+          "aligned": true,
+          "contained": true,
+          "noHorizontalOverflow": true,
+          "materialFits": true,
+          "selectionFits": true
+        },
+        "scroll": {
+          "width": 76,
+          "scrollWidth": 76,
+          "height": 932,
+          "scrollHeight": 932
+        },
+        "entries": [
+          {
+            "text": "1今天",
+            "width": 60,
+            "centerOffset": 0,
+            "iconOffset": 0,
+            "contained": true,
+            "labelOverflow": 0
+          },
+          {
+            "text": "日历",
+            "width": 60,
+            "centerOffset": 0,
+            "iconOffset": 0,
+            "contained": true,
+            "labelOverflow": 0
+          },
+          {
+            "text": "全部任务",
+            "width": 60,
+            "centerOffset": 0,
+            "iconOffset": 0,
+            "contained": true,
+            "labelOverflow": 0
+          },
+          {
+            "text": "我创建的",
+            "width": 60,
+            "centerOffset": 0,
+            "iconOffset": 0,
+            "contained": true,
+            "labelOverflow": 0
+          },
+          {
+            "text": "Google 日历",
+            "width": 60,
+            "centerOffset": 0,
+            "iconOffset": 0,
+            "contained": true,
+            "labelOverflow": 0
+          },
+          {
+            "text": "回收站",
+            "width": 60,
+            "centerOffset": 0,
+            "iconOffset": 0,
+            "contained": true,
+            "labelOverflow": 0
+          },
+          {
+            "text": "番茄钟",
+            "width": 60,
+            "centerOffset": 0,
+            "iconOffset": 0,
+            "contained": true,
+            "labelOverflow": 0
+          },
+          {
+            "text": "倒计时",
+            "width": 60,
+            "centerOffset": 0,
+            "iconOffset": 0,
+            "contained": true,
+            "labelOverflow": 0
+          },
+          {
+            "text": "设置",
+            "width": 60,
+            "centerOffset": 0,
+            "iconOffset": 0,
+            "contained": true,
+            "labelOverflow": 0
+          }
+        ]
+      },
+      {
+        "viewport": "1202×540",
+        "pass": true,
+        "checks": {
+          "aligned": true,
+          "contained": true,
+          "noHorizontalOverflow": true,
+          "materialFits": true,
+          "selectionFits": true
+        },
+        "scroll": {
+          "width": 76,
+          "scrollWidth": 76,
+          "height": 516,
+          "scrollHeight": 664
+        },
+        "entries": [
+          {
+            "text": "1今天",
+            "width": 60,
+            "centerOffset": 0,
+            "iconOffset": 0,
+            "contained": true,
+            "labelOverflow": 0
+          },
+          {
+            "text": "日历",
+            "width": 60,
+            "centerOffset": 0,
+            "iconOffset": 0,
+            "contained": true,
+            "labelOverflow": 0
+          },
+          {
+            "text": "全部任务",
+            "width": 60,
+            "centerOffset": 0,
+            "iconOffset": 0,
+            "contained": true,
+            "labelOverflow": 0
+          },
+          {
+            "text": "我创建的",
+            "width": 60,
+            "centerOffset": 0,
+            "iconOffset": 0,
+            "contained": true,
+            "labelOverflow": 0
+          },
+          {
+            "text": "Google 日历",
+            "width": 60,
+            "centerOffset": 0,
+            "iconOffset": 0,
+            "contained": true,
+            "labelOverflow": 0
+          },
+          {
+            "text": "回收站",
+            "width": 60,
+            "centerOffset": 0,
+            "iconOffset": 0,
+            "contained": true,
+            "labelOverflow": 0
+          },
+          {
+            "text": "番茄钟",
+            "width": 60,
+            "centerOffset": 0,
+            "iconOffset": 0,
+            "contained": true,
+            "labelOverflow": 0
+          },
+          {
+            "text": "倒计时",
+            "width": 60,
+            "centerOffset": 0,
+            "iconOffset": 0,
+            "contained": true,
+            "labelOverflow": 0
+          },
+          {
+            "text": "设置",
+            "width": 60,
+            "centerOffset": 0,
+            "iconOffset": 0,
+            "contained": true,
+            "labelOverflow": 0
+          }
+        ]
+      },
+      {
+        "viewport": "840×480",
+        "pass": true,
+        "checks": {
+          "aligned": true,
+          "contained": true,
+          "noHorizontalOverflow": true,
+          "materialFits": true,
+          "selectionFits": true
+        },
+        "scroll": {
+          "width": 76,
+          "scrollWidth": 76,
+          "height": 456,
+          "scrollHeight": 664
+        },
+        "entries": [
+          {
+            "text": "1今天",
+            "width": 60,
+            "centerOffset": 0,
+            "iconOffset": 0,
+            "contained": true,
+            "labelOverflow": 0
+          },
+          {
+            "text": "日历",
+            "width": 60,
+            "centerOffset": 0,
+            "iconOffset": 0,
+            "contained": true,
+            "labelOverflow": 0
+          },
+          {
+            "text": "全部任务",
+            "width": 60,
+            "centerOffset": 0,
+            "iconOffset": 0,
+            "contained": true,
+            "labelOverflow": 0
+          },
+          {
+            "text": "我创建的",
+            "width": 60,
+            "centerOffset": 0,
+            "iconOffset": 0,
+            "contained": true,
+            "labelOverflow": 0
+          },
+          {
+            "text": "Google 日历",
+            "width": 60,
+            "centerOffset": 0,
+            "iconOffset": 0,
+            "contained": true,
+            "labelOverflow": 0
+          },
+          {
+            "text": "回收站",
+            "width": 60,
+            "centerOffset": 0,
+            "iconOffset": 0,
+            "contained": true,
+            "labelOverflow": 0
+          },
+          {
+            "text": "番茄钟",
+            "width": 60,
+            "centerOffset": 0,
+            "iconOffset": 0,
+            "contained": true,
+            "labelOverflow": 0
+          },
+          {
+            "text": "倒计时",
+            "width": 60,
+            "centerOffset": 0,
+            "iconOffset": 0,
+            "contained": true,
+            "labelOverflow": 0
+          },
+          {
+            "text": "设置",
+            "width": 60,
+            "centerOffset": 0,
+            "iconOffset": 0,
+            "contained": true,
+            "labelOverflow": 0
+          }
+        ]
+      },
+      {
+        "viewport": "1088×956",
+        "pass": true,
+        "checks": {
+          "aligned": true,
+          "contained": true,
+          "noHorizontalOverflow": true,
+          "materialFits": true,
+          "selectionFits": true
+        },
+        "scroll": {
+          "width": 76,
+          "scrollWidth": 76,
+          "height": 932,
+          "scrollHeight": 932
+        },
+        "entries": [
+          {
+            "text": "1今天",
+            "width": 60,
+            "centerOffset": 0,
+            "iconOffset": 0,
+            "contained": true,
+            "labelOverflow": 0
+          },
+          {
+            "text": "日历",
+            "width": 60,
+            "centerOffset": 0,
+            "iconOffset": 0,
+            "contained": true,
+            "labelOverflow": 0
+          },
+          {
+            "text": "全部任务",
+            "width": 60,
+            "centerOffset": 0,
+            "iconOffset": 0,
+            "contained": true,
+            "labelOverflow": 0
+          },
+          {
+            "text": "我创建的",
+            "width": 60,
+            "centerOffset": 0,
+            "iconOffset": 0,
+            "contained": true,
+            "labelOverflow": 0
+          },
+          {
+            "text": "Google 日历",
+            "width": 60,
+            "centerOffset": 0,
+            "iconOffset": 0,
+            "contained": true,
+            "labelOverflow": 0
+          },
+          {
+            "text": "回收站",
+            "width": 60,
+            "centerOffset": 0,
+            "iconOffset": 0,
+            "contained": true,
+            "labelOverflow": 0
+          },
+          {
+            "text": "番茄钟",
+            "width": 60,
+            "centerOffset": 0,
+            "iconOffset": 0,
+            "contained": true,
+            "labelOverflow": 0
+          },
+          {
+            "text": "倒计时",
+            "width": 60,
+            "centerOffset": 0,
+            "iconOffset": 0,
+            "contained": true,
+            "labelOverflow": 0
+          },
+          {
+            "text": "设置",
+            "width": 60,
+            "centerOffset": 0,
+            "iconOffset": 0,
+            "contained": true,
+            "labelOverflow": 0
+          }
+        ]
+      }
+    ],
+    "afterFourToggles": {
+      "aligned": true,
+      "clientHeight": 696,
+      "clientWidth": 76,
+      "materialWidth": 76,
+      "mode": "rail",
+      "scrollHeight": 696,
+      "scrollWidth": 76,
+      "width": 76
+    },
+    "englishLabels": [
+      {
+        "entryWidth": 60,
+        "labelHeight": 14,
+        "labelOverflow": 0,
+        "name": "1Today",
+        "wrap": "anywhere"
+      },
+      {
+        "entryWidth": 60,
+        "labelHeight": 14,
+        "labelOverflow": 0,
+        "name": "Calendar",
+        "wrap": "anywhere"
+      },
+      {
+        "entryWidth": 60,
+        "labelHeight": 14,
+        "labelOverflow": 0,
+        "name": "All tasks",
+        "wrap": "anywhere"
+      },
+      {
+        "entryWidth": 60,
+        "labelHeight": 28,
+        "labelOverflow": 0,
+        "name": "Created by me",
+        "wrap": "anywhere"
+      },
+      {
+        "entryWidth": 60,
+        "labelHeight": 28,
+        "labelOverflow": 0,
+        "name": "Google Calendar",
+        "wrap": "anywhere"
+      },
+      {
+        "entryWidth": 60,
+        "labelHeight": 28,
+        "labelOverflow": 0,
+        "name": "Recycle bin",
+        "wrap": "anywhere"
+      },
+      {
+        "entryWidth": 60,
+        "labelHeight": 14,
+        "labelOverflow": 0,
+        "name": "Pomodoro",
+        "wrap": "anywhere"
+      },
+      {
+        "entryWidth": 60,
+        "labelHeight": 28,
+        "labelOverflow": 0,
+        "name": "Countdowns",
+        "wrap": "anywhere"
+      },
+      {
+        "entryWidth": 60,
+        "labelHeight": 14,
+        "labelOverflow": 0,
+        "name": "Settings",
+        "wrap": "anywhere"
+      }
+    ]
+  }
+}

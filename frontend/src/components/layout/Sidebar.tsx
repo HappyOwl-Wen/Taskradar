@@ -119,8 +119,8 @@ function NavEntry({
       onClick={onNavigate}
       aria-current={current ? "page" : undefined}
       className={cn(
-        "sidebar-entry group/nav relative flex text-muted-foreground outline-none transition-[color,background-color,box-shadow] duration-(--duration-normal) hover:bg-accent hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50 active:bg-accent-strong",
-        rail ? "h-14 flex-col items-center justify-center gap-1 px-1 text-[11px] leading-tight font-medium" : "h-11 items-center gap-3 px-3 text-sm font-medium",
+        "sidebar-entry group/nav relative flex min-w-0 text-muted-foreground outline-none transition-[color,background-color,box-shadow] duration-(--duration-normal) hover:bg-accent hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50 active:bg-accent-strong",
+        rail ? "h-14 flex-col items-center gap-1 px-1 pt-1.5 text-[11px] leading-tight font-medium" : "h-11 items-center gap-3 px-3 text-sm font-medium",
       )}
     >
       <span className="sidebar-icon relative">
@@ -133,7 +133,7 @@ function NavEntry({
           />
         ) : null}
       </span>
-      <span className={cn("min-w-0 truncate", rail ? "max-w-full" : "flex-1")}>{item.key === "workbench" ? t("workbench.nav") : t(`nav.${item.key}`)}</span>
+      <span className={cn("min-w-0", rail ? "w-full text-center wrap-anywhere break-keep" : "flex-1 truncate")}>{item.key === "workbench" ? t("workbench.nav") : t(`nav.${item.key}`)}</span>
       {!rail && count !== undefined ? <NavCount value={count} /> : null}
       {live ? (
         <span className={cn("text-xs font-semibold tabular-nums", rail ? "sr-only" : LIVE_TONE[live.tone].text)}>
@@ -169,9 +169,9 @@ export function SidebarNav({ onNavigate, rail = false }: { onNavigate?: () => vo
   const overdue = data?.counts.overdue ?? 0;
   const live = useLiveTimes(i18n.language);
   return (
-    <nav aria-label={t("nav.mainNav")} className={cn("grid", rail ? "gap-1" : "gap-0.5")}>
+    <nav aria-label={t("nav.mainNav")} className={cn("grid min-w-0 grid-cols-1", rail ? "gap-1" : "gap-0.5")}>
       {NAV.map(({ group, items }) => (
-        <div key={group} role="group" aria-label={group === "main" ? undefined : t(`nav.group.${group}`)} className={cn("grid", rail ? "gap-1" : "gap-0.5")}>
+        <div key={group} role="group" aria-label={group === "main" ? undefined : t(`nav.group.${group}`)} className={cn("grid min-w-0 grid-cols-1", rail ? "gap-1" : "gap-0.5")}>
           {group !== "main" ? (
             rail ? (
               <div aria-hidden className="mx-3 my-1 border-t" />
@@ -215,37 +215,38 @@ export function Sidebar({ onOpenDrawer }: { onOpenDrawer: () => void }) {
   return (
     <aside
       data-mode={rail ? "rail" : "expanded"}
-      data-selection-scope="navigation"
       className={cn(
-        "app-sidebar hidden h-full shrink-0 flex-col overflow-x-hidden overflow-y-auto pb-3 md:flex",
-        rail ? "w-[76px] px-2" : "w-[244px] px-3",
+        "app-sidebar relative hidden h-full shrink-0 flex-col md:flex",
+        rail ? "w-[76px]" : "w-[244px]",
       )}
     >
       <span className="sidebar-material" aria-hidden="true" />
-      <div className={cn("sidebar-brand-row flex h-16 shrink-0 items-center", rail ? "justify-center" : "gap-1")}>
-        <Tip content={label} side="right">
-          <button
-            type="button"
-            onClick={toggle}
-            aria-label={label}
-            aria-expanded={!rail}
-            className="grid size-9 shrink-0 place-items-center rounded-md text-muted-foreground outline-none transition-colors duration-(--duration-fast) hover:bg-accent hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50 active:bg-accent-strong"
-          >
-            <Menu className="size-[18px]" />
-          </button>
-        </Tip>
-        {rail ? null : (
-          <div className="min-w-0 pl-1">
-            <Brand />
-          </div>
-        )}
-      </div>
-      <div className="mt-2 grid">
-        <SidebarNav rail={rail} />
-      </div>
-      <div className="mt-auto grid pt-3">
-        {!rail ? <SidebarWeek /> : null}
-        <SettingsNav rail={rail} />
+      <div data-selection-scope="navigation" className={cn("sidebar-scroll flex min-h-0 min-w-0 flex-1 flex-col overflow-x-hidden overflow-y-auto pb-3", rail ? "px-2" : "px-3")}>
+        <div className={cn("sidebar-brand-row flex h-16 shrink-0 items-center", rail ? "justify-center" : "gap-1")}>
+          <Tip content={label} side="right">
+            <button
+              type="button"
+              onClick={toggle}
+              aria-label={label}
+              aria-expanded={!rail}
+              className="grid size-9 shrink-0 place-items-center rounded-md text-muted-foreground outline-none transition-colors duration-(--duration-fast) hover:bg-accent hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50 active:bg-accent-strong"
+            >
+              <Menu className="size-[18px]" />
+            </button>
+          </Tip>
+          {rail ? null : (
+            <div className="min-w-0 pl-1">
+              <Brand />
+            </div>
+          )}
+        </div>
+        <div className="mt-2 grid min-w-0 grid-cols-1">
+          <SidebarNav rail={rail} />
+        </div>
+        <div className="mt-auto grid min-w-0 grid-cols-1 pt-3">
+          {!rail ? <SidebarWeek /> : null}
+          <SettingsNav rail={rail} />
+        </div>
       </div>
     </aside>
   );

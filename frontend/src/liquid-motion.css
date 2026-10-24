@@ -45,7 +45,7 @@
     backdrop-filter: var(--liquid-filter, blur(1px) saturate(130%));
     box-shadow: inset 1px 1px 1px var(--glass-highlight), inset -1px -1px 1px var(--glass-rim-shadow), 0 3px 9px rgb(35 25 60 / .1);
   }
-  .app-sidebar > .liquid-selection, .nav-drawer-body > .liquid-selection { background-color: rgb(210 183 249 / .86); }
+  .sidebar-scroll > .liquid-selection, .nav-drawer-body > .liquid-selection { background-color: rgb(210 183 249 / .86); }
   [data-selection-scope="navigation"][data-selection-ready="true"] .sidebar-entry[aria-current="page"] { background: transparent; box-shadow: none; }
   [data-selection-scope="navigation"][data-selection-ready="true"] .settings-option[aria-current="page"] { background: transparent; }
   .settings-option[aria-current="page"] { background: var(--selected); color: var(--selected-foreground); }
@@ -72,7 +72,7 @@
   }
   @media (prefers-reduced-transparency: reduce) {
     .liquid-selection { background: var(--selected); -webkit-backdrop-filter: none; backdrop-filter: none; }
-    .app-sidebar > .liquid-selection, .nav-drawer-body > .liquid-selection, .sidebar-week-days > .liquid-selection { background: #c9acee; }
+    .sidebar-scroll > .liquid-selection, .nav-drawer-body > .liquid-selection, .sidebar-week-days > .liquid-selection { background: #c9acee; }
     [data-popup-trigger] > .popup-trigger-glass { background: var(--selected); -webkit-backdrop-filter: none; backdrop-filter: none; }
   }
   @media (forced-colors: active) {
@@ -87,4 +87,3 @@
   -webkit-backdrop-filter: none; backdrop-filter: none;
 }
 html[data-layout-transition="active"] .app-workspace, html[data-layout-transition="active"] .app-sidebar a { pointer-events: none; }
-html[data-layout-transition="active"] .app-sidebar { overflow: visible; }
