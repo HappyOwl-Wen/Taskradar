@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { TooltipProvider } from "@/components/ui/menu";
 import { LiquidGlassEffects } from "@/components/ui/LiquidGlassEffects";
 import { LiquidSelectionEffects } from "@/components/ui/LiquidSelectionEffects";
+import { PopupTriggerEffects } from "@/components/ui/PopupTriggerEffects";
 import { LoadingRows } from "@/components/ui/states";
 import { rememberLanguage } from "@/i18n";
 import { ApiError, loadSession } from "@/lib/api";
@@ -143,6 +144,7 @@ export default function App() {
       <TooltipProvider delayDuration={300}>
         <LiquidGlassEffects />
         <LiquidSelectionEffects />
+        <PopupTriggerEffects />
         <SessionGate />
         <Toaster
           closeButton

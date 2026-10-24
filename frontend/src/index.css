@@ -359,6 +359,7 @@
   .motion-popover[data-state="delayed-open"],
   .motion-popover[data-state="instant-open"] {
     animation: tr-popup-spring 460ms cubic-bezier(.2, .7, .25, 1) both;
+    animation-delay: var(--popup-handoff-delay, 0ms);
   }
   .motion-popover[data-state="closed"] {
     animation: tr-popup-return 140ms var(--ease-in) forwards;

@@ -1,7 +1,7 @@
 import { useEffect, useId, useRef } from "react";
 import { DISPLACEMENT_SCALE, LIQUID_LAYOUT_EVENT, lensMap } from "@/lib/liquidGlass";
 
-const SURFACES = ".app-topbar, .app-sidebar, .glass-dialog, .nav-drawer, .glass-popover, .glass-card, .calendar-toolbar, .calendar-view-switch, .glass-outline, .glass-action, .liquid-selection, .agent-glass-body, .dashboard-date, .timer-alarm-dialog";
+const SURFACES = ".app-topbar, .app-sidebar, .glass-dialog, .nav-drawer, .glass-popover, .glass-card, .calendar-toolbar, .calendar-view-switch, .glass-outline, .glass-action, .liquid-selection, .popup-trigger-glass, .agent-glass-body, .dashboard-date, .timer-alarm-dialog";
 const SVG = "http://www.w3.org/2000/svg";
 interface Surface { filter: SVGFilterElement; image: SVGFEImageElement; key: string }
 

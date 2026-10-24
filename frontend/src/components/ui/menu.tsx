@@ -4,7 +4,9 @@ import type { ComponentProps, CSSProperties, ReactNode } from "react";
 import { cn } from "@/lib/utils";
 
 export const DropdownMenu = MenuPrimitive.Root;
-export const DropdownMenuTrigger = MenuPrimitive.Trigger;
+export function DropdownMenuTrigger(props: ComponentProps<typeof MenuPrimitive.Trigger>) {
+  return <MenuPrimitive.Trigger data-popup-trigger="" {...props} />;
+}
 export const DropdownMenuGroup = MenuPrimitive.Group;
 
 const panel =
@@ -73,7 +75,9 @@ export function DropdownMenuSeparator({ className, ...props }: ComponentProps<ty
 }
 
 export const Popover = PopoverPrimitive.Root;
-export const PopoverTrigger = PopoverPrimitive.Trigger;
+export function PopoverTrigger(props: ComponentProps<typeof PopoverPrimitive.Trigger>) {
+  return <PopoverPrimitive.Trigger data-popup-trigger="" {...props} />;
+}
 
 export function PopoverContent({ className, align = "end", sideOffset = 6, style, ...props }: ComponentProps<typeof PopoverPrimitive.Content>) {
   return (
