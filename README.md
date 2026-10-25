@@ -34,12 +34,6 @@ Screenshots use local demonstration data. Google event labels do not demonstrate
 The appearance screenshot shows automatic color matching and the high-contrast option for a custom background.
 More screenshots and earlier interface iterations are preserved in [docs/screenshots](docs/screenshots).
 
---- | --- | --- | --- |
-| ![Today in 0.4.0](docs/screenshots/release-0.4.0-today-zh.jpg) | ![Calendar in 0.4.0](docs/screenshots/release-0.4.0-calendar-zh.jpg) | ![Compact Agent in dark mode](docs/screenshots/release-0.4.0-agent-dark-en.jpg) | ![Mobile Agent in 0.4.0](docs/screenshots/release-0.4.0-agent-mobile-zh.jpg) |
-
-These screenshots show the 0.4.0 interface with synthetic tasks and a scripted local AI provider, not a live account.
-More in [docs/screenshots](docs/screenshots); older screenshots remain there as historical documentation.
-
 ---
 
 ## What changed in 0.4.0
