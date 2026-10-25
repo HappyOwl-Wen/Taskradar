@@ -29,6 +29,12 @@ list); see Windows' notification center.
 `window.py find` lists TaskRadar windows (process, handle, size in physical pixels, DPI, maximised/minimised);
 `window.py shot <handle> <file.png>` captures one with its title bar.
 
+`node scripts/desktop-check/refresh-rate.mjs <debugPort> [results.json]` samples scrolling and navigation frame
+callbacks in a visible scratch window. Start on Today with enough tasks to scroll, and keep the window on the
+display being tested. It reports viewport, scroll range, average callback frequency and median/P95/max gaps.
+It does not change task data. These are browser callback measurements, not physical scan-out measurements;
+zero scroll range means the scrolling phase did not exercise scrolling.
+
 中文：`flow.mjs` 在真实的 TaskRadar 窗口中按用户操作走完“启动 → 用一句话添加两条待办 → 开始处理一条（移到“进行中”）→
 删除另一条 → 完成第一条并在“已完成”中找到 → 番茄钟（侧边栏显示倒数的时间；暂停、继续、停止）→ 5 秒倒计时自动结束并产生通知 →
 设置中的入门指南”，并保存页面和整个窗口的截图。只在测试时设置 `TASKRADAR_WEBVIEW_DEBUG_PORT`，并用临时数据目录启动，

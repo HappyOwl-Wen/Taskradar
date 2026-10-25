@@ -1,5 +1,5 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { CalendarClock, CloudUpload, Save, TriangleAlert } from "lucide-react";
+import { CalendarClock, CloudUpload, Save, Trash2, TriangleAlert } from "lucide-react";
 import { DateTime } from "luxon";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -10,13 +10,14 @@ import { Field, Input, Textarea } from "@/components/ui/form";
 import { ApiError } from "@/lib/api";
 import { conflictExclude, formAt, useConflicts } from "@/lib/buffers";
 import { calendarApi, displayRange, eventDuration, eventForm, type CalendarDraft, type CalendarItem, type CalendarSources, type EventForm, type RemoteEvent } from "@/lib/calendar";
+import { RECOVERY_KEY } from "@/lib/calendarRecovery";
 import { useUnsavedChanges } from "@/lib/desktop";
 import { errorMessage } from "@/lib/errors";
 import { refreshAll } from "@/lib/queries";
 import { BufferFields } from "./BufferFields";
 import { ConflictNotice } from "./ConflictNotice";
+import { DeleteCalendarDraftDialog } from "./DeleteCalendarDraftDialog";
 
-export const RECOVERY_KEY = "taskradar.calendar.editor";
 export interface EditorSeed {
   mode: "local" | "google";
   id?: string;
@@ -31,9 +32,7 @@ export interface EditorSeed {
   operation?: "create" | "update" | "delete";
 }
 // eslint-disable-next-line react-refresh/only-export-components
-export function loadRecovery(): EditorSeed | null {
-  try { return JSON.parse(localStorage.getItem(RECOVERY_KEY) ?? "null") as EditorSeed | null; } catch { return null; }
-}
+export { RECOVERY_KEY, loadRecovery } from "@/lib/calendarRecovery";
 
 export function CalendarEditor({ seed, sources, timezone, onClose }: {
   seed: EditorSeed; sources: CalendarSources; timezone: string; onClose: () => void;
@@ -46,6 +45,7 @@ export function CalendarEditor({ seed, sources, timezone, onClose }: {
   const [base, setBase] = useState<RemoteEvent | Record<string, never>>(seed.draft?.base_event ?? seed.item?.remote ?? {});
   const [conflict, setConflict] = useState<RemoteEvent | undefined>(seed.draft?.status === "conflict" ? seed.draft.remote_event : undefined);
   const [confirm, setConfirm] = useState(false);
+  const [deletingDraft, setDeletingDraft] = useState(false);
   const [failed, setFailed] = useState("");
   const remote = seed.mode === "google";
   const [operation, setOperation] = useState(seed.operation ?? seed.draft?.operation ?? (seed.item?.event_id && !seed.publish ? "update" : "create"));
@@ -155,11 +155,13 @@ export function CalendarEditor({ seed, sources, timezone, onClose }: {
       </section> : null}
       {remote && !target?.writable ? <p className="text-sm text-high">{t("workbench.noWritable")}</p> : null}
       <DialogActions>
+        <Button variant="ghost" className="text-destructive hover:text-destructive sm:mr-auto" disabled={save.isPending || keep.isPending} onClick={() => setDeletingDraft(true)}><Trash2 aria-hidden />{t("workbench.deleteDraft")}</Button>
         <Button variant="outline" disabled={save.isPending} loading={keep.isPending} onClick={() => keep.mutate()}>{t("workbench.saveDraft")}</Button>
-        <Button form="calendar-editor" type="submit" loading={save.isPending} disabled={!!conflict || (remote && !target?.writable)}>
+        <Button form="calendar-editor" type="submit" className="max-sm:col-span-2" loading={save.isPending} disabled={!!conflict || (remote && !target?.writable)}>
           {remote ? <CloudUpload /> : <Save />}{remote ? t("workbench.review") : t("workbench.saveLocal")}
         </Button>
       </DialogActions>
+      {deletingDraft ? <DeleteCalendarDraftDialog id={id} title={form.title} persisted={remote} onOpenChange={setDeletingDraft} onDeleted={onClose} /> : null}
       <ConfirmDialog open={confirm} onOpenChange={setConfirm} title={deleting ? t("workbench.confirmDelete") : t("workbench.confirmSave")}
         description={<div className="grid gap-2"><strong>{form.title}</strong><p>{t("workbench.target")}: {target?.summary}</p><p>{range}</p>{deleting ? <p>{t("workbench.remoteDeletion")}</p> : null}
           {timed && conflicts.data?.conflicts.length ? <p className="flex items-center gap-2 text-high"><TriangleAlert className="size-4 shrink-0" aria-hidden />{t("workbench.conflictConfirm", { count: conflicts.data.conflicts.length })}</p> : null}</div>}

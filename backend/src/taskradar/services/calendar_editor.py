@@ -136,7 +136,8 @@ class CalendarEditor:
                         body = EventForm.model_validate(draft.payload).google_body()
                     except ValidationError as exc:
                         raise CalendarSyncError("invalid_event_time", str(exc.errors()[0]["msg"]), 422) from exc
-                event_id = draft.event_id or ("trw" + uuid.UUID(draft.id).hex)
+                # Google event IDs allow only base32hex (0-9, a-v); "w" is not a valid prefix character.
+                event_id = draft.event_id or ("tre" + uuid.UUID(draft.id).hex)
                 if draft.operation == "create":
                     body["id"] = event_id
                     body["extendedProperties"] = {"private": {"taskradar_operation": draft.id}}

@@ -4,6 +4,7 @@ import { useBlocker, useLocation, useNavigate, useSearchParams } from "react-rou
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { GeneralSection } from "@/components/settings/General";
+import { AppearanceSection } from "@/components/settings/Appearance";
 import { CalendarSection } from "@/components/settings/Google";
 import { GuideSection } from "@/components/settings/Guide";
 import { DataSection, RemindersSection, SystemSection } from "@/components/settings/Other";
@@ -43,7 +44,7 @@ function SectionBody({ section, settings }: { section: SectionKey; settings: Set
     case "agent":
       return <AgentSection />;
     case "general":
-      return <GeneralSection settings={settings} />;
+      return <><GeneralSection settings={settings} /><AppearanceSection /></>;
     case "guide":
       return <GuideSection />;
     case "calendar":
@@ -118,21 +119,21 @@ export default function SettingsPage() {
   };
 
   return (
-    <div className="grid grid-cols-1 gap-5">
-      <header className="grid gap-0.5">
+    <div className="settings-page mx-auto flex h-full min-h-0 w-full max-w-7xl flex-col gap-5 overflow-hidden px-4 py-6 sm:px-6 lg:px-8 2xl:max-w-[96rem]">
+      <header className="grid shrink-0 gap-0.5">
         <h1 className="text-page font-semibold">{t("settings.title")}</h1>
         <p className="text-[13px] text-muted-foreground">{t("settings.description")}</p>
       </header>
 
       {/* Phones: a select (seven categories do not fit in one row); tablets: tabs; desktop: side navigation. */}
       <SimpleSelect
-        className="sm:hidden"
+        className="shrink-0 sm:hidden"
         value={section}
         onValueChange={(v) => select(v)}
         ariaLabel={t("settings.title")}
         options={SECTIONS.map((s) => ({ value: s, label: t(`settings.sections.${s}`) }))}
       />
-      <Tabs value={section} onValueChange={(v) => select(v as SectionKey)} className="hidden min-w-0 sm:block lg:hidden">
+      <Tabs value={section} onValueChange={(v) => select(v as SectionKey)} className="hidden min-w-0 shrink-0 sm:block lg:hidden">
         <TabsList variant="underline" className="border-b">
           {SECTIONS.map((s) => (
             <TabsTrigger key={s} value={s} variant="underline">
@@ -142,8 +143,8 @@ export default function SettingsPage() {
         </TabsList>
       </Tabs>
 
-      <div className="grid gap-6 lg:grid-cols-[12rem_minmax(0,1fr)]">
-        <nav className="settings-navigation hidden h-fit gap-1 lg:sticky lg:top-0 lg:grid" data-selection-scope="navigation" aria-label={t("settings.title")}>
+      <div className="grid min-h-0 flex-1 gap-6 overflow-hidden lg:grid-cols-[12rem_minmax(0,1fr)]">
+        <nav className="settings-navigation hidden max-h-full min-h-0 content-start gap-1 self-start overflow-y-auto overscroll-contain lg:grid" data-selection-scope="navigation" aria-label={t("settings.title")}>
           {SECTIONS.map((s) => {
             const Icon = ICON[s];
             return (
@@ -163,7 +164,7 @@ export default function SettingsPage() {
             );
           })}
         </nav>
-        <div className="grid min-w-0 content-start gap-6">
+        <div key={section} role="region" aria-label={t(`settings.sections.${section}`)} tabIndex={0} className="settings-content scroll-stable grid min-h-0 min-w-0 content-start gap-6 overflow-y-auto overscroll-contain rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-ring">
           {isLoading ? <LoadingRows rows={6} /> : null}
           {error ? <ErrorState error={error} onRetry={() => void refetch()} /> : null}
           {settings ? (

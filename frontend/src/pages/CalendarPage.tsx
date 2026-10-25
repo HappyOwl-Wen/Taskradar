@@ -12,9 +12,9 @@ import { DateTime } from "luxon";
 import { useEffect, useRef, useState } from "react";
 import { Link, useLocation, useNavigate, useSearchParams } from "react-router";
 import { useTranslation } from "react-i18next";
-import { toast } from "sonner";
 import { ItemBuffers } from "@/components/calendar/BufferFields";
-import { CalendarEditor, loadRecovery, RECOVERY_KEY, type EditorSeed } from "@/components/calendar/CalendarEditor";
+import { CalendarDrafts } from "@/components/calendar/CalendarDrafts";
+import { CalendarEditor, loadRecovery, type EditorSeed } from "@/components/calendar/CalendarEditor";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog, Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/form";
@@ -297,6 +297,9 @@ export default function CalendarPage() {
       <FullCalendar ref={calendar} plugins={plugins} initialView={view} initialDate={params.get("date") ?? undefined} locale={i18n.language === "zh-CN" ? zhLocale : "en"}
         timeZone={timezone} headerToolbar={false} height={view === "dayGridMonth" ? "auto" : 560} firstDay={1} fixedWeekCount={false} nowIndicator allDaySlot
         dayHeaderContent={(info) => {
+          if (view === "listMonth") return <span className="calendar-agenda-day-heading" aria-current={info.isToday ? "date" : undefined}>
+            <span>{info.text}</span>{info.isToday ? <span className="calendar-today-badge">{t("workbench.today")}</span> : null}
+          </span>;
           if (view !== "timeGridWeek" && view !== "timeGridDay") return info.text;
           const day = DateTime.fromJSDate(info.date, { zone: timezone }).setLocale(i18n.language);
           return <span className="calendar-day-heading"><span>{day.toFormat("ccc")}</span><strong>{day.day}</strong></span>;
@@ -326,10 +329,7 @@ export default function CalendarPage() {
       />
     </div>
     {data ? <Unscheduled data={data} onPlan={openEditor} /> : null}
-    {(data?.drafts.length || recovery) ? <section className="grid gap-2 rounded-lg border p-3"><h2 className="text-sm font-semibold">{t("workbench.drafts")}</h2>
-      {data?.drafts.map((d) => <div key={d.id} className="flex flex-wrap items-center justify-between gap-2 text-sm"><span>{d.payload.title} · {data.sources.find((s) => s.id === d.calendar_id)?.summary} · {t(`workbench.operation_${d.operation}`)} {d.last_error ? `· ${translateKey(`errors.${d.last_error}`, d.last_error)}` : ""}</span><Button variant="outline" size="xs" onClick={() => openEditor({ mode: "google", draft: d })}>{t("workbench.resume")}</Button></div>)}
-      {recovery && !data?.drafts.some((d) => d.id === recovery.id) ? <div className="flex gap-2"><Button variant="outline" size="xs" onClick={() => openEditor(recovery)}>{t("workbench.browserDraft")}</Button><Button variant="ghost" size="xs" onClick={() => { localStorage.removeItem(RECOVERY_KEY); setRecovery(null); toast(t("workbench.discard")); }}>{t("workbench.discard")}</Button></div> : null}
-    </section> : null}
+    <CalendarDrafts drafts={data?.drafts ?? []} sources={data?.sources ?? []} recovery={recovery} onEdit={openEditor} onRecoveryChange={setRecovery} />
     {detail ? <ItemDetail item={detail} onClose={() => setDetail(null)} onEdit={openEditor} /> : null}
     {editor && data ? <CalendarEditor key={editor.id} seed={editor} sources={data} timezone={timezone} onClose={closeEditor} /> : null}
   </div>;

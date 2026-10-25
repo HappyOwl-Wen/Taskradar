@@ -15,15 +15,18 @@
   background-clip: padding-box;
   color: var(--foreground);
   box-shadow: var(--glass-shadow-float), inset 0 1px 0 var(--glass-highlight);
-  -webkit-backdrop-filter: var(--liquid-filter, blur(2px) saturate(120%));
-  backdrop-filter: var(--liquid-filter, blur(2px) saturate(120%));
+  -webkit-backdrop-filter: var(--glass-finish) var(--liquid-filter, blur(0px));
+  backdrop-filter: var(--glass-finish) var(--liquid-filter, blur(0px));
   transform: translate(-50%, -50%);
   text-align: center;
   outline: none;
 }
 
-@media (prefers-reduced-transparency: reduce) {
+@media (prefers-reduced-transparency: reduce), (prefers-contrast: more) {
   .timer-alarm-dialog { background: var(--popover); -webkit-backdrop-filter: none; backdrop-filter: none; }
+}
+@media (forced-colors: active) {
+  .timer-alarm-dialog { background: Canvas; color: CanvasText; border-color: CanvasText; box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none; }
 }
 
 .timer-alarm-description {

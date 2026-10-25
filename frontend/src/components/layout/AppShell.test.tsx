@@ -70,6 +70,9 @@ describe("modal navigation on narrow and zoomed layouts", () => {
   it("closes the popup and restores workspace interaction after navigation", async () => {
     const user = userEvent.setup();
     const { shell, router } = mount();
+    const material = shell.querySelector(".app-page-material");
+    expect(material).toHaveAttribute("aria-hidden", "true");
+    expect(shell.querySelector(".app-page")).not.toContainElement(material as HTMLElement);
     await user.click(screen.getByRole("button", { name: "展开导航" }));
     const dialog = await screen.findByRole("dialog", { name: "主导航" });
     await user.click(within(dialog).getByRole("link", { name: "全部任务" }));
@@ -78,5 +81,6 @@ describe("modal navigation on narrow and zoomed layouts", () => {
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     expect(shell).not.toHaveAttribute("inert");
     expect(shell).not.toHaveAttribute("data-navigation-overlay");
+    expect(shell.querySelector(".app-page-material")).toBe(material);
   });
 });

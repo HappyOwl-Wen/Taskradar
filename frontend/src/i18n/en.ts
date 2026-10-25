@@ -3,6 +3,17 @@ import calendarEn from "./calendar.en";
 import agentEn from "./agent.en";
 
 const en: Messages = {
+  appearance: {
+    autoColor: "Match accent to background", autoColorHint: "Extract a representative color on upload. Choosing a color manually turns matching off; you can enable it again anytime.",
+    highContrast: "High-contrast text", highContrastHint: "For custom images, choose contrasting text for light/dark panels. Reading areas retain at least 72% tint to protect text from image detail. Turn off for the full transparency range.",
+    matchImage: "Match background again", matchError: "Could not extract image colors. Please choose the image again.",
+    title: "Background and accent color", hint: "Changes apply immediately and are saved in this browser or desktop app.",
+    background: "Background style", landscape: "Default landscape", solid: "Solid", image: "Custom image", color: "Accent color",
+    upload: "Choose a background image", imageHint: "PNG, JPEG or WebP, up to 8 MB. Images stay on this device.",
+    imageError: "Choose a valid PNG, JPEG or WebP image no larger than 8 MB.", storageError: "Could not save appearance. Local storage may be full or unavailable.",
+    loading: "Reading image…", remove: "Remove image", transparency: "Content background transparency", transparencyHint: "Higher values reveal more of the background; 0% is opaque.",
+    blur: "Background image blur", reset: "Restore default appearance",
+  },
   agent: agentEn,
   workbench: calendarEn,
   app: {
@@ -318,7 +329,7 @@ const en: Messages = {
     auth_required: "Authorization expired. Reconnect in the settings.",
     rate_limited: "Too many requests. A retry has been scheduled automatically.",
     transient_error: "The external service is temporarily unavailable; it will be retried automatically.",
-    permanent_error: "The external service rejected the request.",
+    permanent_error: "The external service could not process this request.",
     connector_error: "The external service failed.",
     conflict: "Data conflict. Refresh and try again.",
     gmail_not_connected: "Gmail is not connected.",

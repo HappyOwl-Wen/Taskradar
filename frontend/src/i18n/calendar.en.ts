@@ -29,6 +29,8 @@ const calendarEn: Record<keyof typeof zh, string> = {
   foldAuto: "Automatic (must be unambiguous)", foldFirst: "First occurrence", foldSecond: "Second occurrence", startFold: "Start occurrence", endFold: "End occurrence",
   saveLocal: "Save locally", review: "Review Google submission…", saveDraft: "Keep draft and close", discard: "Discard draft", draft: "Not submitted to Google · draft saved locally",
   drafts: "Unsubmitted Google operations", resume: "Continue editing", browserDraft: "Restore unfinished input", confirmSave: "Confirm save to Google Calendar",
+  deleteDraft: "Delete draft", deleteDraftNamed: "Delete draft: {{title}}", deleteDraftTitle: "Delete this draft?",
+  deleteDraftDescription: "This cannot be undone. Existing Google events, local tasks and work blocks are kept.", draftDeleted: "Draft deleted",
   confirmDelete: "Confirm Google event deletion", submit: "Confirm submission", cancel: "Back to editing", saved: "Saved", invalid: "Enter a title and valid start and end times.",
   unsaved: "Not saved to Google. Your input is preserved.", conflict: "The event has changed in Google", mine: "Your input", remote: "Latest Google version",
   conflictHint: "Both versions are preserved. Keep Google's version, or review your changes against the latest version before submitting again.",

@@ -4,8 +4,8 @@
 ![Windows 10/11](https://img.shields.io/badge/Windows-10%20%7C%2011-0078D4)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
-**[Download TaskRadar 0.3.0 for Windows](https://github.com/HappyOwl-Wen/Taskradar/releases/tag/v0.3.0)**
-(pre-release: installer and portable ZIP). See [what changed since 0.2.0](docs/releases/v0.3.0.md).
+**[Download TaskRadar 0.4.0 for Windows](https://github.com/HappyOwl-Wen/Taskradar/releases/tag/v0.4.0)**
+(pre-release: installer and portable ZIP). See [what changed since 0.3.0](docs/releases/v0.4.0.md).
 
 TaskRadar is a to-do app for Windows that keeps everything on your own computer. You write a to-do as one sentence
 ("周五前交房租", "Freitag 10 Uhr Zahnarzt", "submit report by Oct 20 5pm") and the date and time are recognised
@@ -24,35 +24,44 @@ for chat, title and suggestion calls; actual cache support and billing depend on
 
 > 中文简介见下方 [中文快速上手](#中文快速上手)。The UI is Chinese by default and switchable to English.
 
-![TaskRadar 0.3.0: calendar planning and the AI Agent with compact composer controls](docs/screenshots/release-0.3.0-calendar-agent-zh.jpg)
+![TaskRadar: customizable background and automatic theme colors](docs/screenshots/appearance-auto-colors.png)
 
-| Today and task statuses | Calendar workspace | Dark, English | Compact mobile chat |
-| --- | --- | --- | --- |
-| ![Today in 0.3.0](docs/screenshots/release-0.3.0-today-zh.jpg) | ![Calendar in 0.3.0](docs/screenshots/release-0.3.0-calendar-zh.jpg) | ![Compact Agent in dark mode](docs/screenshots/release-0.3.0-agent-dark-en.jpg) | ![Mobile Agent in 0.3.0](docs/screenshots/release-0.3.0-agent-mobile-zh.jpg) |
+| Calendar agenda and today marker | Delete a pending draft | Liquid Glass in dark mode |
+| --- | --- | --- |
+| ![Calendar agenda](docs/screenshots/calendar-agenda-today.jpg) | ![Draft deletion confirmation](docs/screenshots/calendar-draft-delete-confirm.jpg) | ![Dark Liquid Glass](docs/screenshots/liquid-glass-droplet-rail-dark.jpg) |
 
-These screenshots show the 0.3.0 interface with synthetic tasks and a scripted local AI provider, not a live account.
+Screenshots use local demonstration data. Google event labels do not demonstrate live account authorization.
+The appearance screenshot shows automatic color matching and the high-contrast option for a custom background.
+More screenshots and earlier interface iterations are preserved in [docs/screenshots](docs/screenshots).
+
+--- | --- | --- | --- |
+| ![Today in 0.4.0](docs/screenshots/release-0.4.0-today-zh.jpg) | ![Calendar in 0.4.0](docs/screenshots/release-0.4.0-calendar-zh.jpg) | ![Compact Agent in dark mode](docs/screenshots/release-0.4.0-agent-dark-en.jpg) | ![Mobile Agent in 0.4.0](docs/screenshots/release-0.4.0-agent-mobile-zh.jpg) |
+
+These screenshots show the 0.4.0 interface with synthetic tasks and a scripted local AI provider, not a live account.
 More in [docs/screenshots](docs/screenshots); older screenshots remain there as historical documentation.
 
 ---
 
-## What changed in 0.3.0
+## What changed in 0.4.0
 
-Compared with [0.2.0](https://github.com/HappyOwl-Wen/Taskradar/releases/tag/v0.2.0):
+Compared with [0.3.0](https://github.com/HappyOwl-Wen/Taskradar/releases/tag/v0.3.0):
 
-* **AI Agent:** Claude, OpenAI and compatible APIs; normal questions and task/calendar proposals; Restricted and
-  optional YOLO modes; Markdown, model detection and thinking levels, automatic titles and prompt suggestions.
-  The resizable side panel uses compact controls in the composer. Claude prompt caching and reported token usage
-  cover chat, titles and suggestions. A user-supplied API key is required; usage is billed by the provider.
-* **Calendar workspace:** month, week and agenda views bring deadlines, work blocks and selected Google calendars
-  together. Plan local work, edit ordinary Google events with permission and conflict checks, see overlaps and
-  reserve preparation or commute buffers. Google access is optional.
-* **Task handling:** 30-day recycle bin and restore, batch rescheduling, more Chinese/German/English time expressions,
-  Ctrl+Enter to save and expandable notes. Starting a focus session moves its task to in progress.
-* **Focus and speed:** compact Pomodoro view, completion alarm that rings until stopped, and faster lists, home page
-  and calendar with large task collections. See [performance measurements](docs/PERFORMANCE.zh-CN.md).
+* **Appearance:** refractive Liquid Glass surfaces, animated selections and anchored menus, unified sidebar styling,
+  and improved compact layouts. Choose a landscape, solid color or local PNG/JPEG/WebP background (up to 8 MiB),
+  match the theme color automatically, adjust transparency/blur, and enable high-contrast text.
+* **Calendar:** day view and navigation shortcuts, clearer agenda headers and today markers, and confirmed deletion
+  of pending Google drafts from either the list or editor. Existing events and local tasks remain intact.
+* **Reliability and speed:** valid Google event IDs for retryable creation, indexed overlap checks, smoother glass
+  animations, preserved lazy-loaded assets across builds, and recovery when a page import fails.
+
+See the [0.4.0 release notes](docs/releases/v0.4.0.md), [calendar guide](docs/CALENDAR_WORKSPACE.zh-CN.md)
+and [Liquid Glass implementation notes](docs/UI_LIQUID_GLASS.zh-CN.md).
 
 Existing tasks and settings are kept; local database migrations run at startup. The mail/file importer removed in
 0.2.0 remains removed. Old imported content and credentials are kept until deleted in Settings → 数据与隐私.
+
+Appearance preferences and background images are stored in the current browser or desktop WebView profile.
+They are not included in the database JSON export; keep your original background image separately.
 
 ## Features
 
@@ -68,16 +77,16 @@ Existing tasks and settings are kept; local database migrations run at startup. 
 | Tray | Closing the window keeps TaskRadar in the notification area (switchable in Settings → 常规). Click the icon to reopen; the rounded light/dark menu offers Open, Restart service and Quit, with service/timer status. Restart rebuilds the local service on the same address and reloads the current page; saved tasks and running timers remain. Restart and Quit ask about unsaved changes. Starting TaskRadar again brings the window out of the tray | implemented, tested; light/dark menu rendering and isolated service restart verified |
 | Reminders | Overdue, due within 24 hours, 3 days or 7 days (configurable); a date-only deadline counts until the end of that day; daylight saving time is handled; each reminder once, none after completion | implemented, tested |
 | Status at a glance | An icon in the top bar is green while everything works; otherwise it says what needs attention and where to fix it (calendar events that failed, reminder checks that fail, background service stopped, notifications that Windows will not show) | implemented, tested |
-| Calendar workspace | Month, week and agenda views for local deadlines, work blocks and selected Google calendars; cached multi-calendar reads, staged OAuth permissions, ordinary event editing, drafts, ETag conflicts and linked-task de-duplication | implemented with Fake Calendar tests; see [calendar guide](docs/CALENDAR_WORKSPACE.zh-CN.md) and [verification](docs/CALENDAR_VERIFICATION.zh-CN.md); real account authorization needs user validation |
+| Calendar workspace | Month, week, day and agenda views for local deadlines, work blocks and selected Google calendars; cached multi-calendar reads, staged OAuth permissions, ordinary event editing, drafts, ETag conflicts and linked-task de-duplication | implemented with Fake Calendar tests; see [calendar guide](docs/CALENDAR_WORKSPACE.zh-CN.md) and [verification](docs/CALENDAR_VERIFICATION.zh-CN.md); real account authorization needs user validation |
 | Overlap warnings and buffers | While a work block or Google event is planned, the form lists what it overlaps (work blocks, timed Google events of the selected calendars, to-dos with an appointment time) and offers the next free slot that day; saving stays possible. Preparation, commute or rest time can be reserved before and after any timed item, including read-only and recurring meetings (for every occurrence); it counts for the warnings and is drawn in the week view, and it stays on this computer | implemented, tested with Fake Calendar; see [calendar guide](docs/CALENDAR_WORKSPACE.zh-CN.md#冲突检测与缓冲) |
 | Data control | Export everything as JSON; delete single tasks; delete what earlier versions imported; delete all data (typed confirmation) | implemented, tested |
 | AI Agent | Dedicated chat side panel with Claude Messages, OpenAI Responses and third-party OpenAI-compatible APIs; ordinary Q&A, on-demand workspace queries, and reviewable task, work-block and Google-event proposals. API keys stay in the system credential store | implemented with simulated-provider tests and local HTTP/UI verification; configure Settings → AI Agent with your own API key for live use; see [Agent guide](docs/AI_AGENT.zh-CN.md) |
-| Desktop app | Its own window (Microsoft Edge WebView2 through pywebview), its local service on `127.0.0.1` only; size and position remembered; light and dark; Chinese and English; optional start with Windows (into the tray). The installer runs for your account without administrator rights; uninstalling keeps your data. Also a portable ZIP | Windows x64 pre-release; see [release notes and verification](docs/releases/v0.3.0.md). Not code-signed; Windows 10 and other computers have not been tested |
+| Desktop app | Its own window (Microsoft Edge WebView2 through pywebview), its local service on `127.0.0.1` only; size and position remembered; light and dark; Chinese and English; optional start with Windows (into the tray). The installer runs for your account without administrator rights; uninstalling keeps your data. Also a portable ZIP | Windows x64 pre-release; see [release notes and verification](docs/releases/v0.4.0.md). Not code-signed; Windows 10 and other computers have not been tested |
 
 ## Install the desktop app
 
-Download **[TaskRadar-Setup-0.3.0.exe](https://github.com/HappyOwl-Wen/Taskradar/releases/download/v0.3.0/TaskRadar-Setup-0.3.0.exe)**
-or the **[portable ZIP](https://github.com/HappyOwl-Wen/Taskradar/releases/download/v0.3.0/TaskRadar-0.3.0-windows-x64.zip)**.
+Download **[TaskRadar-Setup-0.4.0.exe](https://github.com/HappyOwl-Wen/Taskradar/releases/download/v0.4.0/TaskRadar-Setup-0.4.0.exe)**
+or the **[portable ZIP](https://github.com/HappyOwl-Wen/Taskradar/releases/download/v0.4.0/TaskRadar-0.4.0-windows-x64.zip)**.
 Run the installer (built with `scripts\build-exe.ps1`, see
 [below](#build-the-desktop-app-and-its-installer)). It shows where TaskRadar goes
 (`%LOCALAPPDATA%\Programs\TaskRadar`, for your account only, no administrator rights), creates a Start menu entry
@@ -230,9 +239,16 @@ TaskRadar.cmd       double-click launcher (window; --browser)     Setup.cmd   on
 * A code-signed installer with automatic updates.
 * Optional encryption of the local database.
 
+## 0.4.0 中文更新
+
+- 新增液态玻璃界面与背景自定义：本地图片、自动配色、透明度、模糊及高对比文字。
+- 日历新增日视图与快捷导航，优化日程列表的日期标题和“今天”标记，可确认删除未提交的 Google 草稿。
+- 修复 Google 新建事件 ID，优化冲突检测、动画及更新后的页面加载恢复。
+- 外观与背景保存在当前浏览器或桌面 WebView 中，不包含在数据库 JSON 导出中。
+
 ## 中文快速上手
 
-1. 从 [0.3.0 Release](https://github.com/HappyOwl-Wen/Taskradar/releases/tag/v0.3.0) 下载安装包或便携 ZIP；无需 Python 或 Node.js。
+1. 从 [0.4.0 Release](https://github.com/HappyOwl-Wen/Taskradar/releases/tag/v0.4.0) 下载安装包或便携 ZIP；无需 Python 或 Node.js。
    从源码运行时，安装 Python 3.12+ 和 Node.js 20+，双击 `Setup.cmd` 完成一次性安装。
 2. 从开始菜单或便携文件夹启动 `TaskRadar.exe`（源码版双击 `TaskRadar.cmd`）：TaskRadar 在自己的窗口中打开。点窗口的 × 后，它留在任务栏右下角的托盘里继续提醒和计时；
    在托盘图标上右键选“退出 TaskRadar”才会退出（可以在“设置 → 常规”中改为点 × 直接退出）。

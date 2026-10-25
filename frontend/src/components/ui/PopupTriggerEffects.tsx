@@ -25,7 +25,7 @@ export function PopupTriggerEffects() {
     const update = () => {
       frame = 0;
       if (disposed) return;
-      let newLens = false;
+      const newLenses: HTMLElement[] = [];
       for (const [button, trigger] of triggers) if (!button.isConnected || !button.matches(TRIGGERS)) remove(button, trigger);
       const measured = Array.from(document.querySelectorAll<HTMLElement>(TRIGGERS), button => {
         const style = triggers.has(button) ? null : getComputedStyle(button);
@@ -46,7 +46,7 @@ export function PopupTriggerEffects() {
           resize.observe(button);
         }
         // A translated text-only React child may replace textContent, including this decorative lens.
-        if (trigger.glass.parentElement !== button) { button.append(trigger.glass); newLens = true; }
+        if (trigger.glass.parentElement !== button) { button.append(trigger.glass); newLenses.push(trigger.glass); }
         const open = button.getAttribute("aria-expanded") === "true" && !button.matches(":disabled, [aria-disabled=true]");
         const content = open ? document.getElementById(button.getAttribute("aria-controls") ?? "") : null;
         const placedSide = content?.dataset.side;
@@ -78,12 +78,19 @@ export function PopupTriggerEffects() {
           trigger.open = open;
         }
       }
-      if (newLens) document.dispatchEvent(new Event(LIQUID_LAYOUT_EVENT));
+      if (newLenses.length) document.dispatchEvent(new CustomEvent(LIQUID_LAYOUT_EVENT, { detail: newLenses }));
     };
     const schedule = () => { if (!disposed && !frame) frame = requestAnimationFrame(update); };
     const resize = new ResizeObserver(schedule);
     const observer = new MutationObserver(records => {
-      if (records.some(record => !(record.target instanceof Element && record.target.closest(".liquid-filter-definitions")))) schedule();
+      if (records.some(record => {
+        if (record.target instanceof Element && record.target.closest(".liquid-filter-definitions")) return false;
+        if (record.type === "attributes") return true;
+        // A React text replacement inside a trigger must restore its decorative child.
+        if (record.target instanceof Element && record.target.closest(TRIGGERS)) return true;
+        return [...record.addedNodes, ...record.removedNodes].some(node =>
+          node instanceof Element && (node.matches(TRIGGERS) || node.querySelector(TRIGGERS)));
+      })) schedule();
     });
     observer.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ["aria-expanded", "aria-controls", "data-side", "disabled", "aria-disabled", "data-variant"] });
     update();

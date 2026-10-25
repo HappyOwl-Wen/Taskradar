@@ -2,6 +2,17 @@ import calendarZh from "./calendar.zh";
 import agentZh from "./agent.zh";
 
 const zhCN = {
+  appearance: {
+    autoColor: "从背景自动匹配主题色", autoColorHint: "上传图片时提取代表色。手动选色会关闭自动匹配，可随时重新开启。",
+    highContrast: "高对比文字", highContrastHint: "使用自选图片时，按浅色／深色面板选择高对比文字。内容区至少保留 72% 底色，以免图片明暗干扰阅读；关闭后可使用完整透明度范围。",
+    matchImage: "从背景重新配色", matchError: "无法提取图片颜色，请重新选择图片。",
+    title: "背景与主题色", hint: "调整后即时生效，自动保存在当前浏览器或桌面应用中。",
+    background: "背景样式", landscape: "默认风景", solid: "纯色", image: "自选图片", color: "主题颜色",
+    upload: "选择背景图片", imageHint: "支持 PNG、JPEG、WebP，最大 8 MB。图片仅保存在本机。",
+    imageError: "请选择有效的 PNG、JPEG 或 WebP 图片，大小不超过 8 MB。", storageError: "无法保存外观设置，本地存储可能已满或不可用。",
+    loading: "正在读取图片…", remove: "移除图片", transparency: "内容背景透明度", transparencyHint: "数值越大，背景越通透；0% 为不透明。",
+    blur: "背景图片模糊", reset: "恢复默认外观",
+  },
   agent: agentZh,
   workbench: calendarZh,
   app: {
@@ -317,7 +328,7 @@ const zhCN = {
     auth_required: "授权已失效，请在设置中重新连接。",
     rate_limited: "请求过于频繁，已安排稍后自动重试。",
     transient_error: "外部服务暂时不可用，稍后会自动重试。",
-    permanent_error: "外部服务拒绝了请求。",
+    permanent_error: "外部服务无法处理这次请求。",
     connector_error: "外部服务出错。",
     conflict: "数据冲突，请刷新后重试。",
     gmail_not_connected: "尚未连接 Gmail。",

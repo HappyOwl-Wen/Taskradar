@@ -56,7 +56,7 @@ const router = createBrowserRouter([
       { path: "focus", element: page(<FocusPage />), handle: { fullHeight: true } },
       { path: "timers", element: page(<CountdownsPage />) },
       { path: "calendar", element: page(<CalendarPage />) },
-      { path: "settings", element: page(<SettingsPage />) },
+      { path: "settings", element: page(<SettingsPage />), handle: { fullHeight: true } },
       // Pages of removed features (review queue, importing, processing figures): old links land somewhere useful.
       { path: "inbox", element: <Navigate to="/tasks" replace /> },
       { path: "sources", element: <Navigate to="/" replace /> },
@@ -152,16 +152,16 @@ export default function App() {
           // The app's own surfaces: a quiet panel with a coloured icon, and the action as an indigo button.
           style={
             {
-              "--normal-bg": "var(--popover)",
+              "--normal-bg": "var(--glass-menu)",
               "--normal-text": "var(--popover-foreground)",
-              "--normal-border": "var(--border)",
+              "--normal-border": "var(--glass-stroke)",
             } as React.CSSProperties
           }
           // Above an action bar at the bottom of the screen (see keepToastsClear), so the next decision stays reachable.
           offset={{ bottom: "calc(24px + var(--toast-clearance, 0px))" }}
           mobileOffset={{ bottom: "calc(16px + var(--toast-clearance, 0px))" }}
           toastOptions={{
-            className: "whitespace-pre-line rounded-lg! shadow-[0_8px_24px_-6px_rgb(0_0_0/0.2)]! font-sans!",
+            className: "glass-toast whitespace-pre-line rounded-2xl! font-sans!",
             classNames: {
               title: "font-medium! leading-snug!",
               description: "text-muted-foreground!",

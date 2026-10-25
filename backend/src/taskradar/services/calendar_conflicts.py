@@ -211,16 +211,17 @@ def next_free(own: Busy, busy: list[Busy], day_end: dt.datetime) -> dict[str, st
     """The first later start on the same day at which the item and its buffers meet nothing known."""
     length = own.end - own.start
     start = own.start
-    # Every move passes the end of at least one busy item, so this ends after len(busy) moves.
-    for _ in range(len(busy) + 2):
-        lo, hi = start - own.before, start + length + own.after
-        blocking = [b.hi for b in busy if _shared((lo, hi), (b.lo, b.hi))]
-        if not blocking:
-            if start == own.start or start + length > day_end:
+    # Cache widened bounds once. In start order, passed intervals can never block a later start.
+    for lo, hi in sorted((b.lo, b.hi) for b in busy):
+        if lo >= start + length + own.after:
+            break
+        if hi > lo and hi > start - own.before:
+            start = _ceil_step(hi + own.before)
+            if start + length > day_end:
                 return None
-            return {"start": start.isoformat(), "end": (start + length).isoformat()}
-        start = _ceil_step(max(blocking) + own.before)
-    return None
+    if start == own.start or start + length > day_end:
+        return None
+    return {"start": start.isoformat(), "end": (start + length).isoformat()}
 
 
 def _timed(event: dict[str, Any], zone: ZoneInfo) -> tuple[dt.datetime, dt.datetime] | None:
@@ -367,20 +368,30 @@ class CalendarConflicts:
     def _window(session: Session, calendar_id: str, lo: dt.datetime, hi: dt.datetime) -> CalendarWindow | None:
         """The freshest complete snapshot that covers the whole checked time (its dates are local days)."""
         day = dt.timedelta(days=1)
-        covering = [
+        # Select only metadata while choosing a window; historical event payloads can be large.
+        covering = (
             window
-            for window in session.scalars(
-                select(CalendarWindow).where(
+            for window in session.execute(
+                select(
+                    CalendarWindow.id,
+                    CalendarWindow.start_date,
+                    CalendarWindow.end_date,
+                    CalendarWindow.timezone,
+                    CalendarWindow.last_synced_at,
+                )
+                .where(
                     CalendarWindow.calendar_id == calendar_id,
                     CalendarWindow.last_synced_at.isnot(None),
                     CalendarWindow.start_date <= (lo.astimezone(dt.UTC) + day).date(),
                     CalendarWindow.end_date >= (hi.astimezone(dt.UTC) - day).date(),
                 )
+                .execution_options(yield_per=256)
             )
             if dt.datetime.combine(window.start_date, dt.time(), ZoneInfo(window.timezone)) <= lo
             and dt.datetime.combine(window.end_date, dt.time(), ZoneInfo(window.timezone)) >= hi
-        ]
-        return max(covering, key=lambda w: w.last_synced_at or dt.datetime.min.replace(tzinfo=dt.UTC), default=None)
+        )
+        newest = max(covering, key=lambda w: w.last_synced_at, default=None)
+        return session.get(CalendarWindow, newest.id) if newest is not None else None
 
     def set_buffer(
         self,
@@ -420,7 +431,14 @@ class CalendarConflicts:
                 inherits = bool(recurring and session.get(CalendarBuffer, series_key(calendar_id, recurring)))
                 store_buffer(session, event_key(calendar_id, event_id), buffer, keep_zero=inherits)
             session.flush()
-            return event_buffer(all_buffers(session), calendar_id, event)
+            keys = [event_key(calendar_id, event_id)]
+            if recurring:
+                keys.append(series_key(calendar_id, recurring))
+            rows = {
+                row.item_key: row
+                for row in session.scalars(select(CalendarBuffer).where(CalendarBuffer.item_key.in_(keys)))
+            }
+            return event_buffer(rows, calendar_id, event)
 
     @staticmethod
     def _cached_event(session: Session, calendar_id: str, event_id: str) -> dict[str, Any] | None:

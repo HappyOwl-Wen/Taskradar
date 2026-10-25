@@ -5,6 +5,7 @@ from __future__ import annotations
 import copy
 import datetime as dt
 import json
+import re
 import uuid
 from types import SimpleNamespace
 
@@ -12,7 +13,7 @@ import pytest
 from pydantic import ValidationError
 from sqlalchemy import select
 
-from taskradar.connectors.errors import AuthRequiredError, RateLimitedError, TransientError
+from taskradar.connectors.errors import AuthRequiredError, RateLimitedError, TransientError, map_http_error
 from taskradar.connectors.google_oauth import ACCESS_SCOPES, OAuthError, _Pending
 from taskradar.db.calendar_models import CalendarDraft, CalendarSource, CalendarWindow, GoogleEvent, WorkBlock
 from taskradar.db.models import CalendarLink, Setting, Task
@@ -220,6 +221,41 @@ def test_timeout_after_create_is_idempotent_across_retry(container, calendar_cli
     assert len(calendar_client.events) == 1
 
 
+@pytest.mark.parametrize("previous_failure", [False, True])
+def test_created_event_ids_follow_google_contract_and_remain_stable_on_retry(
+    container, calendar_client, monkeypatch, previous_failure
+):
+    editor = setup(container, calendar_client)
+    draft_id = draft(editor)
+    if previous_failure:
+        with transaction(container.factory) as session:
+            row = session.get(CalendarDraft, draft_id)
+            row.status, row.last_error = "failed", "permanent_error"
+    original = calendar_client.insert_event
+    attempted_ids = []
+
+    def google_contract(calendar_id, body):
+        attempted_ids.append(body["id"])
+        # Google's events.insert contract requires base32hex IDs, including any app-specific prefix.
+        if not re.fullmatch(r"[0-9a-v]{5,1024}", body["id"]):
+            raise map_http_error(400, '{"error":{"errors":[{"reason":"invalid"}]}}', api="Google Calendar API")
+        result = original(calendar_id, body)
+        if len(attempted_ids) == 1:
+            raise TransientError("Response lost after Google accepted the event")
+        return result
+
+    monkeypatch.setattr(calendar_client, "insert_event", google_contract)
+    with pytest.raises(TransientError):
+        editor.commit(draft_id, confirm=True)
+    saved = editor.commit(draft_id, confirm=True)
+    assert saved["status"] == "saved"
+    assert saved["result"]["extendedProperties"]["private"]["taskradar_operation"] == draft_id
+    assert len(attempted_ids) == 2 and len(set(attempted_ids)) == 1
+    assert len(calendar_client.events) == 1
+    assert editor.commit(draft_id, confirm=True)["status"] == "saved"
+    assert len(attempted_ids) == 2
+
+
 def test_full_resync_failure_preserves_cache_tasks_drafts_and_other_calendars(container, calendar_client):
     editor = setup(container, calendar_client)
     event(calendar_client)
@@ -240,6 +276,32 @@ def test_full_resync_failure_preserves_cache_tasks_drafts_and_other_calendars(co
         assert session.get(Task, task_id)
         assert session.get(CalendarDraft, id)
         assert session.get(GoogleEvent, (READONLY, "other"))
+
+
+@pytest.mark.parametrize("status,operation", [("draft", "create"), ("failed", "update"), ("conflict", "delete")])
+def test_discard_draft_only_removes_the_local_outbox_entry(api, container, calendar_client, status, operation):
+    editor = setup(container, calendar_client)
+    remote = event(calendar_client)
+    task_id = add_task(container, due=dt.date(2026, 10, 22))
+    block = api.post("/api/calendar/work-blocks", json={**form(), "task_id": task_id}).json()
+    draft_id = draft(
+        editor,
+        operation=operation,
+        original=remote if operation != "create" else None,
+        work_block_id=block["work_block_id"],
+    )
+    with transaction(container.factory) as session:
+        row = session.get(CalendarDraft, draft_id)
+        row.status, row.last_error, row.remote_event = status, "permanent_error", remote
+    calendar_client.calls.clear()
+    response = api.post(f"/api/calendar/drafts/{draft_id}/resolve", json={"choice": "discard"})
+    assert response.status_code == 200 and response.json() == {"discarded": True}
+    assert calendar_client.calls == []
+    assert calendar_client.events[(PRIMARY, remote["id"])] == remote
+    with transaction(container.factory) as session:
+        assert session.get(CalendarDraft, draft_id) is None
+        assert session.get(Task, task_id) is not None
+        assert session.get(WorkBlock, block["work_block_id"]) is not None
 
 
 def test_pagination_failure_retains_complete_previous_snapshot(container, calendar_client, monkeypatch):

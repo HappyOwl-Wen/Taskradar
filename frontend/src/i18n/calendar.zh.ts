@@ -28,6 +28,8 @@ const calendarZh = {
   foldAuto: "自动（时间必须唯一）", foldFirst: "第一次", foldSecond: "第二次", startFold: "开始时间出现次数", endFold: "结束时间出现次数",
   saveLocal: "保存到本机", review: "检查并提交 Google…", saveDraft: "保留草稿并关闭", discard: "放弃草稿", draft: "未提交 Google · 草稿保存在本机",
   drafts: "未提交的 Google 操作", resume: "继续编辑", browserDraft: "恢复上次未完成的输入", confirmSave: "确认保存到 Google Calendar",
+  deleteDraft: "删除草稿", deleteDraftNamed: "删除草稿：{{title}}", deleteDraftTitle: "删除这份草稿？",
+  deleteDraftDescription: "删除后无法恢复。已存在的 Google 日程、本地任务和工作时段会保留。", draftDeleted: "草稿已删除",
   confirmDelete: "确认删除 Google 日程", submit: "确认提交", cancel: "返回修改", saved: "已保存", invalid: "请填写标题和有效的起止时间。",
   unsaved: "尚未保存到 Google，输入已保留。", conflict: "Google 上的日程已经变化", mine: "你的输入", remote: "Google 最新版本",
   conflictHint: "两份内容都已保留。可保留 Google 版本，或以最新版本为基础重新检查并提交你的修改。",

@@ -107,7 +107,7 @@ export function Tip({ content, children, side = "top" }: { content: ReactNode; c
         <TooltipPrimitive.Content
           side={side}
           sideOffset={6}
-          className="motion-popover z-50 max-w-xs rounded-md bg-foreground px-2.5 py-1.5 text-xs leading-snug text-background shadow-md"
+          className="glass-popover glass-tooltip motion-popover z-50 max-w-xs border text-xs leading-snug text-popover-foreground"
         >
           {content}
         </TooltipPrimitive.Content>

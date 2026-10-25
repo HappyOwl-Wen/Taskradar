@@ -74,6 +74,7 @@ export function AppShell() {
         <Sidebar onOpenDrawer={openDrawer} />
       </div>
       <div className="app-workspace flex min-w-0 flex-1 flex-col">
+        <span className="app-page-material" aria-hidden="true" />
         <div className={compactFocus ? "hidden" : "contents"}>
           <TopBar onOpenDrawer={openDrawer} agentOpen={agentOpen} onToggleAgent={() => setAgentOpen((value) => !value)} />
         </div>

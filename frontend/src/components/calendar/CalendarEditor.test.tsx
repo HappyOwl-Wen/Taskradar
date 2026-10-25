@@ -18,6 +18,20 @@ beforeEach(async () => { await i18n.changeLanguage("en"); localStorage.clear(); 
 afterEach(() => vi.restoreAllMocks());
 
 describe("calendar editor", () => {
+  it("deletes the open draft after confirmation without saving or committing it again", async () => {
+    const resolve = vi.spyOn(calendarApi, "resolve").mockResolvedValue({} as never);
+    const save = vi.spyOn(calendarApi, "saveDraft"), commit = vi.spyOn(calendarApi, "commit");
+    const id = "11111111-2222-4333-8444-555555555555";
+    const close = mount({ mode: "google", id, form });
+    await userEvent.click(screen.getByRole("button", { name: "Delete draft" }));
+    expect(resolve).not.toHaveBeenCalled();
+    expect(screen.getByRole("alertdialog")).toHaveTextContent(form.title);
+    await userEvent.click(screen.getAllByRole("button", { name: "Delete draft" }).at(-1)!);
+    await waitFor(() => expect(close).toHaveBeenCalledOnce());
+    expect(resolve).toHaveBeenCalledExactlyOnceWith(id, "discard");
+    expect(localStorage.getItem(RECOVERY_KEY)).toBeNull();
+    expect(save).not.toHaveBeenCalled(); expect(commit).not.toHaveBeenCalled();
+  });
   it("saves a linked local work block with explicit duration and no deadline mutation", async () => {
     const save = vi.spyOn(calendarApi, "saveBlock").mockResolvedValue({} as never);
     const close = mount({ mode: "local", taskId: "task", form });

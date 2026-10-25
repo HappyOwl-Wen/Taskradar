@@ -197,6 +197,9 @@ describe("calendar agenda navigation", () => {
     await userEvent.click(screen.getByRole("button", { name: "Agenda" }));
     await waitFor(() => expect(scroller().scrollTop).toBe(200));
     expect(document.querySelector('.fc-list-day[data-date="2026-10-01"]')).toBeInTheDocument();
+    expect(document.querySelector('.fc-list-day[data-date="2026-10-23"] .calendar-today-badge')).toHaveTextContent("Today");
+    expect(document.querySelector('.fc-list-day[data-date="2026-10-23"] [aria-current="date"]')).toBeInTheDocument();
+    expect(document.querySelectorAll(".calendar-today-badge")).toHaveLength(1);
 
     await userEvent.click(screen.getByRole("button", { name: "Month" }));
     await userEvent.click(screen.getByRole("button", { name: "Agenda" }));
@@ -223,6 +226,7 @@ describe("calendar agenda navigation", () => {
     await userEvent.click(screen.getByRole("button", { name: "Agenda" }));
     await waitFor(() => expect(document.querySelector('.fc-list-day[data-date="2026-10-24"]')).toBeInTheDocument());
     await waitFor(() => expect(scroller().scrollTop).toBe(200));
+    expect(document.querySelector(".calendar-today-badge")).toBeNull();
   });
 
   it("uses today in the configured display timezone", async () => {
@@ -231,6 +235,8 @@ describe("calendar agenda navigation", () => {
     await userEvent.click(screen.getByRole("button", { name: "Agenda" }));
     await waitFor(() => expect(scroller().scrollTop).toBe(100));
     expect(document.querySelector(".fc-list-day.fc-day-today")).toHaveAttribute("data-date", "2026-10-22");
+    expect(document.querySelector('.fc-list-day[data-date="2026-10-22"] .calendar-today-badge')).toHaveTextContent("Today");
+    expect(document.querySelector('.fc-list-day[data-date="2026-10-23"] .calendar-today-badge')).toBeNull();
   });
 
   it("keeps the user's scroll position when calendar data refreshes", async () => {

@@ -1,0 +1,104 @@
+/* Keep image filtering on a separate layer: text and controls remain crisp. */
+/* Unlayered theme tokens must override index.css's unlayered :root defaults. */
+  :root[data-background] .app-shell { position: relative; background-image: none; }
+  :root[data-background] .app-shell::before {
+    content: ""; position: absolute; inset: 0; z-index: -1; pointer-events: none;
+    background-image: var(--ambient); background-position: center; background-size: cover;
+    filter: blur(var(--appearance-blur));
+  }
+  :root[data-background="solid"] .app-shell::before { background-image: none; }
+  :root[data-background="image"] .app-shell::before { background-image: var(--appearance-image); }
+  :root[data-background] { --page-tint: rgb(248 250 255 / var(--appearance-opacity)); }
+  :root.dark[data-background] { --page-tint: rgb(18 23 38 / var(--appearance-opacity)); }
+  :root[data-custom-color="true"] {
+    --frame: color-mix(in srgb, var(--appearance-color) 14%, #f1f3f8);
+    --background: color-mix(in srgb, var(--appearance-color) 4%, #fff);
+    --subtle: color-mix(in srgb, var(--appearance-color) 8%, #fff);
+    --secondary: var(--subtle);
+    --muted: var(--subtle);
+    --border: color-mix(in srgb, var(--appearance-color) 20%, #e5e7eb);
+    --primary: color-mix(in srgb, var(--appearance-color) 65%, #000);
+    --primary-hover: color-mix(in srgb, var(--primary) 85%, #000);
+    --primary-foreground: #fff;
+    --ring: var(--primary);
+    --selected: color-mix(in srgb, var(--appearance-color) 18%, var(--background));
+    --selected-foreground: var(--primary);
+    --accent: color-mix(in srgb, var(--appearance-color) 8%, transparent);
+    --accent-strong: color-mix(in srgb, var(--appearance-color) 15%, transparent);
+  }
+  :root.dark[data-custom-color="true"] {
+    --frame: color-mix(in srgb, var(--appearance-color) 12%, #111318);
+    --background: color-mix(in srgb, var(--appearance-color) 12%, #20232a);
+    --subtle: color-mix(in srgb, var(--appearance-color) 16%, #242730);
+    --border: color-mix(in srgb, var(--appearance-color) 28%, #424650);
+    --primary: color-mix(in srgb, var(--appearance-color) 40%, #fff);
+    --primary-hover: color-mix(in srgb, var(--primary) 85%, #fff);
+    --primary-foreground: #17151f;
+  }
+  :root[data-custom-color="true"] :is(.app-sidebar, .nav-drawer) {
+    --primary: color-mix(in srgb, var(--appearance-color) 35%, white);
+    --ring: var(--primary);
+  }
+  :root[data-custom-color="true"] :is(.sidebar-material, .nav-drawer) {
+    background-color: color-mix(in srgb, var(--appearance-color) 18%, rgb(24 27 43 / .85));
+    background-image: none;
+  }
+
+/* Protect reading surfaces even over the brightest/darkest patches of a photo.
+   Theme mode determines the panel color; text contrasts with that composed surface. */
+:root[data-image-contrast="true"] {
+  --foreground: #111111;
+  --muted-foreground: #303030;
+  --card-foreground: #111111;
+  --popover-foreground: #111111;
+  --secondary-foreground: #111111;
+  --accent-foreground: #111111;
+  --primary: var(--readable-accent-light);
+  --primary-hover: color-mix(in srgb, var(--primary) 85%, black);
+  --primary-foreground: #ffffff;
+  --selected-foreground: var(--primary);
+  --ring: var(--primary);
+  --page-tint: rgb(248 250 255 / max(.72, var(--appearance-opacity)));
+}
+:root.dark[data-image-contrast="true"] {
+  --foreground: #ffffff;
+  --muted-foreground: #eeeeee;
+  --card-foreground: #ffffff;
+  --popover-foreground: #ffffff;
+  --secondary-foreground: #ffffff;
+  --accent-foreground: #ffffff;
+  --primary: var(--readable-accent-dark);
+  --primary-hover: color-mix(in srgb, var(--primary) 85%, white);
+  --primary-foreground: #000000;
+  --page-tint: rgb(18 23 38 / max(.72, var(--appearance-opacity)));
+}
+:root[data-image-contrast="true"] :is(.app-topbar, .settings-navigation, .glass-card, [data-slot="card"]) {
+  background-color: var(--page-tint);
+}
+
+/* Resolve at the root so sidebar-local purple tokens cannot replace the theme.
+   The link fallback and moving glass share one fill, never two overlapping fills. */
+:root {
+  --navigation-selected: var(--primary);
+  --navigation-on-selected: var(--primary-foreground);
+}
+:root .sidebar-entry[aria-current="page"],
+:root .sidebar-week-days a[aria-current="date"] {
+  --foreground: var(--navigation-on-selected);
+  --muted-foreground: var(--navigation-on-selected);
+  --primary: var(--navigation-on-selected);
+  color: var(--navigation-on-selected);
+  background: var(--navigation-selected);
+}
+:root .sidebar-entry[aria-current="page"] :is(.sidebar-icon, .text-primary, .text-muted-foreground),
+:root .sidebar-week-days a[aria-current="date"] > span { color: var(--navigation-on-selected); }
+:root [data-selection-scope="navigation"][data-selection-ready="true"] .sidebar-entry[aria-current="page"],
+:root .sidebar-week-days[data-selection-ready="true"] a[aria-current="date"] { background: transparent; box-shadow: none; }
+:root :is(.sidebar-scroll, .nav-drawer-body, .sidebar-week-days) > .liquid-selection > .liquid-selection-glass {
+  --liquid-selection-fill: var(--navigation-selected);
+  background-color: var(--navigation-selected);
+  background-image: none;
+}
+@media (forced-colors: active) {
+  :root { --navigation-selected: Highlight; --navigation-on-selected: HighlightText; }
+}
